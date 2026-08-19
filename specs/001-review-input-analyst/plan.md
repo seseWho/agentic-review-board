@@ -3,13 +3,13 @@
 **Branch**: `001-review-input-analyst`  
 **Date**: 2026-08-19  
 **Spec**: `specs/001-review-input-analyst/spec.md`  
-**Status**: Draft — awaiting review
+**Status**: Approved — implemented and verified
 
 ## 1. Summary
 
 Implement the smallest executable Analyst slice while preserving the architectural boundary between untrusted model output and trusted review contracts.
 
-The increment will introduce:
+The increment introduces:
 
 - `ReviewInput` as the validated representation of the current user-provided problem and optional context;
 - `ProblemAnalysis` as the validated Analyst result;
@@ -18,7 +18,7 @@ The increment will introduce:
 - an `Analyst` participant that requests structured content, validates the returned data, enforces Analyst-specific invariants, and returns a trusted `ProblemAnalysis`;
 - deterministic tests that require neither network access nor a live LLM.
 
-The increment will not implement orchestration, UI, a concrete model provider, persistence, or downstream participants.
+The increment does not implement orchestration, UI, a concrete model provider, persistence, or downstream participants.
 
 ## 2. Technical Context
 
@@ -35,7 +35,7 @@ The increment will not implement orchestration, UI, a concrete model provider, p
 
 ### Pydantic version policy
 
-Use stable Pydantic v2 rather than a pre-release line. The implementation dependency will use the compatible range:
+Use stable Pydantic v2 rather than a pre-release line. The implementation dependency uses the compatible range:
 
 ```text
 pydantic>=2.13,<3
@@ -64,7 +64,7 @@ No attempt is made to simulate the remaining four participants.
 
 ### II. Structured Contracts and Validation — PASS
 
-Pydantic v2 will provide the standard mechanism for declaring and validating structured review contracts.
+Pydantic v2 provides the standard mechanism for declaring and validating structured review contracts.
 
 Generated Analyst content remains untrusted until it passes:
 
@@ -79,7 +79,9 @@ Invalid generated content does not become trusted `ProblemAnalysis` data.
 
 Items represented as user-provided facts must remain traceable to the current `ReviewInput`.
 
-Review-local identifiers remain optional where useful for traceability; the implementation must not turn the canonical SHOULD into a universal mandatory-ID rule.
+Review-local identifiers remain optional where useful for traceability; the implementation does not turn the canonical SHOULD into a universal mandatory-ID rule.
+
+Accepted `ReviewInput` and trusted `ProblemAnalysis` collections are immutable after validation so their evidence basis cannot be altered without crossing validation again.
 
 ### IV. Human Decision Authority — PASS
 
@@ -89,7 +91,7 @@ This increment produces problem analysis only. It contains no recommendation exe
 
 Pydantic introduces one production dependency, but it directly addresses an already-defined architectural need: structured contract declaration, parsing, validation, error reporting, and future schema generation across multiple agent outputs.
 
-Because the canonical architecture explicitly deferred selection of the structured-output validation library, adoption of Pydantic requires an ADR before implementation is considered approved.
+Because the canonical architecture explicitly deferred selection of the structured-output validation library, adoption of Pydantic is governed by accepted ADR-0001.
 
 No agent framework, persistence layer, RAG system, UI framework, broker, database, or distributed component is introduced.
 
@@ -99,13 +101,13 @@ The Analyst depends on a provider-neutral `LLMPort`, not on a concrete model SDK
 
 Pydantic is a contract/validation dependency, not a model-provider dependency.
 
-Provider SDK objects must not appear in domain contracts, participant interfaces, or tests.
+Provider SDK objects do not appear in domain contracts, participant interfaces, or tests.
 
 ### VII. Deterministic Testability and Visible Failure — PASS
 
-All behavior introduced by this feature must be testable with a deterministic `LLMPort` fake.
+All behavior introduced by this feature is testable with a deterministic `LLMPort` fake.
 
-Tests cover valid output and representative invalid generated content. A real model endpoint is not required for the core suite.
+Tests cover valid output, representative invalid generated content, provider failure separation, and post-validation immutability. A real model endpoint is not required for the core suite.
 
 ### VIII. Security by Minimization and Least Capability — PASS
 
@@ -115,9 +117,9 @@ The increment introduces no secret, persistence, tool, network action, filesyste
 
 The increment is deliberately limited to Review Input + Analyst.
 
-Before implementation proceeds, a new ADR under `docs/adr/` must record the choice of Pydantic v2 as the structured-contract and validation library, including alternatives, consequences, and reconsideration conditions.
+ADR-0001 records the choice of Pydantic v2 as the structured-contract and validation library, including alternatives, consequences, and reconsideration conditions.
 
-**Constitution gate result**: PASS, conditional only on approval of the Pydantic ADR before implementation.
+**Constitution gate result**: PASS. The ADR prerequisite was satisfied before implementation completion.
 
 ## 4. Architectural Decisions in This Plan
 
@@ -139,7 +141,7 @@ Pydantic validation does not make generated content trusted by itself. Trust is 
 
 ### 4.2 Fail-closed contract configuration
 
-Models receiving generated content should use explicit configuration rather than permissive defaults.
+Models receiving generated content use explicit configuration rather than permissive defaults.
 
 The baseline is:
 
@@ -148,11 +150,11 @@ The baseline is:
 - use strict textual field types for generated textual content so unrelated primitive types are not silently accepted as text;
 - use explicit validators only for real domain invariants rather than duplicating validation already provided by Pydantic.
 
-The implementation should favor built-in Pydantic v2 constructs over custom schema internals.
+The implementation favors built-in Pydantic v2 constructs over custom schema internals.
 
 ### 4.3 ReviewInput preservation
 
-`ReviewInput` will be represented as a Pydantic model configured to prevent reassignment after creation.
+`ReviewInput` is represented as a Pydantic model configured to prevent reassignment after creation and to store validated collections immutably.
 
 Conceptual fields remain aligned with the Agent Model:
 
@@ -166,13 +168,13 @@ ReviewInput
 - stated_facts[]  optional collection
 ```
 
-Validation must reject a description that is empty or whitespace-only without modifying the original non-empty text.
+Validation rejects a description that is empty or whitespace-only without modifying the original non-empty text.
 
-Optional user-provided values remain optional.
+Optional user-provided values remain optional. List-shaped external collection input may be validated into an ordered immutable representation so the accepted input cannot later be mutated in place.
 
 ### 4.4 ProblemAnalysis contract
 
-`ProblemAnalysis` will be a Pydantic model with the canonical semantic categories:
+`ProblemAnalysis` is a Pydantic model with the canonical semantic categories:
 
 ```text
 ProblemAnalysis
@@ -184,11 +186,13 @@ ProblemAnalysis
 - uncertainties[]
 ```
 
-The model must not contain solution alternatives, solution ranking, architecture recommendations, or a final recommendation.
+The model does not contain solution alternatives, solution ranking, architecture recommendations, or a final recommendation.
+
+Trusted output collections are immutable after validation to prevent post-validation mutation from bypassing contract checks.
 
 ### 4.5 Fact provenance
 
-A fact must include enough structural information to identify the `ReviewInput` field that supports it.
+A fact includes enough structural information to identify the `ReviewInput` field that supports it.
 
 The allowed source-reference vocabulary is limited to the conceptual `ReviewInput` fields:
 
@@ -215,8 +219,8 @@ Therefore:
 
 - an identifier may be present on structured findings;
 - if present, it must be non-empty and unambiguous within the current `ProblemAnalysis`;
-- duplicate provided identifiers must be rejected;
-- absence of an identifier alone must not invalidate an otherwise valid finding in this increment.
+- duplicate provided identifiers are rejected by the `ProblemAnalysis` model-level structural validation because the rule depends only on the candidate analysis;
+- absence of an identifier alone does not invalidate an otherwise valid finding in this increment.
 
 This preserves the canonical SHOULD semantics.
 
@@ -224,13 +228,13 @@ This preserves the canonical SHOULD semantics.
 
 Define a minimal Python `Protocol` representing the model capability required by the Analyst.
 
-For this increment the port should:
+For this increment the port:
 
-- accept provider-neutral Analyst input data;
-- return an untrusted mapping/object representation suitable for local validation;
-- expose no concrete SDK types, authentication objects, endpoint-specific envelopes, or provider-specific tool definitions.
+- accepts provider-neutral Analyst input data;
+- returns an untrusted mapping/object representation suitable for local validation;
+- exposes no concrete SDK types, authentication objects, endpoint-specific envelopes, or provider-specific tool definitions.
 
-The port does not need to know about OpenAI, Anthropic, Ollama, vLLM, or any other concrete provider.
+The port does not know about OpenAI, Anthropic, Ollama, vLLM, or any other concrete provider.
 
 A later adapter may use Pydantic-generated JSON Schema when integrating provider-native structured output, but provider-side schema enforcement must never replace local validation before trusted Review state.
 
@@ -249,18 +253,18 @@ untrusted generated mapping
     ↓
 Pydantic structural validation
     ↓
-Analyst-specific invariant validation
+Analyst-specific contextual validation
     ↓
 trusted ProblemAnalysis
 ```
 
-Pydantic handles shape/type/closed-schema validation.
+Pydantic handles shape/type/closed-schema validation plus model-level invariants that depend only on the candidate output, including duplicate non-null finding IDs.
 
-The Analyst/application boundary retains only invariants that depend on review context, such as checking fact provenance against the actual current `ReviewInput` and checking ambiguity of optional local identifiers.
+The Analyst/application boundary retains invariants that require trusted external review context, specifically checking fact provenance against the actual current `ReviewInput`.
 
-Validation errors from generated content should be normalized into an Analyst/output-validation error category rather than leaking provider-specific failures or being repaired silently.
+Validation errors from generated content are normalized into an Analyst/output-validation error category rather than leaking provider-specific failures or being repaired silently. Provider/transport failures remain distinguishable and are not swallowed as schema errors.
 
-## 5. Proposed Project Structure
+## 5. Project Structure
 
 No new architectural layer is required.
 
@@ -280,6 +284,7 @@ src/agentic_review_board/
 tests/
 └── unit/
     ├── test_review_input.py
+    ├── test_problem_analysis.py
     └── test_analyst.py
 ```
 
@@ -295,7 +300,7 @@ The exact package structure remains revisitable through ADR if later increments 
 
 ## 6. Dependency Change
 
-After the plan and ADR are approved, `pyproject.toml` should change from no production dependency to:
+The approved dependency change is:
 
 ```toml
 [project]
@@ -318,7 +323,9 @@ Verify at minimum:
 - blank/whitespace-only description is rejected;
 - all optional fields may be absent;
 - supplied text is not silently trimmed or rewritten;
-- model reassignment is rejected once constructed.
+- model reassignment is rejected once constructed;
+- list-shaped external collections can be validated while the accepted representation remains immutable;
+- validated collections cannot be mutated after construction.
 
 ### 7.2 ProblemAnalysis / Analyst happy-path tests
 
@@ -328,6 +335,7 @@ Verify at minimum:
 - all six semantic categories are present;
 - facts and assumptions remain distinct;
 - valid fact provenance points to applicable current `ReviewInput` data;
+- trusted collections cannot be mutated after validation;
 - Analyst output contains no solution alternatives, ranking, or final recommendation fields.
 
 ### 7.3 Fail-closed tests
@@ -352,7 +360,7 @@ Core tests must not import or require any concrete provider SDK and must run wit
 
 ### 7.5 Existing quality gates
 
-The completed increment must pass:
+The completed increment passes:
 
 ```text
 pytest
@@ -362,6 +370,8 @@ pip check
 ```
 
 on the supported CI Python versions.
+
+The final deterministic suite contains 38 tests.
 
 ## 8. Deliberately Deferred
 
@@ -381,19 +391,11 @@ This plan does not decide or implement:
 - dependency locking strategy unless reproducibility evidence requires it;
 - use of Pydantic Settings.
 
-## 9. Required ADR Before Implementation
+## 9. ADR Status
 
-Before implementation of this revised plan, create and review one ADR for:
+ADR-0001 — **Use Pydantic v2 for Structured Contracts and Validation** — is accepted and governs this implementation.
 
-**Decision**: adopt Pydantic v2 as the structured-contract, validation, and serialization foundation for review-domain and participant-output contracts.
-
-The ADR should compare at least:
-
-- Python dataclasses plus handwritten validation;
-- Pydantic v2;
-- retaining a generic/no-library approach until later.
-
-It should document:
+It records:
 
 - why Pydantic is justified now rather than deferred further;
 - where Pydantic is allowed to appear in the architecture;
@@ -402,20 +404,17 @@ It should document:
 - how provider independence is preserved;
 - conditions under which the decision should be revisited.
 
-The ADR is a planning gate, not a new feature requirement.
+The ADR is an implementation prerequisite that has been satisfied; it is not a new feature requirement.
 
-## 10. Existing Branch Reconciliation
+## 10. Branch Reconciliation Result
 
-The current branch already contains an earlier provisional implementation based on standard-library dataclasses and handwritten validation.
+The earlier provisional standard-library dataclass implementation and handwritten structural validation were reconciled during implementation.
 
-That code must not be treated as authoritative for this revised plan and must not be merged in its current form.
+The completed branch:
 
-After this plan and the required ADR are approved, the later implementation phase will reconcile the branch by:
-
-- replacing provisional structured contracts with the approved Pydantic models;
-- removing handwritten structural validation that Pydantic makes redundant;
-- retaining only review-context/domain invariants not covered by ordinary schema validation;
-- updating tests to match the approved specification and plan;
-- re-running the complete deterministic and CI quality gates.
-
-No code change is part of the current planning phase.
+- uses the approved Pydantic models;
+- removes handwritten structural validation that Pydantic makes redundant;
+- retains only review-context/domain invariants not covered by ordinary schema validation;
+- uses immutable validated collections where mutation would undermine traceability;
+- updates tests to match the approved specification and plan;
+- passes the complete deterministic and CI quality gates.
