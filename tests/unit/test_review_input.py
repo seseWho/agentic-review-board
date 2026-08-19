@@ -46,6 +46,24 @@ def test_review_input_is_frozen_after_validation() -> None:
         review_input.description = "Changed"
 
 
+@pytest.mark.parametrize("field_name", ["constraints", "context", "stated_facts"])
+def test_review_input_collections_cannot_change_after_validation(field_name: str) -> None:
+    review_input = ReviewInput(
+        description="Review this.",
+        constraints=["Original constraint"],
+        context=["Original context"],
+        stated_facts=["Original fact"],
+    )
+    collection = getattr(review_input, field_name)
+    original = tuple(collection)
+    append = getattr(collection, "append", None)
+
+    if append is not None:
+        append("Injected after validation")
+
+    assert tuple(getattr(review_input, field_name)) == original
+
+
 def test_review_input_rejects_unexpected_fields() -> None:
     with pytest.raises(ValidationError):
         ReviewInput(description="Review this.", unexpected="value")  # type: ignore[call-arg]
