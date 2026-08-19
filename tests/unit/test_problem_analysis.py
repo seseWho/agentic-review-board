@@ -102,6 +102,22 @@ def test_facts_and_assumptions_remain_structurally_distinct() -> None:
 
 
 @pytest.mark.parametrize(
+    "field_name",
+    ["facts", "constraints", "assumptions", "missing_information", "uncertainties"],
+)
+def test_problem_analysis_collections_cannot_change_after_validation(field_name: str) -> None:
+    analysis = ProblemAnalysis.model_validate(valid_problem_analysis_data())
+    collection = getattr(analysis, field_name)
+    original = tuple(collection)
+    append = getattr(collection, "append", None)
+
+    if append is not None:
+        append("Injected after validation")
+
+    assert tuple(getattr(analysis, field_name)) == original
+
+
+@pytest.mark.parametrize(
     "mutate",
     [
         pytest.param(
