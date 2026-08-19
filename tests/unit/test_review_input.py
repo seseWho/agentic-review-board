@@ -43,7 +43,7 @@ def test_review_input_is_frozen_after_validation() -> None:
     review_input = ReviewInput(description="Review this.")
 
     with pytest.raises(ValidationError):
-        review_input.description = "Changed"  # type: ignore[misc]
+        review_input.description = "Changed"
 
 
 def test_review_input_rejects_unexpected_fields() -> None:
