@@ -77,8 +77,8 @@ Every implementation task follows:
 
 ### Tests first
 
-- [ ] T009 [P] [US3] Extend `tests/unit/test_problem_analysis.py` with structural failure cases for missing mandatory fields, unexpected top-level/nested fields, wrong primitive types for strict semantic text, invalid `ReviewInputSource`, malformed nested findings, empty required finding text, and duplicate non-null review-local identifiers while allowing absent identifiers.
-- [ ] T010 [P] [US3] Extend `tests/unit/test_analyst.py` with contextual/error-boundary cases proving that a fact cannot reference an absent/not-applicable `ReviewInput` field, Pydantic contract failures are normalized as Analyst-output validation failures, invalid generated data is not repaired or returned, and provider-specific exceptions are not misreported as schema-validation errors.
+- [X] T009 [P] [US3] Extend `tests/unit/test_problem_analysis.py` with structural failure cases for missing mandatory fields, unexpected top-level/nested fields, wrong primitive types for strict semantic text, invalid `ReviewInputSource`, malformed nested findings, empty required finding text, and duplicate non-null review-local identifiers while allowing absent identifiers.
+- [X] T010 [P] [US3] Extend `tests/unit/test_analyst.py` with contextual/error-boundary cases proving that a fact cannot reference an absent/not-applicable `ReviewInput` field, Pydantic contract failures are normalized as Analyst-output validation failures, invalid generated data is not repaired or returned, and provider-specific exceptions are not misreported as schema-validation errors.
 
 ### Implementation
 
