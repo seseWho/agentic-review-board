@@ -104,4 +104,4 @@ def test_analyst_happy_path_preserves_role_boundary() -> None:
         "decision",
     }
 
-    assert forbidden_fields.isdisjoint(analysis.model_fields)
+    assert forbidden_fields.isdisjoint(ProblemAnalysis.model_fields)
