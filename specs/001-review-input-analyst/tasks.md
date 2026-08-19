@@ -82,8 +82,8 @@ Every implementation task follows:
 
 ### Implementation
 
-- [ ] T011 [US3] Complete fail-closed contract invariants in `src/agentic_review_board/domain/analysis.py`, using Pydantic for structural validation and duplicate detection only for identifiers that are actually present; do not make local identifiers mandatory.
-- [ ] T012 [US3] Complete the validation/error boundary in `src/agentic_review_board/participants/analyst.py` so Pydantic validation failures and Analyst contextual provenance failures produce the explicit Analyst-output validation error category without swallowing unrelated provider/transport failures or manufacturing replacement values.
+- [X] T011 [US3] Complete fail-closed contract invariants in `src/agentic_review_board/domain/analysis.py`, using Pydantic for structural validation and duplicate detection only for identifiers that are actually present; do not make local identifiers mandatory.
+- [X] T012 [US3] Complete the validation/error boundary in `src/agentic_review_board/participants/analyst.py` so Pydantic validation failures and Analyst contextual provenance failures produce the explicit Analyst-output validation error category without swallowing unrelated provider/transport failures or manufacturing replacement values.
 
 **Checkpoint**: Every representative invalid result in US3 fails before trusted state, while the valid US1 result still succeeds.
 
