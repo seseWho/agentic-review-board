@@ -1,9 +1,8 @@
 from collections.abc import Mapping
 
-import pytest
-
+from agentic_review_board.domain.analysis import ProblemAnalysis
 from agentic_review_board.domain.review import ReviewInput
-from agentic_review_board.participants.analyst import Analyst, AnalystOutputError
+from agentic_review_board.participants.analyst import Analyst
 
 
 class FakeLLM:
@@ -32,59 +31,77 @@ def valid_response() -> dict[str, object]:
             }
         ],
         "constraints": [
-            {"id": "CON-001", "text": "The initial review should stay small."}
+            {"text": "The initial review should stay small."},
         ],
         "assumptions": [
-            {"id": "ASM-001", "text": "The existing system can be changed."}
+            {"id": "ASM-001", "text": "The existing system can be changed."},
         ],
         "missing_information": [
-            {"id": "MISS-001", "text": "Current architecture is unknown."}
+            {"text": "Current architecture is unknown."},
         ],
         "uncertainties": [
-            {"id": "UNC-001", "text": "The expected benefit is unclear."}
+            {"text": "The expected benefit is unclear."},
         ],
     }
 
 
-def test_analyst_returns_structured_problem_analysis() -> None:
+def test_analyst_returns_trusted_problem_analysis_from_valid_generated_output() -> None:
     llm = FakeLLM(valid_response())
-    review_input = ReviewInput(description="A technical change is proposed.")
+    review_input = ReviewInput(
+        description="A technical change is proposed.",
+        title="Technical change review",
+        objective="Decide whether further evaluation is justified.",
+        constraints=["Keep the initial review small."],
+        context=["The change affects an existing system."],
+        stated_facts=["A technical change is proposed."],
+    )
 
     analysis = Analyst(llm).analyze(review_input)
 
+    assert isinstance(analysis, ProblemAnalysis)
     assert analysis.objective == "Determine whether the proposal merits further evaluation."
-    assert analysis.facts[0].source_ref == "description"
+    assert analysis.facts[0].source_ref.value == "description"
+    assert analysis.facts[0].id == "FACT-001"
     assert analysis.assumptions[0].id == "ASM-001"
-    assert analysis.missing_information[0].id == "MISS-001"
-    assert llm.calls[0][0] == "analyst"
-    assert llm.calls[0][1]["description"] == review_input.description
+    assert analysis.missing_information[0].id is None
 
 
-def test_analyst_rejects_missing_required_collection() -> None:
-    response = valid_response()
-    del response["assumptions"]
+def test_analyst_invokes_provider_neutral_boundary_once_with_current_review_input() -> None:
+    llm = FakeLLM(valid_response())
+    review_input = ReviewInput(
+        description="A technical change is proposed.",
+        title="Technical change review",
+        constraints=["Keep the initial review small."],
+        context=["Existing system."],
+        stated_facts=["A technical change is proposed."],
+    )
 
-    with pytest.raises(AnalystOutputError, match="assumptions must be a list"):
-        Analyst(FakeLLM(response)).analyze(ReviewInput(description="Review this."))
+    Analyst(llm).analyze(review_input)
+
+    assert len(llm.calls) == 1
+    role, payload = llm.calls[0]
+    assert role == "analyst"
+    assert payload["description"] == review_input.description
+    assert payload["title"] == review_input.title
+    assert payload["objective"] == review_input.objective
+    assert payload["constraints"] == review_input.constraints
+    assert payload["context"] == review_input.context
+    assert payload["stated_facts"] == review_input.stated_facts
 
 
-def test_analyst_rejects_fact_without_valid_input_source() -> None:
-    response = valid_response()
-    response["facts"] = [
-        {
-            "id": "FACT-001",
-            "text": "An invented fact.",
-            "source_ref": "external_knowledge",
-        }
-    ]
+def test_analyst_happy_path_preserves_role_boundary() -> None:
+    analysis = Analyst(FakeLLM(valid_response())).analyze(
+        ReviewInput(description="A technical change is proposed.")
+    )
 
-    with pytest.raises(AnalystOutputError, match="invalid fact source_ref"):
-        Analyst(FakeLLM(response)).analyze(ReviewInput(description="Review this."))
+    forbidden_fields = {
+        "alternatives",
+        "solution_alternatives",
+        "ranking",
+        "architecture_recommendation",
+        "preferred_solution",
+        "final_recommendation",
+        "decision",
+    }
 
-
-def test_analyst_rejects_duplicate_finding_ids() -> None:
-    response = valid_response()
-    response["assumptions"] = [{"id": "FACT-001", "text": "Duplicate identifier."}]
-
-    with pytest.raises(AnalystOutputError, match="finding ids must be unique"):
-        Analyst(FakeLLM(response)).analyze(ReviewInput(description="Review this."))
+    assert forbidden_fields.isdisjoint(analysis.model_fields)
