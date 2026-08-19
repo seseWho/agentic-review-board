@@ -10,9 +10,9 @@ def test_review_input_accepts_minimal_valid_description() -> None:
     assert review_input.description == "Evaluate a proposed technical change."
     assert review_input.title is None
     assert review_input.objective is None
-    assert review_input.constraints == []
-    assert review_input.context == []
-    assert review_input.stated_facts == []
+    assert review_input.constraints == ()
+    assert review_input.context == ()
+    assert review_input.stated_facts == ()
 
 
 def test_review_input_accepts_and_preserves_optional_context() -> None:
@@ -28,9 +28,9 @@ def test_review_input_accepts_and_preserves_optional_context() -> None:
     assert review_input.description == "  Keep this exact description.  "
     assert review_input.title == "  Exact title  "
     assert review_input.objective == "  Exact objective  "
-    assert review_input.constraints == ["  Constraint A  "]
-    assert review_input.context == ["  Background A  "]
-    assert review_input.stated_facts == ["  Fact A  "]
+    assert review_input.constraints == ("  Constraint A  ",)
+    assert review_input.context == ("  Background A  ",)
+    assert review_input.stated_facts == ("  Fact A  ",)
 
 
 @pytest.mark.parametrize("description", ["", "   ", "\t\n"])
