@@ -3,12 +3,12 @@
 **Feature:** `specs/001-review-input-analyst/spec.md`  
 **Plan:** `specs/001-review-input-analyst/plan.md`  
 **Related ADR:** `docs/adr/ADR-0001-pydantic-v2-for-structured-contracts.md`  
-**Status:** Reviewed for implementation planning
+**Status:** Reviewed and reconciled with implementation
 
 ## 1. Purpose
 
 This document records the technical questions investigated for the first executable
-Analyst increment and the conclusions that inform the implementation plan.
+Analyst increment and the conclusions that informed the implementation plan.
 
 It does not create new product requirements. Product behavior remains governed by the
 canonical documents and `spec.md`; architectural decisions remain governed by the
@@ -137,29 +137,41 @@ Canonical requirements state that the original user-provided problem and context
 unchanged for the duration of the review. Pydantic v2 supports frozen model
 configuration, preventing ordinary field reassignment after construction.
 
+Pre-merge regression tests showed that `frozen=True` alone does not make nested mutable
+collections immutable: list fields can still be modified in place after model
+validation.
+
 ### Decision
 
-Represent `ReviewInput` as a frozen Pydantic model.
+Represent `ReviewInput` as a frozen Pydantic model and store validated collections using
+immutable ordered collection types.
 
-Validation will reject an empty or whitespace-only required description but must not
-silently trim or rewrite a valid supplied value.
+Validation rejects an empty or whitespace-only required description but does not
+silently trim or rewrite a valid supplied value. List-shaped external input remains
+acceptable through normal Pydantic validation and is normalized into the immutable
+validated representation.
 
 ### Rationale
 
 Immutability directly supports traceability and prevents later application code from
-accidentally rewriting the evidence basis of the review.
+accidentally rewriting the evidence basis of the review. Deep-enough immutability for
+these collection fields is necessary because field reassignment protection alone did
+not satisfy the preservation requirement.
 
 ### Alternatives considered
 
 - **Mutable model with coding convention** — rejected because the invariant can be
   enforced directly and cheaply.
+- **Frozen model with mutable list fields** — rejected after deterministic tests proved
+  that post-validation in-place mutation remained possible.
 - **Copy input into a second immutable structure later** — unnecessary duplication for
   this increment.
 
 ### Boundary
 
-Frozen Pydantic models provide practical application-level immutability; they are not a
-security boundary against deliberate low-level mutation.
+Frozen Pydantic models plus immutable collection fields provide practical
+application-level immutability; they are not a security boundary against deliberate
+low-level mutation.
 
 ## 5. Research Decision — Split Structural and Contextual Validation
 
@@ -169,22 +181,22 @@ Should all Analyst validation live inside Pydantic models?
 
 ### Evidence
 
-Some invariants depend only on the generated structure, while others require trusted
-context from the active review.
+Some invariants depend only on the generated candidate structure, while others require
+trusted context from the active review.
 
-Examples of structural validation:
+Examples of structural/model-local validation:
 
 - required fields exist;
 - field types are valid;
 - extra generated fields are rejected;
-- source-reference values belong to the allowed vocabulary.
+- source-reference values belong to the allowed vocabulary;
+- duplicate non-null local identifiers are rejected within one candidate
+  `ProblemAnalysis`.
 
 Examples of contextual validation:
 
 - a generated fact references a `ReviewInput` field that is actually present or
-  applicable in the current review;
-- optional local identifiers do not create ambiguous references within the active
-  analysis.
+  applicable in the current review.
 
 The canonical architecture places validation between generated model content and trusted
 review contracts, but does not require every invariant to be embedded in one schema
@@ -197,22 +209,28 @@ Use two validation layers:
 ```text
 untrusted generated content
     ↓
-Pydantic structural validation
+Pydantic structural/model-local validation
     ↓
 Analyst/application contextual invariants
     ↓
 trusted ProblemAnalysis
 ```
 
+Duplicate-ID detection belongs to `ProblemAnalysis` because it depends only on the
+candidate output. Fact-source applicability remains at the Analyst/application boundary
+because it requires the current trusted `ReviewInput`.
+
 ### Rationale
 
-This keeps Pydantic focused on reusable contract validation while preserving domain
-rules that require active-review context in the participant/application boundary.
+This keeps Pydantic focused on reusable contract and model-local validation while
+preserving rules that genuinely require active-review context in the
+participant/application boundary.
 
 ### Alternatives considered
 
-- **Put every rule in Pydantic validators** — rejected because it would force trusted
-  external review context into schema validation and blur responsibilities.
+- **Put review-context rules inside Pydantic validators** — rejected because it would
+  force trusted external review context into schema validation and blur
+  responsibilities.
 - **Perform all validation manually in Analyst** — rejected because it duplicates
   structural validation already provided declaratively by Pydantic.
 
@@ -323,7 +341,8 @@ Identifiers may be present on Analyst findings but are not universally mandatory
 v0.1.
 
 If identifiers are supplied, they must be non-empty and must not create ambiguous
-references within the current `ProblemAnalysis`.
+references within the current `ProblemAnalysis`. Duplicate non-null identifiers are
+therefore rejected as a model-level invariant.
 
 ### Rationale
 
@@ -423,13 +442,12 @@ The following remain outside this feature or require later evidence/ADRs:
 
 ## 12. Research Conclusion
 
-No unresolved technical question in this feature blocks creation of implementation
-tasks.
+No unresolved technical question in this feature blocks the completed implementation.
 
-The approved direction is:
+The reconciled direction is:
 
 ```text
-ReviewInput (Pydantic, preserved/frozen)
+ReviewInput (Pydantic, preserved/frozen, immutable collections)
     ↓
 Analyst
     ↓
@@ -437,11 +455,11 @@ provider-neutral LLMPort
     ↓
 untrusted generated content
     ↓
-Pydantic structural validation
+Pydantic structural/model-local validation
     ↓
 contextual Analyst validation
     ↓
-trusted ProblemAnalysis
+trusted ProblemAnalysis (immutable collections)
 ```
 
 This direction is consistent with `spec.md`, `plan.md`, `data-model.md`, accepted
