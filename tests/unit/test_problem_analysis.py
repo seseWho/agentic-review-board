@@ -58,17 +58,17 @@ def test_fact_finding_uses_closed_review_input_source_vocabulary() -> None:
 def test_problem_analysis_contains_all_six_semantic_categories() -> None:
     analysis = ProblemAnalysis(
         objective="Determine whether the proposal merits further evaluation.",
-        facts=[
+        facts=(
             FactFinding(
                 id="FACT-001",
                 text="A technical change is proposed.",
                 source_ref=ReviewInputSource.DESCRIPTION,
-            )
-        ],
-        constraints=[AnalysisFinding(text="The initial review should stay small.")],
-        assumptions=[AnalysisFinding(id="ASM-001", text="The system can be changed.")],
-        missing_information=[AnalysisFinding(text="Current architecture is unknown.")],
-        uncertainties=[AnalysisFinding(text="The expected benefit is unclear.")],
+            ),
+        ),
+        constraints=(AnalysisFinding(text="The initial review should stay small."),),
+        assumptions=(AnalysisFinding(id="ASM-001", text="The system can be changed."),),
+        missing_information=(AnalysisFinding(text="Current architecture is unknown."),),
+        uncertainties=(AnalysisFinding(text="The expected benefit is unclear."),),
     )
 
     assert analysis.objective == "Determine whether the proposal merits further evaluation."
@@ -88,17 +88,27 @@ def test_facts_and_assumptions_remain_structurally_distinct() -> None:
 
     analysis = ProblemAnalysis(
         objective="Evaluate the proposal.",
-        facts=[fact],
-        constraints=[],
-        assumptions=[assumption],
-        missing_information=[],
-        uncertainties=[],
+        facts=(fact,),
+        constraints=(),
+        assumptions=(assumption,),
+        missing_information=(),
+        uncertainties=(),
     )
 
     assert analysis.facts == (fact,)
     assert analysis.assumptions == (assumption,)
     assert isinstance(analysis.facts[0], FactFinding)
     assert isinstance(analysis.assumptions[0], AnalysisFinding)
+
+
+def test_problem_analysis_model_validation_normalizes_external_lists_to_tuples() -> None:
+    analysis = ProblemAnalysis.model_validate(valid_problem_analysis_data())
+
+    assert isinstance(analysis.facts, tuple)
+    assert isinstance(analysis.constraints, tuple)
+    assert isinstance(analysis.assumptions, tuple)
+    assert isinstance(analysis.missing_information, tuple)
+    assert isinstance(analysis.uncertainties, tuple)
 
 
 @pytest.mark.parametrize(
