@@ -1,21 +1,15 @@
 <!--
 Sync Impact Report
-- Version change: N/A -> 1.0.0
-- Ratification: initial constitution derived from the canonical MVP documentation.
-- Added principles:
+- Version change: 1.0.0 -> 1.1.0
+- Amendment: align governing language more precisely with canonical MVP requirements.
+- Modified principles:
   - I. Genuine Agent Collaboration and Role Integrity
-  - II. Structured Contracts and Validation
-  - III. Traceability, Uncertainty, and Explicit Evidence
-  - IV. Human Decision Authority
-  - V. Minimal Architecture and Evidence-Driven Complexity
-  - VI. Provider Independence and Boundary Discipline
-  - VII. Deterministic Testability and Visible Failure
-  - VIII. Security by Minimization and Least Capability
-  - IX. Incremental Delivery and Explicit Architectural Decisions
-- Added sections:
-  - Canonical Project Sources
-  - Development and Review Gates
-  - Governance
+    - Added explicit user-visible participant/status/intermediate-output inspectability.
+    - Corrected Coordinator ranking semantics so ranking is mandatory when multiple
+      alternatives exist and preference is produced only when evidence is sufficient.
+- Added principles: none
+- Removed principles: none
+- Added sections: none
 - Removed sections: none
 - Deferred items: none
 -->
@@ -44,11 +38,18 @@ The system MUST demonstrate real collaboration between specialized review partic
 - Agents MUST NOT control global workflow progression or directly invoke one another.
 - Multiple independent prompts whose outputs are merely displayed together MUST NOT
   be treated as agentic collaboration.
-- The Coordinator alone MAY rank alternatives and identify a preferred alternative
-  when evidence is sufficient.
+- The user-visible experience MUST make the participating roles, their execution
+  status, and the structured output of each completed stage inspectable during the
+  active review.
+- The Coordinator MUST be the only participant that ranks alternatives. When multiple
+  alternatives exist, it MUST rank them from most suitable to least suitable as
+  required by the canonical requirements, and it MUST identify a preferred alternative
+  when sufficient evidence exists. It MUST NOT force a preferred alternative when
+  evidence is insufficient.
 
 Any feature that collapses these responsibilities into indistinguishable generic
-reviewers violates the product purpose and MUST be redesigned.
+reviewers or hides the collaborative process from the user violates the product purpose
+and MUST be redesigned.
 
 ### II. Structured Contracts and Validation
 
@@ -279,6 +280,6 @@ complete.
 Architecture may evolve through ADRs, but an ADR does not automatically override the
 constitution. A conflicting ADR requires a constitution amendment first.
 
-**Version:** 1.0.0  
+**Version:** 1.1.0  
 **Ratified:** 2026-08-19  
 **Last Amended:** 2026-08-19
