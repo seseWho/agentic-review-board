@@ -1,6 +1,6 @@
 # ADR-0001 — Use Pydantic v2 for Structured Contracts and Validation
 
-**Status:** Proposed  
+**Status:** Accepted  
 **Date:** 2026-08-19  
 **Decision owners:** Agentic Review Board maintainers  
 **Related feature:** `specs/001-review-input-analyst/`  
