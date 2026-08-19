@@ -2,7 +2,7 @@
 
 **Input**: Design documents from `specs/001-review-input-analyst/`  
 **Prerequisites**: reviewed `spec.md`, `plan.md`, `research.md`, `data-model.md`, and accepted `docs/adr/ADR-0001-pydantic-v2-for-structured-contracts.md`  
-**Status**: Reviewed — awaiting approval before implementation
+**Status**: Approved — implementation in progress
 
 Tests are mandatory for this feature because the specification, canonical Quality & Security baseline, and Constitution require deterministic verification of new domain/application behavior.
 
@@ -24,7 +24,7 @@ Every implementation task follows:
 
 **Purpose**: Apply the one approved production dependency before feature code is reconciled.
 
-- [ ] T001 Update `[project].dependencies` in `pyproject.toml` to include `pydantic>=2.13,<3` and add no other production dependency.
+- [X] T001 Update `[project].dependencies` in `pyproject.toml` to include `pydantic>=2.13,<3` and add no other production dependency.
 
 **Checkpoint**: The project dependency declaration matches ADR-0001 and the approved plan.
 
@@ -38,11 +38,11 @@ Every implementation task follows:
 
 ### Tests first
 
-- [ ] T002 [US2] Replace the provisional tests in `tests/unit/test_review_input.py` with Pydantic-focused cases covering minimal valid input, all optional fields absent, blank/whitespace-only description rejection, exact preservation of valid supplied text, frozen-model reassignment rejection, and deterministic rejection of unexpected fields.
+- [X] T002 [US2] Replace the provisional tests in `tests/unit/test_review_input.py` with Pydantic-focused cases covering minimal valid input, all optional fields absent, blank/whitespace-only description rejection, exact preservation of valid supplied text, frozen-model reassignment rejection, and deterministic rejection of unexpected fields.
 
 ### Implementation
 
-- [ ] T003 [US2] Replace the provisional dataclass in `src/agentic_review_board/domain/review.py` with the approved Pydantic v2 `ReviewInput`, preserving the conceptual fields from `data-model.md`, rejecting only invalid required description content, preserving valid text unchanged, using closed input fields, and preventing reassignment after validation.
+- [X] T003 [US2] Replace the provisional dataclass in `src/agentic_review_board/domain/review.py` with the approved Pydantic v2 `ReviewInput`, preserving the conceptual fields from `data-model.md`, rejecting only invalid required description content, preserving valid text unchanged, using closed input fields, and preventing reassignment after validation.
 
 **Checkpoint**: `tests/unit/test_review_input.py` passes independently and demonstrates FR-001 through FR-003 without invoking Analyst or a model provider.
 
