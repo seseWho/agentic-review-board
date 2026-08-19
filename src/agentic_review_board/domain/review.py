@@ -1,17 +1,21 @@
-from dataclasses import dataclass
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
-@dataclass(frozen=True, slots=True)
-class ReviewInput:
+class ReviewInput(BaseModel):
     """Immutable user-provided input for one review execution."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     description: str
     title: str | None = None
     objective: str | None = None
-    constraints: tuple[str, ...] = ()
-    context: tuple[str, ...] = ()
-    stated_facts: tuple[str, ...] = ()
+    constraints: list[str] = []
+    context: list[str] = []
+    stated_facts: list[str] = []
 
-    def __post_init__(self) -> None:
-        if not self.description.strip():
+    @field_validator("description")
+    @classmethod
+    def validate_description(cls, value: str) -> str:
+        if not value.strip():
             raise ValueError("description must not be empty")
+        return value
