@@ -3,7 +3,7 @@
 **Feature:** `specs/001-review-input-analyst/spec.md`  
 **Plan:** `specs/001-review-input-analyst/plan.md`  
 **ADR:** `docs/adr/ADR-0001-pydantic-v2-for-structured-contracts.md`  
-**Status:** Draft — awaiting review
+**Status:** Approved — implemented and verified
 
 ## 1. Purpose
 
@@ -19,6 +19,7 @@ The following rules apply to the contracts introduced by this increment:
 
 - models use Pydantic v2 `BaseModel`;
 - accepted review data is immutable where mutation would break traceability;
+- validated collections that belong to immutable review data are stored using immutable collection types;
 - closed generated-output contracts reject unexpected fields deterministically;
 - valid supplied text is preserved rather than silently trimmed or rewritten;
 - required text may be rejected when empty or whitespace-only;
@@ -48,6 +49,7 @@ ReviewInput
 - `title`, `objective`, `constraints`, `context`, and `stated_facts` are optional context.
 - Empty optional collections are valid.
 - The exact user-provided textual values remain unchanged after validation.
+- Collection order is preserved while the validated representation prevents post-validation mutation.
 
 ### Validation rules
 
@@ -56,6 +58,7 @@ ReviewInput
 - Optional text fields MUST remain optional.
 - Collection items, when present, are textual values supplied by the user.
 - The model is configured as frozen after successful construction so accepted input cannot be reassigned accidentally.
+- Validated collections MUST NOT remain mutable after successful construction because mutation would violate preservation and traceability requirements.
 
 ### Pydantic configuration intent
 
@@ -164,6 +167,8 @@ ProblemAnalysis
 
 All six semantic categories are required by the Analyst contract, although the collections may be empty when no relevant finding exists.
 
+Validated collections preserve order and are immutable after the model crosses the validation boundary so trusted stage output cannot be altered without revalidation.
+
 ### Structural invariants
 
 Pydantic validates at minimum:
@@ -183,6 +188,8 @@ When identifiers are supplied:
 
 - duplicate non-null identifiers within the same `ProblemAnalysis` are invalid because they would create ambiguous references;
 - missing identifiers do not invalidate otherwise valid findings.
+
+Duplicate-ID detection is a model-level structural invariant because it depends only on the candidate `ProblemAnalysis`, not on external review context.
 
 This preserves the canonical SHOULD semantics for local identifiers.
 
@@ -226,7 +233,7 @@ Pydantic owns ordinary contract concerns such as:
 - nested model structure;
 - closed-schema behavior;
 - allowed `source_ref` vocabulary;
-- model-level invariants that depend only on the candidate `ProblemAnalysis` itself.
+- model-level invariants that depend only on the candidate `ProblemAnalysis` itself, including duplicate non-null local identifiers.
 
 ### Analyst/application responsibility
 
