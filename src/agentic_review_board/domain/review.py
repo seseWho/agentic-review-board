@@ -9,9 +9,9 @@ class ReviewInput(BaseModel):
     description: str
     title: str | None = None
     objective: str | None = None
-    constraints: list[str] = []
-    context: list[str] = []
-    stated_facts: list[str] = []
+    constraints: tuple[str, ...] = ()
+    context: tuple[str, ...] = ()
+    stated_facts: tuple[str, ...] = ()
 
     @field_validator("description")
     @classmethod
