@@ -2,7 +2,7 @@
 
 **Input**: Design documents from `specs/001-review-input-analyst/`  
 **Prerequisites**: reviewed `spec.md`, `plan.md`, `research.md`, `data-model.md`, and accepted `docs/adr/ADR-0001-pydantic-v2-for-structured-contracts.md`  
-**Status**: Approved — implementation in progress
+**Status**: Implementation complete — awaiting final review and merge approval
 
 Tests are mandatory for this feature because the specification, canonical Quality & Security baseline, and Constitution require deterministic verification of new domain/application behavior.
 
@@ -93,12 +93,12 @@ Every implementation task follows:
 
 **Purpose**: Prove the increment satisfies the approved design and has not expanded scope.
 
-- [ ] T013 Run the deterministic feature and package test suite in `tests/` with no live LLM or network dependency and confirm all tests pass.
-- [ ] T014 Run Ruff against `src/` and `tests/` using the configuration in `pyproject.toml` and resolve all violations introduced by this increment.
-- [ ] T015 Run mypy strict checks against `src/` and `tests/` using `pyproject.toml` and resolve all type errors introduced by this increment without adding the Pydantic mypy plugin.
-- [ ] T016 Run `pip check` for the environment built from `pyproject.toml`, then inspect `pyproject.toml` and `src/agentic_review_board/` to confirm the increment introduced no concrete LLM SDK, UI framework, persistence, RAG/document ingestion, external tools, orchestration framework, downstream participant, or additional production dependency beyond Pydantic.
+- [X] T013 Run the deterministic feature and package test suite in `tests/` with no live LLM or network dependency and confirm all tests pass.
+- [X] T014 Run Ruff against `src/` and `tests/` using the configuration in `pyproject.toml` and resolve all violations introduced by this increment.
+- [X] T015 Run mypy strict checks against `src/` and `tests/` using `pyproject.toml` and resolve all type errors introduced by this increment without adding the Pydantic mypy plugin.
+- [X] T016 Run `pip check` for the environment built from `pyproject.toml`, then inspect `pyproject.toml` and `src/agentic_review_board/` to confirm the increment introduced no concrete LLM SDK, UI framework, persistence, RAG/document ingestion, external tools, orchestration framework, downstream participant, or additional production dependency beyond Pydantic.
 
-**Final checkpoint**: T001–T016 are complete, pytest/Ruff/mypy/pip-check are green, and implementation matches `spec.md`, `plan.md`, `data-model.md`, `research.md`, ADR-0001, and the canonical project documents.
+**Final checkpoint**: T001–T016 are complete. GitHub Actions CI run 30 is green on Python 3.12 and 3.13, including dependency check, pytest, Ruff, and mypy. The implementation remains limited to the approved Review Input + Analyst v0.1 scope.
 
 ---
 
