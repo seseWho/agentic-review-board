@@ -49,8 +49,8 @@
 ## Phase 6: Verification
 
 - [X] T018 Run deterministic pytest suite and confirm all feature tests pass
-- [ ] T019 Run Ruff against source/tests in CI or an environment with development dependencies
-- [ ] T020 Run mypy strict checks in CI or an environment with development dependencies
+- [X] T019 Run Ruff against source/tests in CI or an environment with development dependencies
+- [X] T020 Run mypy strict checks in CI or an environment with development dependencies
 - [X] T021 Confirm no production dependency, UI, persistence, real provider SDK, or downstream participant was introduced
 
 ## Dependencies
