@@ -1,9 +1,29 @@
+import pytest
+from pydantic import ValidationError
+
 from agentic_review_board.domain.analysis import (
     AnalysisFinding,
     FactFinding,
     ProblemAnalysis,
     ReviewInputSource,
 )
+
+
+def valid_problem_analysis_data() -> dict[str, object]:
+    return {
+        "objective": "Determine whether the proposal merits further evaluation.",
+        "facts": [
+            {
+                "id": "FACT-001",
+                "text": "A technical change is proposed.",
+                "source_ref": "description",
+            }
+        ],
+        "constraints": [{"text": "The initial review should stay small."}],
+        "assumptions": [{"id": "ASM-001", "text": "The system can be changed."}],
+        "missing_information": [{"text": "Current architecture is unknown."}],
+        "uncertainties": [{"text": "The expected benefit is unclear."}],
+    }
 
 
 def test_analysis_finding_allows_optional_local_identifier() -> None:
@@ -79,3 +99,72 @@ def test_facts_and_assumptions_remain_structurally_distinct() -> None:
     assert analysis.assumptions == [assumption]
     assert isinstance(analysis.facts[0], FactFinding)
     assert isinstance(analysis.assumptions[0], AnalysisFinding)
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        pytest.param(
+            lambda data: data.pop("assumptions"),
+            id="missing-mandatory-field",
+        ),
+        pytest.param(
+            lambda data: data.update({"ranking": []}),
+            id="unexpected-top-level-field",
+        ),
+        pytest.param(
+            lambda data: data["assumptions"][0].update({"confidence": "HIGH"}),
+            id="unexpected-nested-field",
+        ),
+        pytest.param(
+            lambda data: data["assumptions"][0].update({"text": 123}),
+            id="wrong-strict-text-type",
+        ),
+        pytest.param(
+            lambda data: data["facts"][0].update({"source_ref": "external_knowledge"}),
+            id="invalid-review-input-source",
+        ),
+        pytest.param(
+            lambda data: data.update({"uncertainties": ["not-a-finding"]}),
+            id="malformed-nested-finding",
+        ),
+        pytest.param(
+            lambda data: data["missing_information"][0].update({"text": "   "}),
+            id="empty-finding-text",
+        ),
+    ],
+)
+def test_problem_analysis_rejects_structurally_invalid_generated_content(
+    mutate: object,
+) -> None:
+    data = valid_problem_analysis_data()
+    assert callable(mutate)
+    mutate(data)
+
+    with pytest.raises(ValidationError):
+        ProblemAnalysis.model_validate(data)
+
+
+def test_problem_analysis_rejects_duplicate_non_null_local_identifiers() -> None:
+    data = valid_problem_analysis_data()
+    data["assumptions"] = [{"id": "FACT-001", "text": "Duplicate identifier."}]
+
+    with pytest.raises(ValidationError):
+        ProblemAnalysis.model_validate(data)
+
+
+def test_problem_analysis_allows_multiple_findings_without_identifiers() -> None:
+    data = valid_problem_analysis_data()
+    data["facts"] = [
+        {"text": "One fact.", "source_ref": "description"},
+        {"text": "Another fact.", "source_ref": "description"},
+    ]
+    data["assumptions"] = [
+        {"text": "First assumption."},
+        {"text": "Second assumption."},
+    ]
+
+    analysis = ProblemAnalysis.model_validate(data)
+
+    assert all(finding.id is None for finding in analysis.facts)
+    assert all(finding.id is None for finding in analysis.assumptions)
