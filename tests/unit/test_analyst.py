@@ -1,8 +1,10 @@
 from collections.abc import Mapping
 
+import pytest
+
 from agentic_review_board.domain.analysis import ProblemAnalysis
 from agentic_review_board.domain.review import ReviewInput
-from agentic_review_board.participants.analyst import Analyst
+from agentic_review_board.participants.analyst import Analyst, AnalystOutputError
 
 
 class FakeLLM:
@@ -18,6 +20,20 @@ class FakeLLM:
     ) -> Mapping[str, object]:
         self.calls.append((role, payload))
         return self.response
+
+
+class ProviderFailure(RuntimeError):
+    pass
+
+
+class FailingLLM:
+    def generate_structured(
+        self,
+        *,
+        role: str,
+        payload: Mapping[str, object],
+    ) -> Mapping[str, object]:
+        raise ProviderFailure("provider unavailable")
 
 
 def valid_response() -> dict[str, object]:
@@ -90,7 +106,7 @@ def test_analyst_invokes_provider_neutral_boundary_once_with_current_review_inpu
 
 
 def test_analyst_happy_path_preserves_role_boundary() -> None:
-    analysis = Analyst(FakeLLM(valid_response())).analyze(
+    Analyst(FakeLLM(valid_response())).analyze(
         ReviewInput(description="A technical change is proposed.")
     )
 
@@ -105,3 +121,41 @@ def test_analyst_happy_path_preserves_role_boundary() -> None:
     }
 
     assert forbidden_fields.isdisjoint(ProblemAnalysis.model_fields)
+
+
+def test_analyst_rejects_fact_reference_to_absent_review_input_field() -> None:
+    response = valid_response()
+    response["facts"] = [
+        {
+            "text": "A title-specific fact.",
+            "source_ref": "title",
+        }
+    ]
+
+    with pytest.raises(AnalystOutputError, match="not applicable"):
+        Analyst(FakeLLM(response)).analyze(ReviewInput(description="Review this."))
+
+
+def test_analyst_normalizes_pydantic_contract_failure() -> None:
+    response = valid_response()
+    del response["assumptions"]
+
+    with pytest.raises(AnalystOutputError, match="invalid Analyst output") as captured:
+        Analyst(FakeLLM(response)).analyze(ReviewInput(description="Review this."))
+
+    assert captured.value.__cause__ is not None
+
+
+def test_analyst_does_not_repair_invalid_generated_data() -> None:
+    response = valid_response()
+    response["objective"] = 123
+
+    with pytest.raises(AnalystOutputError, match="invalid Analyst output"):
+        Analyst(FakeLLM(response)).analyze(ReviewInput(description="Review this."))
+
+    assert response["objective"] == 123
+
+
+def test_provider_failure_is_not_misreported_as_output_validation_error() -> None:
+    with pytest.raises(ProviderFailure, match="provider unavailable"):
+        Analyst(FailingLLM()).analyze(ReviewInput(description="Review this."))
