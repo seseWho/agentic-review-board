@@ -2,7 +2,7 @@
 
 **Input**: Design documents from `specs/001-review-input-analyst/`  
 **Prerequisites**: reviewed `spec.md`, `plan.md`, `research.md`, `data-model.md`, and accepted `docs/adr/ADR-0001-pydantic-v2-for-structured-contracts.md`  
-**Status**: Implementation complete — awaiting final review and merge approval
+**Status**: Implementation complete — ready for final merge review
 
 Tests are mandatory for this feature because the specification, canonical Quality & Security baseline, and Constitution require deterministic verification of new domain/application behavior.
 
@@ -16,7 +16,7 @@ Every implementation task follows:
 
 - `[P]` means the task can be executed in parallel because it changes a different file and does not depend on an incomplete task.
 - `[US1]`, `[US2]`, and `[US3]` map directly to the user stories in `spec.md`.
-- Existing code on this branch is provisional. A task is complete only when the current approved specification, plan, data model, research, and ADR are satisfied; previous implementation does not make a task pre-completed.
+- Existing code on this branch was provisional. A task is complete only when the current approved specification, plan, data model, research, and ADR are satisfied; previous implementation does not make a task pre-completed.
 
 ---
 
@@ -38,11 +38,11 @@ Every implementation task follows:
 
 ### Tests first
 
-- [X] T002 [US2] Replace the provisional tests in `tests/unit/test_review_input.py` with Pydantic-focused cases covering minimal valid input, all optional fields absent, blank/whitespace-only description rejection, exact preservation of valid supplied text, frozen-model reassignment rejection, and deterministic rejection of unexpected fields.
+- [X] T002 [US2] Replace the provisional tests in `tests/unit/test_review_input.py` with Pydantic-focused cases covering minimal valid input, all optional fields absent, blank/whitespace-only description rejection, exact preservation of valid supplied text, frozen-model reassignment rejection, deterministic rejection of unexpected fields, and post-validation immutability of review-input collections.
 
 ### Implementation
 
-- [X] T003 [US2] Replace the provisional dataclass in `src/agentic_review_board/domain/review.py` with the approved Pydantic v2 `ReviewInput`, preserving the conceptual fields from `data-model.md`, rejecting only invalid required description content, preserving valid text unchanged, using closed input fields, and preventing reassignment after validation.
+- [X] T003 [US2] Replace the provisional dataclass in `src/agentic_review_board/domain/review.py` with the approved Pydantic v2 `ReviewInput`, preserving the conceptual fields from `data-model.md`, rejecting only invalid required description content, preserving valid text unchanged, using closed input fields, preventing reassignment after validation, and storing validated collections immutably so accepted input cannot be mutated after validation.
 
 **Checkpoint**: `tests/unit/test_review_input.py` passes independently and demonstrates FR-001 through FR-003 without invoking Analyst or a model provider.
 
@@ -56,12 +56,12 @@ Every implementation task follows:
 
 ### Tests first
 
-- [X] T004 [P] [US1] Create `tests/unit/test_problem_analysis.py` with happy-path contract tests for `AnalysisFinding`, `FactFinding`, optional review-local identifiers, the closed `ReviewInputSource` vocabulary, all six required `ProblemAnalysis` categories, and facts remaining structurally distinct from assumptions.
+- [X] T004 [P] [US1] Create `tests/unit/test_problem_analysis.py` with happy-path contract tests for `AnalysisFinding`, `FactFinding`, optional review-local identifiers, the closed `ReviewInputSource` vocabulary, all six required `ProblemAnalysis` categories, facts remaining structurally distinct from assumptions, and post-validation immutability of trusted output collections.
 - [X] T005 [P] [US1] Rewrite the happy-path portion of `tests/unit/test_analyst.py` to use a deterministic provider-neutral substitute, assert one Analyst invocation, verify propagation of the current `ReviewInput`, verify applicable fact provenance, and assert the returned value is a trusted `ProblemAnalysis` containing no solution alternatives, ranking, architecture recommendation, or final recommendation fields.
 
 ### Implementation
 
-- [X] T006 [US1] Replace the provisional dataclasses in `src/agentic_review_board/domain/analysis.py` with Pydantic v2 `AnalysisFinding`, `FactFinding`, `ReviewInputSource`, and `ProblemAnalysis` contracts aligned with `data-model.md`, including optional local identifiers, non-empty semantic text, closed generated-output models, and immutable trusted output where appropriate.
+- [X] T006 [US1] Replace the provisional dataclasses in `src/agentic_review_board/domain/analysis.py` with Pydantic v2 `AnalysisFinding`, `FactFinding`, `ReviewInputSource`, and `ProblemAnalysis` contracts aligned with `data-model.md`, including optional local identifiers, non-empty semantic text, closed generated-output models, and immutable trusted output collections.
 - [X] T007 [US1] Reconcile `src/agentic_review_board/application/ports.py` into the smallest provider-neutral `LLMPort` Protocol required by the Analyst use case, keeping concrete provider SDK types, authentication, transport envelopes, and provider-specific structured-output mechanics outside the port.
 - [X] T008 [US1] Refactor `src/agentic_review_board/participants/analyst.py` so `Analyst` invokes `LLMPort`, treats the returned representation as untrusted, constructs `ProblemAnalysis` through local Pydantic validation, verifies that each fact's `source_ref` is applicable to the actual current `ReviewInput`, and returns only the trusted Analyst contract.
 
@@ -98,7 +98,7 @@ Every implementation task follows:
 - [X] T015 Run mypy strict checks against `src/` and `tests/` using `pyproject.toml` and resolve all type errors introduced by this increment without adding the Pydantic mypy plugin.
 - [X] T016 Run `pip check` for the environment built from `pyproject.toml`, then inspect `pyproject.toml` and `src/agentic_review_board/` to confirm the increment introduced no concrete LLM SDK, UI framework, persistence, RAG/document ingestion, external tools, orchestration framework, downstream participant, or additional production dependency beyond Pydantic.
 
-**Final checkpoint**: T001–T016 are complete. GitHub Actions CI run 30 is green on Python 3.12 and 3.13, including dependency check, pytest, Ruff, and mypy. The implementation remains limited to the approved Review Input + Analyst v0.1 scope.
+**Final checkpoint**: T001–T016 are complete. The final deterministic suite contains 38 tests, including regression coverage proving that accepted `ReviewInput` and trusted `ProblemAnalysis` collections cannot be mutated after validation. GitHub Actions passes dependency check, pytest, Ruff, and mypy on Python 3.12 and 3.13. The implementation remains limited to the approved Review Input + Analyst v0.1 scope.
 
 ---
 
