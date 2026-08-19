@@ -28,10 +28,10 @@ The same validation concern will recur for the later participant outputs:
 - `CriticalReview`;
 - `FinalReview`.
 
-A purely handwritten validation approach is possible, but the provisional implementation
-on the feature branch already demonstrates that structural parsing, required-field
-checks, nested validation, closed-schema behavior, immutability, error normalization,
-and schema representation would otherwise require repetitive custom code.
+A purely handwritten validation approach is possible, but implementing required-field
+checks, nested validation, closed-schema behavior, immutability, structured errors, and
+schema representation separately for these contracts would create repetitive custom
+code and increase the risk of inconsistent validation policy across participants.
 
 The project therefore needs a standard validation mechanism before these contracts
 proliferate.
@@ -58,9 +58,13 @@ The chosen approach should:
 
 ## 3. Decision
 
-Adopt **Pydantic v2** as the standard structured-contract, parsing, validation, and
-serialization foundation for Agentic Review Board review-domain and participant-output
-contracts.
+Adopt **Pydantic v2** as the standard structured-contract and local validation
+foundation for Agentic Review Board review-domain and participant-output contracts.
+
+Pydantic serialization facilities may be used to obtain explicit representations of
+validated contracts, but Pydantic does **not** define the application's transport
+protocol, provider request/response envelope, persistence format, or UI representation.
+Those concerns remain owned by their respective architectural adapters and boundaries.
 
 The project dependency policy for this decision is:
 
@@ -82,7 +86,7 @@ Pydantic MAY be used for:
 - local parsing of untrusted structured model output;
 - field and model validation;
 - immutable/frozen contract configuration;
-- deterministic serialization of validated contract data;
+- explicit serialization of already validated contract data;
 - JSON Schema generation for contract representation;
 - validation-error information used by the application boundary.
 
@@ -96,10 +100,34 @@ Pydantic MUST NOT replace:
 - provider-neutral `LLMPort` abstractions;
 - contextual/domain invariants that require comparison with other trusted review data;
 - explicit application error semantics;
+- provider transport or protocol ownership;
+- persistence decisions;
+- UI representation decisions;
 - human decision authority.
 
 A Pydantic model being structurally valid does not automatically make every semantic
 claim in generated content true.
+
+### 3.3 Serialization boundary
+
+The semantic contract is defined by the validated review model and its documented
+fields/invariants, not by one particular JSON encoding.
+
+Pydantic serialization APIs MAY be used to convert trusted contracts into standard
+Python or JSON-compatible representations when an application or adapter boundary needs
+them. However:
+
+- domain and participant contracts MUST NOT acquire provider-specific envelope fields;
+- a concrete LLM Adapter remains responsible for provider-specific request and response
+  formats;
+- a future UI Adapter remains responsible for presentation-specific representation;
+- any future persistence format requires its own architectural decision when persistence
+  is introduced;
+- changing a provider-specific transport representation MUST NOT require redesigning the
+  semantic review contracts.
+
+This keeps the choice of validation library separate from transport and integration
+technology.
 
 ## 4. Validation Policy
 
@@ -203,9 +231,9 @@ Use frozen/slotted dataclasses and manually parse dictionaries returned by the m
 - growing duplication as five participant contracts are introduced;
 - higher risk of inconsistent validation policies across participants.
 
-**Assessment:** Rejected. It is viable for a single tiny contract, but evidence from the
-first provisional implementation already shows avoidable handwritten validation that
-will multiply across the full workflow.
+**Assessment:** Rejected. It is viable for a single tiny contract, but the required
+validation behavior would be repeated across the full review workflow and would add
+custom code without adding product value.
 
 ### Alternative B — Pydantic v2
 
@@ -220,7 +248,7 @@ contextual invariants in application/participant logic.
 - configurable closed-schema behavior;
 - frozen models where appropriate;
 - strict validation options;
-- deterministic serialization;
+- explicit serialization facilities;
 - JSON Schema generation;
 - substantially less handwritten structural validation;
 - a common contract pattern across all five participant outputs.
@@ -248,7 +276,7 @@ Keep the first increment library-neutral and revisit after more contracts exist.
 
 **Disadvantages**
 
-- knowingly implements validation code expected to be replaced shortly afterwards;
+- requires temporary handwritten validation for a concern already known to recur;
 - encourages inconsistent patterns before the common contract foundation is selected;
 - delays schema-generation capability that will likely be useful for real LLM adapters;
 - creates unnecessary migration work across several contracts instead of establishing
