@@ -67,9 +67,9 @@ def test_analyst_returns_trusted_problem_analysis_from_valid_generated_output() 
         description="A technical change is proposed.",
         title="Technical change review",
         objective="Decide whether further evaluation is justified.",
-        constraints=["Keep the initial review small."],
-        context=["The change affects an existing system."],
-        stated_facts=["A technical change is proposed."],
+        constraints=("Keep the initial review small.",),
+        context=("The change affects an existing system.",),
+        stated_facts=("A technical change is proposed.",),
     )
 
     analysis = Analyst(llm).analyze(review_input)
@@ -87,9 +87,9 @@ def test_analyst_invokes_provider_neutral_boundary_once_with_current_review_inpu
     review_input = ReviewInput(
         description="A technical change is proposed.",
         title="Technical change review",
-        constraints=["Keep the initial review small."],
-        context=["Existing system."],
-        stated_facts=["A technical change is proposed."],
+        constraints=("Keep the initial review small.",),
+        context=("Existing system.",),
+        stated_facts=("A technical change is proposed.",),
     )
 
     Analyst(llm).analyze(review_input)
