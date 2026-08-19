@@ -95,8 +95,8 @@ def test_facts_and_assumptions_remain_structurally_distinct() -> None:
         uncertainties=[],
     )
 
-    assert analysis.facts == [fact]
-    assert analysis.assumptions == [assumption]
+    assert analysis.facts == (fact,)
+    assert analysis.assumptions == (assumption,)
     assert isinstance(analysis.facts[0], FactFinding)
     assert isinstance(analysis.assumptions[0], AnalysisFinding)
 
