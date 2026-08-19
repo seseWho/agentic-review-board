@@ -56,8 +56,8 @@ Every implementation task follows:
 
 ### Tests first
 
-- [ ] T004 [P] [US1] Create `tests/unit/test_problem_analysis.py` with happy-path contract tests for `AnalysisFinding`, `FactFinding`, optional review-local identifiers, the closed `ReviewInputSource` vocabulary, all six required `ProblemAnalysis` categories, and facts remaining structurally distinct from assumptions.
-- [ ] T005 [P] [US1] Rewrite the happy-path portion of `tests/unit/test_analyst.py` to use a deterministic provider-neutral substitute, assert one Analyst invocation, verify propagation of the current `ReviewInput`, verify applicable fact provenance, and assert the returned value is a trusted `ProblemAnalysis` containing no solution alternatives, ranking, architecture recommendation, or final recommendation fields.
+- [X] T004 [P] [US1] Create `tests/unit/test_problem_analysis.py` with happy-path contract tests for `AnalysisFinding`, `FactFinding`, optional review-local identifiers, the closed `ReviewInputSource` vocabulary, all six required `ProblemAnalysis` categories, and facts remaining structurally distinct from assumptions.
+- [X] T005 [P] [US1] Rewrite the happy-path portion of `tests/unit/test_analyst.py` to use a deterministic provider-neutral substitute, assert one Analyst invocation, verify propagation of the current `ReviewInput`, verify applicable fact provenance, and assert the returned value is a trusted `ProblemAnalysis` containing no solution alternatives, ranking, architecture recommendation, or final recommendation fields.
 
 ### Implementation
 
