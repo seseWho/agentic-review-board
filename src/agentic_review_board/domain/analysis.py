@@ -68,11 +68,11 @@ class ProblemAnalysis(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     objective: StrictStr
-    facts: list[FactFinding]
-    constraints: list[AnalysisFinding]
-    assumptions: list[AnalysisFinding]
-    missing_information: list[AnalysisFinding]
-    uncertainties: list[AnalysisFinding]
+    facts: tuple[FactFinding, ...]
+    constraints: tuple[AnalysisFinding, ...]
+    assumptions: tuple[AnalysisFinding, ...]
+    missing_information: tuple[AnalysisFinding, ...]
+    uncertainties: tuple[AnalysisFinding, ...]
 
     @field_validator("objective")
     @classmethod
