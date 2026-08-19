@@ -20,9 +20,9 @@ def test_review_input_accepts_and_preserves_optional_context() -> None:
         description="  Keep this exact description.  ",
         title="  Exact title  ",
         objective="  Exact objective  ",
-        constraints=["  Constraint A  "],
-        context=["  Background A  "],
-        stated_facts=["  Fact A  "],
+        constraints=("  Constraint A  ",),
+        context=("  Background A  ",),
+        stated_facts=("  Fact A  ",),
     )
 
     assert review_input.description == "  Keep this exact description.  "
@@ -31,6 +31,21 @@ def test_review_input_accepts_and_preserves_optional_context() -> None:
     assert review_input.constraints == ("  Constraint A  ",)
     assert review_input.context == ("  Background A  ",)
     assert review_input.stated_facts == ("  Fact A  ",)
+
+
+def test_review_input_model_validation_normalizes_external_lists_to_tuples() -> None:
+    review_input = ReviewInput.model_validate(
+        {
+            "description": "Review this.",
+            "constraints": ["Constraint"],
+            "context": ["Context"],
+            "stated_facts": ["Fact"],
+        }
+    )
+
+    assert review_input.constraints == ("Constraint",)
+    assert review_input.context == ("Context",)
+    assert review_input.stated_facts == ("Fact",)
 
 
 @pytest.mark.parametrize("description", ["", "   ", "\t\n"])
@@ -50,9 +65,9 @@ def test_review_input_is_frozen_after_validation() -> None:
 def test_review_input_collections_cannot_change_after_validation(field_name: str) -> None:
     review_input = ReviewInput(
         description="Review this.",
-        constraints=["Original constraint"],
-        context=["Original context"],
-        stated_facts=["Original fact"],
+        constraints=("Original constraint",),
+        context=("Original context",),
+        stated_facts=("Original fact",),
     )
     collection = getattr(review_input, field_name)
     original = tuple(collection)
