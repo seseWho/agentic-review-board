@@ -1,6 +1,7 @@
 from enum import StrEnum
+from typing import Self
 
-from pydantic import BaseModel, ConfigDict, StrictStr, field_validator
+from pydantic import BaseModel, ConfigDict, StrictStr, field_validator, model_validator
 
 
 class ReviewInputSource(StrEnum):
@@ -79,3 +80,26 @@ class ProblemAnalysis(BaseModel):
         if not value.strip():
             raise ValueError("objective must not be empty")
         return value
+
+    @model_validator(mode="after")
+    def validate_unique_local_identifiers(self) -> Self:
+        provided_ids: list[str] = []
+
+        for fact in self.facts:
+            if fact.id is not None:
+                provided_ids.append(fact.id)
+
+        for findings in (
+            self.constraints,
+            self.assumptions,
+            self.missing_information,
+            self.uncertainties,
+        ):
+            for finding in findings:
+                if finding.id is not None:
+                    provided_ids.append(finding.id)
+
+        if len(provided_ids) != len(set(provided_ids)):
+            raise ValueError("finding ids must be unique within ProblemAnalysis when provided")
+
+        return self
