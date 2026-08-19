@@ -1,7 +1,9 @@
 from collections.abc import Mapping
 
+from pydantic import ValidationError
+
 from agentic_review_board.application.ports import LLMPort
-from agentic_review_board.domain.analysis import FactFinding, ProblemAnalysis, ReferencedFinding
+from agentic_review_board.domain.analysis import ProblemAnalysis, ReviewInputSource
 from agentic_review_board.domain.review import ReviewInput
 
 
@@ -11,10 +13,6 @@ class AnalystOutputError(ValueError):
 
 class Analyst:
     """Transforms ReviewInput into a validated ProblemAnalysis."""
-
-    _FACT_SOURCES = frozenset(
-        {"description", "title", "objective", "constraints", "context", "stated_facts"}
-    )
 
     def __init__(self, llm: LLMPort) -> None:
         self._llm = llm
@@ -31,82 +29,41 @@ class Analyst:
                 "stated_facts": review_input.stated_facts,
             },
         )
-        return self._parse_output(raw)
 
-    def _parse_output(self, raw: Mapping[str, object]) -> ProblemAnalysis:
-        objective = self._required_text(raw, "objective")
-        facts = tuple(self._parse_fact(item) for item in self._required_list(raw, "facts"))
-        constraints = self._parse_findings(raw, "constraints")
-        assumptions = self._parse_findings(raw, "assumptions")
-        missing_information = self._parse_findings(raw, "missing_information")
-        uncertainties = self._parse_findings(raw, "uncertainties")
-        self._validate_unique_ids(
-            facts,
-            constraints,
-            assumptions,
-            missing_information,
-            uncertainties,
-        )
-        return ProblemAnalysis(
-            objective=objective,
-            facts=facts,
-            constraints=constraints,
-            assumptions=assumptions,
-            missing_information=missing_information,
-            uncertainties=uncertainties,
-        )
-
-    def _parse_findings(
-        self,
-        raw: Mapping[str, object],
-        key: str,
-    ) -> tuple[ReferencedFinding, ...]:
-        return tuple(self._parse_finding(item, key) for item in self._required_list(raw, key))
-
-    def _parse_fact(self, item: object) -> FactFinding:
-        mapping = self._mapping(item, "facts")
-        finding_id = self._required_text(mapping, "id")
-        text = self._required_text(mapping, "text")
-        source_ref = self._required_text(mapping, "source_ref")
-        if source_ref not in self._FACT_SOURCES:
-            raise AnalystOutputError(f"invalid fact source_ref: {source_ref}")
-        return FactFinding(id=finding_id, text=text, source_ref=source_ref)
-
-    def _parse_finding(self, item: object, field: str) -> ReferencedFinding:
-        mapping = self._mapping(item, field)
-        return ReferencedFinding(
-            id=self._required_text(mapping, "id"),
-            text=self._required_text(mapping, "text"),
-        )
+        analysis = self._validate_structure(raw)
+        self._validate_fact_provenance(analysis, review_input)
+        return analysis
 
     @staticmethod
-    def _mapping(item: object, field: str) -> Mapping[str, object]:
-        if not isinstance(item, Mapping):
-            raise AnalystOutputError(f"{field} items must be mappings")
-        return item
+    def _validate_structure(raw: Mapping[str, object]) -> ProblemAnalysis:
+        try:
+            return ProblemAnalysis.model_validate(raw)
+        except ValidationError as exc:
+            raise AnalystOutputError("invalid Analyst output") from exc
 
     @staticmethod
-    def _required_text(mapping: Mapping[str, object], key: str) -> str:
-        value = mapping.get(key)
-        if not isinstance(value, str) or not value.strip():
-            raise AnalystOutputError(f"{key} must be non-empty text")
-        return value
+    def _validate_fact_provenance(
+        analysis: ProblemAnalysis,
+        review_input: ReviewInput,
+    ) -> None:
+        for fact in analysis.facts:
+            if not Analyst._source_is_applicable(fact.source_ref, review_input):
+                raise AnalystOutputError(
+                    f"fact source_ref is not applicable to current ReviewInput: {fact.source_ref.value}"
+                )
 
     @staticmethod
-    def _required_list(mapping: Mapping[str, object], key: str) -> list[object]:
-        value = mapping.get(key)
-        if not isinstance(value, list):
-            raise AnalystOutputError(f"{key} must be a list")
-        return value
-
-    @staticmethod
-    def _validate_unique_ids(*groups: tuple[object, ...]) -> None:
-        ids: list[str] = []
-        for group in groups:
-            for item in group:
-                item_id = getattr(item, "id", None)
-                if not isinstance(item_id, str):
-                    raise AnalystOutputError("all findings must expose an id")
-                ids.append(item_id)
-        if len(ids) != len(set(ids)):
-            raise AnalystOutputError("finding ids must be unique within ProblemAnalysis")
+    def _source_is_applicable(source: ReviewInputSource, review_input: ReviewInput) -> bool:
+        if source is ReviewInputSource.DESCRIPTION:
+            return True
+        if source is ReviewInputSource.TITLE:
+            return review_input.title is not None
+        if source is ReviewInputSource.OBJECTIVE:
+            return review_input.objective is not None
+        if source is ReviewInputSource.CONSTRAINTS:
+            return bool(review_input.constraints)
+        if source is ReviewInputSource.CONTEXT:
+            return bool(review_input.context)
+        if source is ReviewInputSource.STATED_FACTS:
+            return bool(review_input.stated_facts)
+        return False
