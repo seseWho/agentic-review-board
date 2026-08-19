@@ -61,9 +61,9 @@ Every implementation task follows:
 
 ### Implementation
 
-- [ ] T006 [US1] Replace the provisional dataclasses in `src/agentic_review_board/domain/analysis.py` with Pydantic v2 `AnalysisFinding`, `FactFinding`, `ReviewInputSource`, and `ProblemAnalysis` contracts aligned with `data-model.md`, including optional local identifiers, non-empty semantic text, closed generated-output models, and immutable trusted output where appropriate.
-- [ ] T007 [US1] Reconcile `src/agentic_review_board/application/ports.py` into the smallest provider-neutral `LLMPort` Protocol required by the Analyst use case, keeping concrete provider SDK types, authentication, transport envelopes, and provider-specific structured-output mechanics outside the port.
-- [ ] T008 [US1] Refactor `src/agentic_review_board/participants/analyst.py` so `Analyst` invokes `LLMPort`, treats the returned representation as untrusted, constructs `ProblemAnalysis` through local Pydantic validation, verifies that each fact's `source_ref` is applicable to the actual current `ReviewInput`, and returns only the trusted Analyst contract.
+- [X] T006 [US1] Replace the provisional dataclasses in `src/agentic_review_board/domain/analysis.py` with Pydantic v2 `AnalysisFinding`, `FactFinding`, `ReviewInputSource`, and `ProblemAnalysis` contracts aligned with `data-model.md`, including optional local identifiers, non-empty semantic text, closed generated-output models, and immutable trusted output where appropriate.
+- [X] T007 [US1] Reconcile `src/agentic_review_board/application/ports.py` into the smallest provider-neutral `LLMPort` Protocol required by the Analyst use case, keeping concrete provider SDK types, authentication, transport envelopes, and provider-specific structured-output mechanics outside the port.
+- [X] T008 [US1] Refactor `src/agentic_review_board/participants/analyst.py` so `Analyst` invokes `LLMPort`, treats the returned representation as untrusted, constructs `ProblemAnalysis` through local Pydantic validation, verifies that each fact's `source_ref` is applicable to the actual current `ReviewInput`, and returns only the trusted Analyst contract.
 
 **Checkpoint**: The US1 happy path passes with no network access or concrete LLM SDK, and the Analyst remains within the role boundaries defined by `docs/04-agent-model.md`.
 
