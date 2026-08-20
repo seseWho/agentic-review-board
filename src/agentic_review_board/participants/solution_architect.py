@@ -9,6 +9,7 @@ from agentic_review_board.domain.solutions import (
     ConstraintReference,
     ConstraintReferenceKind,
     ConstraintSource,
+    FindingReference,
     SolutionAlternatives,
 )
 
@@ -38,6 +39,7 @@ class SolutionArchitect:
 
         alternatives = self._validate_structure(raw)
         self._validate_constraint_references(alternatives, review_input, problem_analysis)
+        self._validate_generation_notes(alternatives, problem_analysis)
         return alternatives
 
     @staticmethod
@@ -102,4 +104,53 @@ class SolutionArchitect:
             )
         raise SolutionArchitectOutputError(
             f"ambiguous ProblemAnalysis constraint reference: {reference.value}"
+        )
+
+    @staticmethod
+    def _validate_generation_notes(
+        alternatives: SolutionAlternatives,
+        problem_analysis: ProblemAnalysis,
+    ) -> None:
+        notes = alternatives.generation_notes
+        if notes is None:
+            return
+
+        for reference in notes.blocking_missing_information:
+            SolutionArchitect._resolve_finding_reference(
+                reference,
+                problem_analysis.missing_information,
+                category="missing information",
+            )
+
+        for reference in notes.blocking_uncertainties:
+            SolutionArchitect._resolve_finding_reference(
+                reference,
+                problem_analysis.uncertainties,
+                category="uncertainty",
+            )
+
+    @staticmethod
+    def _resolve_finding_reference(
+        reference: FindingReference,
+        findings: tuple[AnalysisFinding, ...],
+        *,
+        category: str,
+    ) -> None:
+        if reference.id is not None:
+            matches = [
+                finding
+                for finding in findings
+                if finding.id == reference.id and finding.text == reference.text
+            ]
+        else:
+            matches = [finding for finding in findings if finding.text == reference.text]
+
+        if len(matches) == 1:
+            return
+        if not matches:
+            raise SolutionArchitectOutputError(
+                f"unresolved {category} blocker reference: {reference.text}"
+            )
+        raise SolutionArchitectOutputError(
+            f"ambiguous {category} blocker reference: {reference.text}"
         )
