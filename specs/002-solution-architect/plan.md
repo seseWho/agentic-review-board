@@ -3,7 +3,7 @@
 **Branch**: `002-solution-architect`  
 **Date**: 2026-08-20  
 **Spec**: `specs/002-solution-architect/spec.md`  
-**Status**: Draft — awaiting review
+**Status**: Approved — ready for data-model refinement
 
 ## 1. Summary
 
