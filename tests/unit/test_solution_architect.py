@@ -2,7 +2,7 @@ from collections.abc import Mapping
 
 from agentic_review_board.domain.analysis import AnalysisFinding, ProblemAnalysis
 from agentic_review_board.domain.review import ReviewInput
-from agentic_review_board.domain.solutions import SolutionAlternatives
+from agentic_review_board.domain.solutions import SolutionAlternative, SolutionAlternatives
 from agentic_review_board.participants.solution_architect import SolutionArchitect
 
 
@@ -13,8 +13,7 @@ class FakeLLM:
 
     def generate_structured(
         self,
-        *,
-        role: str,
+        *,        role: str,
         payload: Mapping[str, object],
     ) -> Mapping[str, object]:
         self.calls.append((role, payload))
@@ -74,33 +73,39 @@ def alternative(
     }
 
 
+def base_alternatives() -> list[dict[str, object]]:
+    return [
+        alternative(
+            alternative_id="ALT-001",
+            name="Local deployment",
+            relevant_constraints=[
+                {
+                    "source": "REVIEW_INPUT",
+                    "kind": "TEXT",
+                    "value": "Must run offline",
+                }
+            ],
+        ),
+        alternative(
+            alternative_id="ALT-002",
+            name="Managed edge deployment",
+            relevant_constraints=[
+                {
+                    "source": "PROBLEM_ANALYSIS",
+                    "kind": "ID",
+                    "value": "CON-002",
+                }
+            ],
+        ),
+    ]
+
+
+def response_from(alternatives: list[dict[str, object]]) -> dict[str, object]:
+    return {"alternatives": alternatives}
+
+
 def two_alternative_response() -> dict[str, object]:
-    return {
-        "alternatives": [
-            alternative(
-                alternative_id="ALT-001",
-                name="Local deployment",
-                relevant_constraints=[
-                    {
-                        "source": "REVIEW_INPUT",
-                        "kind": "TEXT",
-                        "value": "Must run offline",
-                    }
-                ],
-            ),
-            alternative(
-                alternative_id="ALT-002",
-                name="Managed edge deployment",
-                relevant_constraints=[
-                    {
-                        "source": "PROBLEM_ANALYSIS",
-                        "kind": "ID",
-                        "value": "CON-002",
-                    }
-                ],
-            ),
-        ]
-    }
+    return response_from(base_alternatives())
 
 
 def test_solution_architect_returns_trusted_two_alternative_result() -> None:
@@ -117,13 +122,13 @@ def test_solution_architect_returns_trusted_two_alternative_result() -> None:
 
 
 def test_solution_architect_accepts_valid_three_alternative_result() -> None:
-    response = two_alternative_response()
-    response["alternatives"] = [
-        *response["alternatives"],
-        alternative(alternative_id="ALT-003", name="Hybrid deployment"),
-    ]
+    alternatives = base_alternatives()
+    alternatives.append(alternative(alternative_id="ALT-003", name="Hybrid deployment"))
 
-    result = SolutionArchitect(FakeLLM(response)).propose(review_input(), problem_analysis())
+    result = SolutionArchitect(FakeLLM(response_from(alternatives))).propose(
+        review_input(),
+        problem_analysis(),
+    )
 
     assert len(result.alternatives) == 3
 
@@ -172,14 +177,12 @@ def test_solution_architect_happy_path_preserves_role_boundary() -> None:
     }
 
     assert forbidden_fields.isdisjoint(SolutionAlternatives.model_fields)
-    for candidate in result.alternatives:
-        assert forbidden_fields.isdisjoint(candidate.model_fields)
+    assert forbidden_fields.isdisjoint(SolutionAlternative.model_fields)
+    assert len(result.alternatives) == 2
 
 
 def test_review_input_constraint_resolves_even_when_analyst_omitted_it() -> None:
-    response = two_alternative_response()
-
-    result = SolutionArchitect(FakeLLM(response)).propose(
+    result = SolutionArchitect(FakeLLM(two_alternative_response())).propose(
         review_input(),
         problem_analysis(include_offline_constraint=False),
     )
@@ -188,10 +191,10 @@ def test_review_input_constraint_resolves_even_when_analyst_omitted_it() -> None
 
 
 def test_identical_duplicate_review_input_constraint_text_resolves_as_one_textual_target() -> None:
-    response = two_alternative_response()
-    response["alternatives"][1]["relevant_constraints"] = []
+    alternatives = base_alternatives()
+    alternatives[1]["relevant_constraints"] = []
 
-    result = SolutionArchitect(FakeLLM(response)).propose(
+    result = SolutionArchitect(FakeLLM(response_from(alternatives))).propose(
         review_input(duplicate_constraint=True),
         problem_analysis(include_offline_constraint=False),
     )
@@ -200,8 +203,8 @@ def test_identical_duplicate_review_input_constraint_text_resolves_as_one_textua
 
 
 def test_problem_analysis_constraint_resolves_by_id() -> None:
-    response = two_alternative_response()
-    response["alternatives"][0]["relevant_constraints"] = [
+    alternatives = base_alternatives()
+    alternatives[0]["relevant_constraints"] = [
         {
             "source": "PROBLEM_ANALYSIS",
             "kind": "ID",
@@ -209,14 +212,17 @@ def test_problem_analysis_constraint_resolves_by_id() -> None:
         }
     ]
 
-    result = SolutionArchitect(FakeLLM(response)).propose(review_input(), problem_analysis())
+    result = SolutionArchitect(FakeLLM(response_from(alternatives))).propose(
+        review_input(),
+        problem_analysis(),
+    )
 
     assert result.alternatives[0].relevant_constraints[0].value == "CON-001"
 
 
 def test_problem_analysis_constraint_resolves_by_exact_text_when_unambiguous() -> None:
-    response = two_alternative_response()
-    response["alternatives"][0]["relevant_constraints"] = [
+    alternatives = base_alternatives()
+    alternatives[0]["relevant_constraints"] = [
         {
             "source": "PROBLEM_ANALYSIS",
             "kind": "TEXT",
@@ -224,6 +230,9 @@ def test_problem_analysis_constraint_resolves_by_exact_text_when_unambiguous() -
         }
     ]
 
-    result = SolutionArchitect(FakeLLM(response)).propose(review_input(), problem_analysis())
+    result = SolutionArchitect(FakeLLM(response_from(alternatives))).propose(
+        review_input(),
+        problem_analysis(),
+    )
 
     assert result.alternatives[0].relevant_constraints[0].value == "Must run offline"
