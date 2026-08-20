@@ -2,7 +2,7 @@
 
 **Input**: Approved design documents from `specs/002-solution-architect/`  
 **Prerequisites**: approved `spec.md`, `plan.md`, `data-model.md`, accepted `docs/adr/ADR-0001-pydantic-v2-for-structured-contracts.md`, and merged Slice 1 contracts on `main`  
-**Status**: Approved — implementation in progress
+**Status**: Approved — verification pending Ruff and mypy
 
 Tests are mandatory because the specification, Quality & Security baseline, Constitution, and ADR require deterministic verification of generated-contract validation, contextual traceability, role integrity, and fail-closed behavior.
 
@@ -100,11 +100,11 @@ Every implementation task follows:
 
 **Purpose**: Prove the increment satisfies its approved scope and has not introduced accidental architecture or role expansion.
 
-- [ ] T015 Run the complete deterministic test suite in `tests/` with no live LLM/network dependency and confirm all Slice 1 regression tests plus the new Solution Architect tests pass.
+- [X] T015 Run the complete deterministic test suite in `tests/` with no live LLM/network dependency and confirm all Slice 1 regression tests plus the new Solution Architect tests pass.
 - [ ] T016 Run Ruff using the repository configuration and resolve all violations introduced by Slice 2 without weakening rules.
 - [ ] T017 Run mypy strict checks using the repository configuration and resolve all type errors introduced by Slice 2 without adding the Pydantic mypy plugin unless separately justified and approved.
-- [ ] T018 Run `pip check`, then inspect `pyproject.toml` and `src/agentic_review_board/` to confirm Slice 2 adds no production dependency, concrete LLM SDK, Orchestrator, Risk Reviewer, Critic, Coordinator, ranking/final-decision logic, persistence, RAG, UI, tools, semantic-similarity engine, generic reference framework, or new external capability.
-- [ ] T019 Review the final implementation against `specs/002-solution-architect/spec.md`, `plan.md`, `data-model.md`, `docs/04-agent-model.md`, `docs/05-quality-security.md`, the Constitution, and ADR-0001; confirm semantic-quality properties that cannot be proven structurally remain explicitly outside the contract-validation claim.
+- [X] T018 Run `pip check`, then inspect `pyproject.toml` and `src/agentic_review_board/` to confirm Slice 2 adds no production dependency, concrete LLM SDK, Orchestrator, Risk Reviewer, Critic, Coordinator, ranking/final-decision logic, persistence, RAG, UI, tools, semantic-similarity engine, generic reference framework, or new external capability.
+- [X] T019 Review the final implementation against `specs/002-solution-architect/spec.md`, `plan.md`, `data-model.md`, `docs/04-agent-model.md`, `docs/05-quality-security.md`, the Constitution, and ADR-0001; confirm semantic-quality properties that cannot be proven structurally remain explicitly outside the contract-validation claim.
 
 **Final checkpoint**: T001–T019 complete, deterministic suite green, static checks green, dependency check green, and Slice 2 remains limited to Solution Architect v0.1.
 
