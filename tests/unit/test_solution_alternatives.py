@@ -1,6 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
+import agentic_review_board.domain.solutions as solution_contracts
 from agentic_review_board.domain.shared import QualitativeLevel
 from agentic_review_board.domain.solutions import (
     ConstraintReference,
@@ -37,6 +38,23 @@ def valid_generation_notes_data() -> dict[str, object]:
         "explanation": "Alternatives remain comparable with the current evidence.",
         "blocking_missing_information": [],
         "blocking_uncertainties": [],
+    }
+
+
+def no_alternative_notes_data() -> dict[str, object]:
+    return {
+        "explanation": "Deployment constraints are too incomplete for a useful comparison.",
+        "blocking_missing_information": [
+            {
+                "id": "MISS-001",
+                "text": "Available deployment infrastructure is unknown.",
+            }
+        ],
+        "blocking_uncertainties": [
+            {
+                "text": "Operational ownership is unclear.",
+            }
+        ],
     }
 
 
@@ -200,3 +218,29 @@ def test_trusted_solution_output_cannot_be_reassigned_after_validation() -> None
 
     with pytest.raises(ValidationError):
         result.alternatives = ()
+
+
+def test_zero_alternatives_requires_generation_notes() -> None:
+    with pytest.raises(ValidationError):
+        SolutionAlternatives.model_validate({"alternatives": []})
+
+
+def test_zero_alternative_generation_notes_preserve_structured_immutable_blockers() -> None:
+    result = SolutionAlternatives.model_validate(
+        {
+            "alternatives": [],
+            "generation_notes": no_alternative_notes_data(),
+        }
+    )
+
+    assert result.alternatives == ()
+    assert result.generation_notes is not None
+    assert result.generation_notes.explanation.startswith("Deployment constraints")
+    assert isinstance(result.generation_notes.blocking_missing_information, tuple)
+    assert isinstance(result.generation_notes.blocking_uncertainties, tuple)
+    assert result.generation_notes.blocking_missing_information[0].id == "MISS-001"
+    assert result.generation_notes.blocking_uncertainties[0].id is None
+
+
+def test_no_separate_no_alternative_outcome_contract_is_introduced() -> None:
+    assert not hasattr(solution_contracts, "NoAlternativeOutcome")
