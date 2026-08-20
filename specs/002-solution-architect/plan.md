@@ -72,7 +72,7 @@ This produces genuine explicit upstream-to-downstream information flow without i
 Generated Solution Architect content remains untrusted until it passes:
 
 1. Pydantic structural/model validation against the closed `SolutionAlternatives` contract;
-2. contextual participant validation for references that must resolve against the actual trusted `ProblemAnalysis`.
+2. contextual participant validation for references that must resolve against the actual trusted upstream review artifacts.
 
 Malformed or context-invalid output never becomes trusted `SolutionAlternatives` data.
 
@@ -82,9 +82,9 @@ The contract keeps alternatives, trade-offs, assumptions, implementation complex
 
 Solution-specific assumptions remain assumptions by construction and do not become facts.
 
-Relevant constraint references must resolve to constraints present in the supplied trusted `ProblemAnalysis`.
+Relevant constraint references must resolve unambiguously to known constraints present in the supplied trusted `ReviewInput` or `ProblemAnalysis`.
 
-The no-alternative case preserves explicit uncertainty through `generation_notes` rather than manufacturing candidate variants.
+The no-alternative case preserves explicit uncertainty through `generation_notes` rather than manufacturing candidate variants. When missing information or uncertainty materially blocks useful comparison, that blocker must remain represented in the no-alternative explanation.
 
 Trusted generated collections are immutable after validation so accepted stage output cannot be altered without crossing validation again.
 
@@ -190,7 +190,7 @@ Contract intent:
 - `description` is required non-empty generated text;
 - `advantages`, `disadvantages`, and `assumptions` are explicit ordered collections of generated text;
 - `implementation_complexity` accepts only the shared qualitative values;
-- `relevant_constraints` is an ordered collection of references to constraints in the supplied `ProblemAnalysis`;
+- `relevant_constraints` is an ordered collection of references to known constraints in the supplied upstream review artifacts;
 - validated collections are immutable after successful validation.
 
 The plan does not impose an `ALT-001` formatting pattern because the canonical documents provide that as an example rather than a mandatory identifier syntax.
@@ -227,7 +227,9 @@ When `alternatives` is empty:
 
 - `generation_notes` becomes conditionally required;
 - it must contain non-empty generated text explaining why meaningful alternatives cannot responsibly be formed;
-- the text should preserve material missing information or uncertainty blocking comparison when applicable.
+- when material missing information or unresolved uncertainty blocks useful comparison, `generation_notes` must identify that blocker rather than omitting or silently resolving it.
+
+Pydantic can deterministically validate the presence and non-empty nature of `generation_notes` in the zero-alternative case. Whether the natural-language explanation actually contains the correct reason and material blockers is a participant semantic-quality obligation and is evaluated through deterministic representative fixtures and later real-model evaluation; schema validation must not pretend to understand arbitrary prose.
 
 When alternatives are present, `generation_notes` remains optional and may provide concise generation context, but it does not replace required per-alternative fields.
 
@@ -235,21 +237,35 @@ Alternative IDs must be unique within one `SolutionAlternatives` result. Duplica
 
 ### 4.5 Relevant-constraint reference representation
 
-`ProblemAnalysis.constraints` items may have a review-local ID, but Slice 1 intentionally made those IDs optional.
+The Solution Architect receives both the original `ReviewInput` and the trusted `ProblemAnalysis`.
+
+The contextual reference policy must therefore preserve known constraints from either artifact rather than treating the Analyst output as the only source of constraint truth. This is important because canonical agent semantics explicitly treat upstream outputs as evidence that may contain omissions.
+
+`ProblemAnalysis.constraints` items may have a review-local ID, but Slice 1 intentionally made those IDs optional. `ReviewInput.constraints` are original user-provided text values and currently have no local IDs.
 
 Therefore this slice must not require every upstream constraint to gain an ID merely to support Solution Architect traceability.
 
 The minimal reference policy is:
 
 - each `relevant_constraints` entry is a non-empty provider-neutral textual reference;
-- a reference is valid when it resolves to the supplied trusted `ProblemAnalysis.constraints` by an existing constraint ID when one is available, or by exact constraint text when no usable ID reference is supplied;
+- the known-constraint universe for contextual resolution is the union of `ReviewInput.constraints` and `ProblemAnalysis.constraints`;
+- for `ProblemAnalysis.constraints`, a reference may resolve by an existing constraint ID when one is available or by exact constraint text;
+- for `ReviewInput.constraints`, a reference resolves by exact constraint text;
 - the Solution Architect/application boundary performs this contextual resolution after structural validation;
-- a reference that resolves to no current upstream constraint is invalid and fails the participant output;
+- a reference is valid only when it resolves to exactly one known constraint in the current upstream artifacts;
+- zero matches are invalid because the reference is not traceable to a known constraint;
+- more than one match is invalid because the reference is ambiguous;
 - this is review-local structural traceability, not proof that the model interpreted the constraint correctly.
 
 `data-model.md` will define the exact field/type representation while preserving this resolution policy.
 
-This approach avoids retroactively making Analyst IDs mandatory, avoids index-based references that are opaque to users, and avoids introducing persistent/global identifiers.
+This approach:
+
+- avoids retroactively making Analyst IDs mandatory;
+- preserves direct access to original user constraints even if the Analyst omits one;
+- avoids index-based references that are opaque to users;
+- avoids introducing persistent/global identifiers;
+- makes ambiguous references fail closed instead of guessing which constraint was intended.
 
 ### 4.6 Assumption preservation
 
@@ -343,7 +359,7 @@ Pydantic owns invariants that depend only on the candidate generated output, inc
 - unique required alternative IDs;
 - immutable validated collections.
 
-The Solution Architect/application boundary owns invariants requiring actual trusted upstream context, specifically resolving `relevant_constraints` against the current `ProblemAnalysis.constraints`.
+The Solution Architect/application boundary owns invariants requiring actual trusted upstream context, specifically resolving every `relevant_constraints` reference unambiguously against the current `ReviewInput.constraints` and `ProblemAnalysis.constraints`.
 
 Generated structural or contextual validation failures are normalized into a Solution Architect output-validation error category.
 
@@ -435,6 +451,7 @@ Verify at minimum:
 - zero alternatives with a valid non-empty explanation are accepted;
 - zero alternatives without `generation_notes` are rejected;
 - zero alternatives with blank `generation_notes` are rejected;
+- the representative zero-alternative fixture preserves the material missing information or uncertainty that blocks useful comparison when such a blocker exists;
 - `generation_notes` is optional when a valid alternative set exists;
 - duplicate alternative IDs are rejected;
 - top-level ranking, preferred-alternative, final-recommendation, or other unknown role-leakage fields are rejected;
@@ -447,8 +464,10 @@ Using a deterministic fake `LLMPort`, verify at minimum:
 - the participant supplies both `ReviewInput` and the trusted `ProblemAnalysis` to the model boundary;
 - the payload contains no later-stage artifacts;
 - a valid two- or three-alternative generated mapping becomes trusted `SolutionAlternatives`;
-- an upstream constraint with an ID can be referenced and resolved;
-- an upstream constraint without an ID can still be referenced through the approved exact-text fallback;
+- a `ProblemAnalysis` constraint with an ID can be referenced and resolved;
+- a `ProblemAnalysis` constraint without an ID can still be referenced through exact text;
+- an original `ReviewInput` constraint can be referenced even if it was omitted from `ProblemAnalysis.constraints`;
+- a reference that matches exactly one known constraint is accepted;
 - valid input artifacts remain unchanged after participant execution.
 
 ### 7.4 No-alternative participant tests
@@ -457,6 +476,7 @@ Verify an underspecified deterministic scenario where:
 
 - the returned alternatives collection is empty;
 - `generation_notes` explicitly explains why useful alternatives cannot yet be formed;
+- material missing information or uncertainty that blocks useful comparison remains explicit when applicable;
 - no artificial variants are manufactured by test fixtures;
 - the result is accepted as trusted `SolutionAlternatives`.
 
@@ -472,7 +492,8 @@ Verify representative invalid generated output:
 - invalid alternative cardinality;
 - zero-alternative result without required explanatory notes;
 - unknown role-leakage fields;
-- `relevant_constraints` entry that resolves to no constraint in the actual current `ProblemAnalysis`;
+- `relevant_constraints` entry that resolves to no known constraint in the actual current `ReviewInput` or `ProblemAnalysis`;
+- `relevant_constraints` entry that resolves to more than one known constraint and is therefore ambiguous;
 - malformed nested alternative content.
 
 Every such case must fail before trusted `SolutionAlternatives` is returned.
@@ -482,7 +503,7 @@ Every such case must fail before trusted `SolutionAlternatives` is returned.
 Verify that:
 
 - Pydantic/contract failures are normalized into the Solution Architect output-validation error category;
-- contextual invalid-reference failures use the same participant output-validation category;
+- contextual invalid or ambiguous reference failures use the same participant output-validation category;
 - provider/transport exceptions raised by the fake `LLMPort` are not swallowed or misreported as schema failures.
 
 ### 7.7 Semantic-quality evaluation boundary
@@ -495,6 +516,7 @@ Semantic properties such as:
 - whether an alternative is truly compatible with the objective;
 - whether all important constraints were recognized;
 - whether prose subtly implies a winner;
+- whether a no-alternative explanation semantically identifies the correct blockers;
 
 belong to participant prompt/model evaluation against canonical reference scenarios once real-model integration is introduced, unless a deterministic rule can be justified later.
 
