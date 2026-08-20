@@ -58,6 +58,15 @@ def no_alternative_notes_data() -> dict[str, object]:
     }
 
 
+def two_alternative_data() -> dict[str, object]:
+    return {
+        "alternatives": [
+            valid_alternative_data(alternative_id="ALT-001"),
+            valid_alternative_data(alternative_id="ALT-002"),
+        ]
+    }
+
+
 def test_shared_solution_vocabularies_are_closed() -> None:
     assert {level.value for level in QualitativeLevel} == {"LOW", "MEDIUM", "HIGH"}
     assert {source.value for source in ConstraintSource} == {
@@ -132,14 +141,7 @@ def test_solution_alternative_preserves_explicit_tradeoffs_and_immutable_collect
 
 
 def test_solution_alternatives_accepts_two_or_three_unique_alternatives() -> None:
-    two = SolutionAlternatives.model_validate(
-        {
-            "alternatives": [
-                valid_alternative_data(alternative_id="ALT-001"),
-                valid_alternative_data(alternative_id="ALT-002"),
-            ]
-        }
-    )
+    two = SolutionAlternatives.model_validate(two_alternative_data())
     three = SolutionAlternatives.model_validate(
         {
             "alternatives": [
@@ -207,14 +209,7 @@ def test_solution_alternatives_model_validation_normalizes_nested_lists_to_tuple
 
 
 def test_trusted_solution_output_cannot_be_reassigned_after_validation() -> None:
-    result = SolutionAlternatives.model_validate(
-        {
-            "alternatives": [
-                valid_alternative_data(alternative_id="ALT-001"),
-                valid_alternative_data(alternative_id="ALT-002"),
-            ]
-        }
-    )
+    result = SolutionAlternatives.model_validate(two_alternative_data())
 
     with pytest.raises(ValidationError):
         result.alternatives = ()
@@ -244,3 +239,146 @@ def test_zero_alternative_generation_notes_preserve_structured_immutable_blocker
 
 def test_no_separate_no_alternative_outcome_contract_is_introduced() -> None:
     assert not hasattr(solution_contracts, "NoAlternativeOutcome")
+
+
+def test_solution_alternative_rejects_missing_mandatory_nested_field() -> None:
+    alternative = valid_alternative_data()
+    del alternative["description"]
+
+    with pytest.raises(ValidationError):
+        SolutionAlternatives.model_validate(
+            {
+                "alternatives": [
+                    alternative,
+                    valid_alternative_data(alternative_id="ALT-002"),
+                ]
+            }
+        )
+
+
+def test_solution_contracts_reject_unexpected_top_level_and_nested_fields() -> None:
+    top_level = two_alternative_data()
+    top_level["final_recommendation"] = "Choose ALT-001"
+    nested = valid_alternative_data()
+    nested["preferred_alternative"] = True
+
+    with pytest.raises(ValidationError):
+        SolutionAlternatives.model_validate(top_level)
+    with pytest.raises(ValidationError):
+        SolutionAlternatives.model_validate(
+            {
+                "alternatives": [nested, valid_alternative_data(alternative_id="ALT-002")]
+            }
+        )
+
+
+def test_solution_alternative_rejects_unsupported_complexity_and_non_string_semantic_text() -> None:
+    invalid_complexity = valid_alternative_data()
+    invalid_complexity["implementation_complexity"] = "VERY_HIGH"
+    invalid_text = valid_alternative_data()
+    invalid_text["description"] = 123
+
+    for first in (invalid_complexity, invalid_text):
+        with pytest.raises(ValidationError):
+            SolutionAlternatives.model_validate(
+                {
+                    "alternatives": [
+                        first,
+                        valid_alternative_data(alternative_id="ALT-002"),
+                    ]
+                }
+            )
+
+
+def test_solution_alternative_rejects_blank_required_and_collection_text() -> None:
+    blank_name = valid_alternative_data()
+    blank_name["name"] = "   "
+    blank_advantage = valid_alternative_data()
+    blank_advantage["advantages"] = ["   "]
+
+    for first in (blank_name, blank_advantage):
+        with pytest.raises(ValidationError):
+            SolutionAlternatives.model_validate(
+                {
+                    "alternatives": [
+                        first,
+                        valid_alternative_data(alternative_id="ALT-002"),
+                    ]
+                }
+            )
+
+
+def test_solution_alternative_rejects_review_input_id_constraint_reference() -> None:
+    invalid = valid_alternative_data()
+    invalid["relevant_constraints"] = [
+        {
+            "source": "REVIEW_INPUT",
+            "kind": "ID",
+            "value": "CON-001",
+        }
+    ]
+
+    with pytest.raises(ValidationError):
+        SolutionAlternatives.model_validate(
+            {
+                "alternatives": [
+                    invalid,
+                    valid_alternative_data(alternative_id="ALT-002"),
+                ]
+            }
+        )
+
+
+def test_solution_alternatives_rejects_one_or_more_than_three_alternatives() -> None:
+    one = {"alternatives": [valid_alternative_data()]}
+    four = {
+        "alternatives": [
+            valid_alternative_data(alternative_id="ALT-001"),
+            valid_alternative_data(alternative_id="ALT-002"),
+            valid_alternative_data(alternative_id="ALT-003"),
+            valid_alternative_data(alternative_id="ALT-004"),
+        ]
+    }
+
+    with pytest.raises(ValidationError):
+        SolutionAlternatives.model_validate(one)
+    with pytest.raises(ValidationError):
+        SolutionAlternatives.model_validate(four)
+
+
+def test_solution_alternatives_rejects_duplicate_alternative_ids() -> None:
+    with pytest.raises(ValidationError):
+        SolutionAlternatives.model_validate(
+            {
+                "alternatives": [
+                    valid_alternative_data(alternative_id="ALT-001"),
+                    valid_alternative_data(alternative_id="ALT-001"),
+                ]
+            }
+        )
+
+
+def test_zero_alternatives_rejects_blank_generation_explanation() -> None:
+    notes = no_alternative_notes_data()
+    notes["explanation"] = "   "
+
+    with pytest.raises(ValidationError):
+        SolutionAlternatives.model_validate(
+            {
+                "alternatives": [],
+                "generation_notes": notes,
+            }
+        )
+
+
+def test_generation_notes_rejects_malformed_finding_reference() -> None:
+    notes = no_alternative_notes_data()
+    notes["blocking_missing_information"] = [{"id": "MISS-001"}]
+
+    with pytest.raises(ValidationError):
+        SolutionAlternatives.model_validate(
+            {
+                "alternatives": [],
+                "generation_notes": notes,
+            }
+        )
