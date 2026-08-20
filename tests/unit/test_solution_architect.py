@@ -1,9 +1,14 @@
 from collections.abc import Mapping
 
+import pytest
+
 from agentic_review_board.domain.analysis import AnalysisFinding, ProblemAnalysis
 from agentic_review_board.domain.review import ReviewInput
 from agentic_review_board.domain.solutions import SolutionAlternative, SolutionAlternatives
-from agentic_review_board.participants.solution_architect import SolutionArchitect
+from agentic_review_board.participants.solution_architect import (
+    SolutionArchitect,
+    SolutionArchitectOutputError,
+)
 
 
 class FakeLLM:
@@ -19,6 +24,20 @@ class FakeLLM:
     ) -> Mapping[str, object]:
         self.calls.append((role, payload))
         return self.response
+
+
+class ProviderFailure(RuntimeError):
+    pass
+
+
+class FailingLLM:
+    def generate_structured(
+        self,
+        *,
+        role: str,
+        payload: Mapping[str, object],
+    ) -> Mapping[str, object]:
+        raise ProviderFailure("provider unavailable")
 
 
 def review_input(*, duplicate_constraint: bool = False) -> ReviewInput:
@@ -40,9 +59,16 @@ def problem_analysis(
     *,
     include_offline_constraint: bool = True,
     include_blockers: bool = False,
+    duplicate_constraint_text: bool = False,
+    duplicate_uncertainty_text: bool = False,
 ) -> ProblemAnalysis:
     constraints: tuple[AnalysisFinding, ...]
-    if include_offline_constraint:
+    if duplicate_constraint_text:
+        constraints = (
+            AnalysisFinding(id="CON-001", text="Must run offline"),
+            AnalysisFinding(id="CON-002", text="Must run offline"),
+        )
+    elif include_offline_constraint:
         constraints = (
             AnalysisFinding(id="CON-001", text="Must run offline"),
             AnalysisFinding(id="CON-002", text="Keep deployment simple"),
@@ -56,9 +82,16 @@ def problem_analysis(
             text="Available deployment infrastructure is unknown.",
         ),
     ) if include_blockers else ()
-    uncertainties = (
-        AnalysisFinding(text="Operational ownership is unclear."),
-    ) if include_blockers else ()
+
+    if duplicate_uncertainty_text:
+        uncertainties = (
+            AnalysisFinding(id="UNC-001", text="Operational ownership is unclear."),
+            AnalysisFinding(id="UNC-002", text="Operational ownership is unclear."),
+        )
+    elif include_blockers:
+        uncertainties = (AnalysisFinding(text="Operational ownership is unclear."),)
+    else:
+        uncertainties = ()
 
     return ProblemAnalysis(
         objective="Identify viable deployment approaches.",
@@ -134,9 +167,7 @@ def no_alternative_response() -> dict[str, object]:
                     "text": "Available deployment infrastructure is unknown.",
                 }
             ],
-            "blocking_uncertainties": [
-                {"text": "Operational ownership is unclear."}
-            ],
+            "blocking_uncertainties": [{"text": "Operational ownership is unclear."}],
         },
     }
 
@@ -323,3 +354,156 @@ def test_generation_notes_blockers_are_validated_even_when_alternatives_are_pres
     assert len(result.alternatives) == 2
     assert result.generation_notes is not None
     assert result.generation_notes.blocking_uncertainties[0].text == "Operational ownership is unclear."
+
+
+def test_unresolved_review_input_constraint_fails_closed() -> None:
+    alternatives = base_alternatives()
+    alternatives[0]["relevant_constraints"] = [
+        {"source": "REVIEW_INPUT", "kind": "TEXT", "value": "Unknown constraint"}
+    ]
+
+    with pytest.raises(SolutionArchitectOutputError, match="unresolved ReviewInput"):
+        SolutionArchitect(FakeLLM(response_from(alternatives))).propose(
+            review_input(),
+            problem_analysis(),
+        )
+
+
+def test_unresolved_problem_analysis_constraint_by_id_or_text_fails_closed() -> None:
+    for reference in (
+        {"source": "PROBLEM_ANALYSIS", "kind": "ID", "value": "CON-999"},
+        {"source": "PROBLEM_ANALYSIS", "kind": "TEXT", "value": "Unknown constraint"},
+    ):
+        alternatives = base_alternatives()
+        alternatives[0]["relevant_constraints"] = [reference]
+
+        with pytest.raises(SolutionArchitectOutputError, match="unresolved ProblemAnalysis"):
+            SolutionArchitect(FakeLLM(response_from(alternatives))).propose(
+                review_input(),
+                problem_analysis(),
+            )
+
+
+def test_repeated_problem_analysis_constraint_text_is_ambiguous_for_text_reference() -> None:
+    alternatives = base_alternatives()
+    alternatives[0]["relevant_constraints"] = [
+        {"source": "PROBLEM_ANALYSIS", "kind": "TEXT", "value": "Must run offline"}
+    ]
+    alternatives[1]["relevant_constraints"] = []
+
+    with pytest.raises(SolutionArchitectOutputError, match="ambiguous ProblemAnalysis"):
+        SolutionArchitect(FakeLLM(response_from(alternatives))).propose(
+            review_input(),
+            problem_analysis(duplicate_constraint_text=True),
+        )
+
+
+def test_constraint_reference_matching_is_exact_without_trim_or_case_repair() -> None:
+    for value in ("Must run offline ", "must run offline"):
+        alternatives = base_alternatives()
+        alternatives[0]["relevant_constraints"] = [
+            {"source": "REVIEW_INPUT", "kind": "TEXT", "value": value}
+        ]
+
+        with pytest.raises(SolutionArchitectOutputError, match="unresolved ReviewInput"):
+            SolutionArchitect(FakeLLM(response_from(alternatives))).propose(
+                review_input(),
+                problem_analysis(),
+            )
+
+
+def test_unresolved_blocker_fails_closed_for_zero_and_multiple_alternatives() -> None:
+    zero = no_alternative_response()
+    zero["generation_notes"] = {
+        "explanation": "Blocked.",
+        "blocking_missing_information": [{"text": "Unknown blocker"}],
+        "blocking_uncertainties": [],
+    }
+    multiple = two_alternative_response()
+    multiple["generation_notes"] = {
+        "explanation": "Still blocked.",
+        "blocking_missing_information": [],
+        "blocking_uncertainties": [{"text": "Unknown uncertainty"}],
+    }
+
+    for response in (zero, multiple):
+        with pytest.raises(SolutionArchitectOutputError, match="unresolved"):
+            SolutionArchitect(FakeLLM(response)).propose(
+                review_input(),
+                problem_analysis(include_blockers=True),
+            )
+
+
+def test_text_only_blocker_reference_fails_when_ambiguous() -> None:
+    response = no_alternative_response()
+    response["generation_notes"] = {
+        "explanation": "Ownership uncertainty blocks comparison.",
+        "blocking_missing_information": [],
+        "blocking_uncertainties": [{"text": "Operational ownership is unclear."}],
+    }
+
+    with pytest.raises(SolutionArchitectOutputError, match="ambiguous uncertainty"):
+        SolutionArchitect(FakeLLM(response)).propose(
+            review_input(),
+            problem_analysis(duplicate_uncertainty_text=True),
+        )
+
+
+def test_blocker_id_and_text_mismatch_fails_closed() -> None:
+    response = no_alternative_response()
+    response["generation_notes"] = {
+        "explanation": "Missing information blocks comparison.",
+        "blocking_missing_information": [
+            {"id": "MISS-001", "text": "Different missing information text."}
+        ],
+        "blocking_uncertainties": [],
+    }
+
+    with pytest.raises(SolutionArchitectOutputError, match="unresolved missing information"):
+        SolutionArchitect(FakeLLM(response)).propose(
+            review_input(),
+            problem_analysis(include_blockers=True),
+        )
+
+
+def test_blocker_reference_matching_is_exact_without_trim_or_case_repair() -> None:
+    for text in ("Operational ownership is unclear. ", "operational ownership is unclear."):
+        response = no_alternative_response()
+        response["generation_notes"] = {
+            "explanation": "An uncertainty blocks comparison.",
+            "blocking_missing_information": [],
+            "blocking_uncertainties": [{"text": text}],
+        }
+
+        with pytest.raises(SolutionArchitectOutputError, match="unresolved uncertainty"):
+            SolutionArchitect(FakeLLM(response)).propose(
+                review_input(),
+                problem_analysis(include_blockers=True),
+            )
+
+
+def test_pydantic_contract_failure_is_normalized_to_solution_architect_output_error() -> None:
+    response = two_alternative_response()
+    response["ranking"] = ["ALT-001", "ALT-002"]
+
+    with pytest.raises(SolutionArchitectOutputError, match="invalid Solution Architect output") as captured:
+        SolutionArchitect(FakeLLM(response)).propose(review_input(), problem_analysis())
+
+    assert captured.value.__cause__ is not None
+
+
+def test_invalid_generated_data_is_not_repaired_before_failure() -> None:
+    response = two_alternative_response()
+    alternatives = base_alternatives()
+    alternatives[0]["implementation_complexity"] = "VERY_HIGH"
+    response["alternatives"] = alternatives
+
+    with pytest.raises(SolutionArchitectOutputError, match="invalid Solution Architect output"):
+        SolutionArchitect(FakeLLM(response)).propose(review_input(), problem_analysis())
+
+    assert alternatives[0]["implementation_complexity"] == "VERY_HIGH"
+
+
+def test_provider_failure_is_not_misreported_as_solution_output_validation_error() -> None:
+    with pytest.raises(ProviderFailure, match="provider unavailable"):
+        SolutionArchitect(FailingLLM()).propose(review_input(), problem_analysis())
