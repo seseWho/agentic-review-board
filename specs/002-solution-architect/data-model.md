@@ -14,29 +14,30 @@ It refines the approved feature specification and implementation plan without ad
 The increment introduces:
 
 - `QualitativeLevel`;
+- `ConstraintReference`;
+- `GenerationNotes`;
 - `SolutionAlternative`;
 - `SolutionAlternatives`.
 
-It also defines the contextual resolution rules used by the `SolutionArchitect` participant when validating `relevant_constraints` against the trusted upstream artifacts already available from Slice 1.
+Pydantic v2 remains the approved structured-contract implementation mechanism under ADR-0001.
 
-Pydantic v2 remains the approved structured-contract implementation mechanism under ADR-0001. The semantic contract is defined by the fields and invariants documented here, not by provider-specific request or response formats.
+The semantic contract is defined by the fields and invariants documented here, not by provider-specific request/response formats.
 
 ## 2. Shared Modeling Rules
 
-The following rules apply to all generated contracts introduced by this increment:
+The following rules apply to generated contracts introduced by this increment:
 
-- models use Pydantic v2 `BaseModel`;
-- generated structured content is untrusted until structural validation and applicable contextual invariants both succeed;
+- generated structured content is untrusted until structural validation and applicable contextual validation both succeed;
 - generated-output contracts are closed and reject unexpected fields deterministically;
 - trusted models are frozen where mutation would undermine traceability;
-- validated collections are represented immutably after successful validation;
+- validated collections become immutable after successful validation;
 - required generated text rejects empty or whitespace-only values;
-- valid generated text is not silently trimmed or rewritten;
+- valid generated text is preserved rather than silently trimmed or rewritten;
 - generated semantic text uses strict textual validation where coercion could hide malformed output;
-- provider SDK objects and provider-specific transport envelopes are not part of the data model;
-- Pydantic validation establishes structural validity, not semantic truth, factual correctness, or solution quality.
+- provider SDK objects and provider-specific envelopes are not domain data;
+- Pydantic validation establishes structural validity, not semantic truth or solution quality.
 
-Conceptually, generated contract models follow:
+Conceptually:
 
 ```text
 frozen = true
@@ -56,9 +57,7 @@ AnalysisFinding
 FactFinding
 ```
 
-from Slice 1.
-
-The Solution Architect receives both:
+The Solution Architect receives:
 
 ```text
 SolutionArchitectInput
@@ -66,11 +65,11 @@ SolutionArchitectInput
 - problem_analysis: ProblemAnalysis
 ```
 
-These artifacts remain trusted and immutable while the Solution Architect executes.
+Both artifacts remain trusted and immutable while the Solution Architect executes.
 
 ## 4. QualitativeLevel
 
-Represents the closed qualitative scale used by the MVP where a qualitative engineering judgment is required.
+Represents the shared qualitative scale used by the MVP.
 
 ### Values
 
@@ -80,25 +79,258 @@ MEDIUM
 HIGH
 ```
 
-### Semantics
+For `SolutionAlternative.implementation_complexity`, the value is a relative engineering judgment.
 
-For `SolutionAlternative.implementation_complexity`, the value represents a relative engineering judgment about implementation complexity.
-
-It MUST NOT be interpreted as:
+It is not:
 
 - a probability;
 - a statistical confidence score;
 - a duration estimate;
 - a cost estimate;
-- a calibrated project-effort measurement.
+- a calibrated effort estimate.
 
-### Validation
+Only the exact supported values are accepted. Unexpected values are rejected rather than heuristically normalized in this increment.
 
-Only the exact supported semantic values are valid.
+## 5. ConstraintReference
 
-Unexpected values are rejected rather than normalized heuristically in this increment.
+Represents one explicit review-local reference to a known constraint.
 
-## 5. SolutionAlternative
+### Fields
+
+```text
+ConstraintReference
+- source: ConstraintSource
+- kind: ConstraintReferenceKind
+- value: str
+```
+
+### 5.1 ConstraintSource
+
+Closed values:
+
+```text
+REVIEW_INPUT
+PROBLEM_ANALYSIS
+```
+
+These indicate which trusted upstream artifact owns the referenced constraint.
+
+### 5.2 ConstraintReferenceKind
+
+Closed values:
+
+```text
+TEXT
+ID
+```
+
+### 5.3 `value`
+
+Rules:
+
+- required;
+- strict text;
+- non-empty and not whitespace-only;
+- preserved exactly when valid;
+- no trimming, lowercasing, normalization, fuzzy matching, index interpretation, or semantic repair.
+
+### 5.4 Structural source/kind compatibility
+
+The following combinations are valid in the candidate generated contract:
+
+```text
+REVIEW_INPUT + TEXT
+PROBLEM_ANALYSIS + TEXT
+PROBLEM_ANALYSIS + ID
+```
+
+The following is structurally invalid:
+
+```text
+REVIEW_INPUT + ID
+```
+
+because `ReviewInput.constraints` are plain user-provided strings and Slice 1 defines no IDs for them.
+
+This compatibility rule depends only on the candidate reference and is therefore owned by Pydantic/model validation.
+
+### 5.5 Contextual resolution
+
+After structural validation, the `SolutionArchitect` boundary resolves the reference against the actual current upstream artifacts.
+
+#### REVIEW_INPUT + TEXT
+
+`value` must exactly match a current entry in:
+
+```text
+ReviewInput.constraints
+```
+
+Identical duplicate input strings are treated as the same textual target because the existing `ReviewInput` contract provides no separate local identity for individual equal strings.
+
+#### PROBLEM_ANALYSIS + ID
+
+`value` must exactly match one non-null `AnalysisFinding.id` in:
+
+```text
+ProblemAnalysis.constraints
+```
+
+Slice 1 already requires supplied finding IDs to be unique within `ProblemAnalysis`, so a valid ID reference is unambiguous.
+
+#### PROBLEM_ANALYSIS + TEXT
+
+`value` must exactly match one `AnalysisFinding.text` in:
+
+```text
+ProblemAnalysis.constraints
+```
+
+If more than one distinct Analyst constraint has the same exact text, the textual reference is ambiguous and invalid. A unique Analyst ID should be used when available.
+
+### 5.6 Resolution result
+
+Within the declared `source` and `kind`:
+
+```text
+0 matching targets  → invalid
+1 matching target   → valid
+>1 distinct targets → ambiguous and invalid
+```
+
+The application never guesses the intended target.
+
+### 5.7 Scope of the guarantee
+
+A successfully resolved `ConstraintReference` proves only that the reference points to a known upstream constraint.
+
+It does not prove that:
+
+- the constraint is actually material to the alternative;
+- the alternative satisfies the constraint;
+- the generated interpretation of the constraint is correct;
+- the Analyst identified every relevant constraint.
+
+Those remain semantic-quality concerns.
+
+## 6. FindingReference
+
+The no-alternative path needs structured references to existing Analyst `missing_information` and `uncertainties` without introducing a generic repository-wide reference framework.
+
+For this slice, define a small local value object:
+
+```text
+FindingReference
+- id: str | None
+- text: str
+```
+
+### Rules
+
+- `text` is required, strict, non-empty generated text;
+- `id` is optional because Slice 1 finding IDs are optional;
+- when `id` is supplied, it must be non-empty;
+- the reference must resolve contextually to exactly one finding in the category in which the reference is used;
+- no fuzzy or normalized matching is used.
+
+Resolution rule:
+
+- when `id` is supplied, the ID must match the target finding and `text` must exactly equal that same finding's text;
+- when `id` is absent, `text` must exactly match one distinct finding in the applicable category;
+- zero matches fail;
+- multiple distinct text matches without an ID are ambiguous and fail.
+
+This dual id+text representation keeps references readable while avoiding a false requirement that every Slice 1 finding have an ID.
+
+`FindingReference` is intentionally local to this feature. It does not establish a generic cross-project reference abstraction.
+
+## 7. GenerationNotes
+
+Represents optional structured generation context and, critically, the explicit no-alternative limitation when meaningful alternatives cannot responsibly be produced.
+
+### Fields
+
+```text
+GenerationNotes
+- explanation: str
+- blocking_missing_information: collection[FindingReference]
+- blocking_uncertainties: collection[FindingReference]
+```
+
+### 7.1 `explanation`
+
+Rules:
+
+- required whenever `GenerationNotes` is present;
+- strict text;
+- non-empty and not whitespace-only;
+- preserved as generated when valid.
+
+### 7.2 `blocking_missing_information`
+
+References material blockers from:
+
+```text
+ProblemAnalysis.missing_information
+```
+
+Rules:
+
+- field required within `GenerationNotes`;
+- collection may be empty when no missing-information item materially blocks comparison;
+- each entry is a `FindingReference`;
+- every reference must resolve contextually to exactly one current `ProblemAnalysis.missing_information` item;
+- order preserved;
+- immutable after validation.
+
+### 7.3 `blocking_uncertainties`
+
+References material blockers from:
+
+```text
+ProblemAnalysis.uncertainties
+```
+
+Rules mirror `blocking_missing_information`:
+
+- field required;
+- collection may be empty;
+- every item is a `FindingReference`;
+- every reference must resolve contextually to exactly one current uncertainty;
+- order preserved;
+- immutable after validation.
+
+### 7.4 Alternatives-present semantics
+
+When two or three alternatives are present:
+
+- `generation_notes` is optional;
+- if present, its blocker collections may be empty;
+- it may provide concise structured generation context;
+- it does not replace required per-alternative content.
+
+### 7.5 No-alternative semantics
+
+When `alternatives` is empty:
+
+- `generation_notes` is mandatory;
+- `explanation` must explain why multiple meaningful alternatives cannot responsibly be formed;
+- material `missing_information` and `uncertainties` blocking useful comparison must be represented explicitly in the corresponding collections when applicable;
+- the application must not manufacture artificial alternatives merely to satisfy normal cardinality.
+
+Pydantic/model validation can deterministically enforce:
+
+```text
+alternatives == []
+    → generation_notes is required
+    → explanation is non-empty
+```
+
+Contextual validation can deterministically enforce that every blocker reference resolves to the correct current upstream category.
+
+Whether the explanation is substantively correct and whether every truly material blocker was identified remain semantic-quality concerns.
+
+## 8. SolutionAlternative
 
 Represents one candidate approach produced by the Solution Architect.
 
@@ -113,97 +345,71 @@ SolutionAlternative
 - disadvantages: collection[str]
 - assumptions: collection[str]
 - implementation_complexity: QualitativeLevel
-- relevant_constraints: collection[str]
+- relevant_constraints: collection[ConstraintReference]
 ```
 
-### 5.1 `id`
-
-A required review-local identifier for the alternative.
-
-Rules:
-
-- MUST be present;
-- MUST be non-empty and not whitespace-only;
-- MUST remain opaque to the contract beyond those requirements;
-- no mandatory prefix or formatting convention such as `ALT-001` is imposed;
-- does not represent a persistent or globally unique identifier.
-
-Uniqueness is enforced at the containing `SolutionAlternatives` level.
-
-### 5.2 `name`
-
-A short distinguishing label for the alternative.
+### 8.1 `id`
 
 Rules:
 
 - required;
 - strict text;
 - non-empty and not whitespace-only;
-- preserved as generated when valid.
+- review-local only;
+- no mandatory prefix/pattern such as `ALT-001`;
+- not persistent or globally unique.
 
-### 5.3 `description`
+Uniqueness is enforced by `SolutionAlternatives`.
 
-A concise explanation of the approach.
+### 8.2 `name`
+
+Required strict non-empty distinguishing text.
+
+### 8.3 `description`
+
+Required strict non-empty concise explanation of the approach.
+
+### 8.4 `advantages`
 
 Rules:
 
-- required;
-- strict text;
-- non-empty and not whitespace-only;
-- preserved as generated when valid.
+- field required;
+- collection may be empty when no material advantage is identified;
+- each item must be strict non-empty text;
+- order preserved;
+- immutable after validation.
 
-### 5.4 `advantages`
+No minimum item count is invented beyond the approved contract.
 
-Explicit advantages associated with this specific alternative.
-
-Rules:
-
-- field is required;
-- collection may be empty if the generated result genuinely identifies no material advantage;
-- each supplied item must be strict non-empty text;
-- order is preserved;
-- validated representation is immutable.
-
-The data model does not invent a minimum item count not defined by the approved spec or canonical Agent Model.
-
-### 5.5 `disadvantages`
-
-Explicit disadvantages, limitations, costs, or trade-offs associated with this specific alternative.
+### 8.5 `disadvantages`
 
 Rules mirror `advantages`:
 
 - field required;
 - collection may be empty;
-- supplied items must be strict non-empty text;
+- items strict and non-empty;
 - order preserved;
-- immutable after validation.
+- immutable.
 
-### 5.6 `assumptions`
-
-Assumptions required for the alternative to be viable.
+### 8.6 `assumptions`
 
 Rules:
 
 - field required;
 - collection may be empty;
-- supplied items must be strict non-empty text;
+- supplied items strict and non-empty;
 - assumptions remain assumptions by contract placement;
-- no assumption is promoted into a fact by this model;
+- no assumption is promoted into a fact;
 - order preserved;
-- immutable after validation.
+- immutable.
 
-The collection may contain:
+Items may restate Analyst assumptions or introduce solution-specific assumptions.
 
-- assumptions already present in `ProblemAnalysis.assumptions`;
-- solution-specific assumptions introduced by the Solution Architect.
+Formal assumption references are deliberately deferred because the approved canonical contract requires explicit assumptions but does not require every assumption to carry a reference object.
 
-This data model does not require assumption references in v0.1 because the canonical contract requires assumptions to remain explicit, but does not require each one to carry a formal upstream reference.
+### 8.7 `implementation_complexity`
 
-### 5.7 `implementation_complexity`
-
-Uses `QualitativeLevel`.
-
-Only:
+Uses `QualitativeLevel` and accepts only:
 
 ```text
 LOW
@@ -211,24 +417,18 @@ MEDIUM
 HIGH
 ```
 
-are accepted.
-
-### 5.8 `relevant_constraints`
-
-Represents review-local textual references to known constraints that materially shape or limit this alternative.
+### 8.8 `relevant_constraints`
 
 Rules:
 
 - field required;
 - collection may be empty when no known constraint materially shapes the alternative;
-- each supplied reference must be strict non-empty text;
+- every item is a `ConstraintReference`;
 - order preserved;
 - immutable after validation;
-- each reference must resolve contextually against the current trusted upstream artifacts before the `SolutionAlternative` can become part of trusted `SolutionAlternatives` output.
+- every reference must resolve contextually before the overall generated output becomes trusted.
 
-Structural validation only verifies that each reference is well-formed text. Resolution belongs to the participant/application boundary because it requires the actual current `ReviewInput` and `ProblemAnalysis`.
-
-## 6. SolutionAlternatives
+## 9. SolutionAlternatives
 
 Represents the validated structured output of the Solution Architect.
 
@@ -237,12 +437,12 @@ Represents the validated structured output of the Solution Architect.
 ```text
 SolutionAlternatives
 - alternatives: collection[SolutionAlternative]
-- generation_notes: str | None
+- generation_notes: GenerationNotes | None
 ```
 
-### 6.1 `alternatives`
+### 9.1 `alternatives`
 
-Always structurally present.
+The field is always structurally present.
 
 Valid collection sizes are exactly:
 
@@ -256,233 +456,70 @@ Therefore:
 
 - two alternatives are valid;
 - three alternatives are valid;
-- zero alternatives are valid only under the no-alternative rules below;
+- zero alternatives use the no-alternative path;
 - one alternative is invalid;
 - more than three alternatives are invalid.
 
-The validated collection preserves order and is immutable.
+The validated representation is ordered and immutable.
 
-### 6.2 Alternative identifier uniqueness
+### 9.2 Alternative ID uniqueness
 
-Each `SolutionAlternative.id` is required.
+All `SolutionAlternative.id` values must be unique within one `SolutionAlternatives` result.
 
-Within one `SolutionAlternatives` result:
+Duplicate IDs invalidate the whole result.
 
-- all alternative IDs MUST be unique;
-- duplicate IDs make the complete result invalid;
-- uniqueness is a model-level structural invariant because it depends only on the candidate output.
+This is a model-level invariant because it depends only on the candidate output.
 
-### 6.3 `generation_notes`
+### 9.3 `generation_notes`
 
-Optional generated text used for concise generation context.
+When alternatives contain two or three items:
 
-General rules:
+- optional.
 
-- when present, must be strict non-empty text;
-- valid text is preserved rather than silently trimmed or rewritten.
+When alternatives are empty:
 
-#### Alternatives present
+- mandatory;
+- must satisfy the no-alternative `GenerationNotes` rules.
 
-When `alternatives` contains two or three valid items:
+No separate `NoAlternativeOutcome` entity is introduced.
 
-- `generation_notes` is optional;
-- it may describe relevant generation context;
-- it does not replace any required per-alternative fields.
+## 10. Structural vs Contextual Validation Ownership
 
-#### No-alternative case
+### 10.1 Pydantic/model responsibility
 
-When `alternatives` is empty:
-
-- `generation_notes` becomes mandatory;
-- it must be non-empty;
-- it must explain why multiple meaningful alternatives cannot responsibly be formed yet;
-- when material missing information or unresolved uncertainty blocks useful comparison, the explanation must preserve that blocker explicitly.
-
-Pydantic/model validation can enforce the deterministic part of this rule:
-
-```text
-alternatives == []
-    → generation_notes is required and non-empty
-```
-
-Whether the natural-language note semantically identifies the correct reason and blockers is not fully provable by schema validation. That remains a participant behavior/evaluation obligation.
-
-## 7. Relevant-Constraint Resolution Model
-
-### 7.1 Purpose
-
-`relevant_constraints` must remain traceable to the current upstream review artifacts without requiring Slice 1 to retroactively make every Analyst constraint identifier mandatory.
-
-The Solution Architect receives:
-
-```text
-ReviewInput.constraints: collection[str]
-ProblemAnalysis.constraints: collection[AnalysisFinding]
-```
-
-Both are valid sources of known constraints.
-
-The original `ReviewInput` remains authoritative evidence of what the user supplied, while `ProblemAnalysis` is a trusted review artifact that may add structured constraints but may also contain omissions.
-
-### 7.2 Resolution candidates
-
-For contextual validation, construct conceptual candidate keys from the current upstream artifacts.
-
-#### ReviewInput constraint candidate
-
-For each original user constraint:
-
-```text
-source = review_input
-text = exact original constraint text
-reference keys = {text}
-```
-
-#### ProblemAnalysis constraint candidate
-
-For each Analyst constraint:
-
-```text
-source = problem_analysis
-text = finding.text
-id = finding.id | None
-reference keys = {text}
-                 plus {id} when id exists
-```
-
-### 7.3 Exact-match policy
-
-No fuzzy matching, semantic similarity, normalization, trimming, lowercasing, index lookup, or model-assisted repair is used.
-
-A generated constraint reference is matched exactly against the candidate reference keys.
-
-This keeps contextual validation deterministic and prevents the application from silently guessing which upstream constraint the model intended.
-
-### 7.4 Equivalent duplicate text across upstream artifacts
-
-The same semantic constraint may legitimately appear in both upstream artifacts, for example:
-
-```text
-ReviewInput.constraints:
-- "Must run offline"
-
-ProblemAnalysis.constraints:
-- text: "Must run offline"
-  id: "CON-001"
-```
-
-An exact textual reference:
-
-```text
-"Must run offline"
-```
-
-must NOT fail merely because the same exact constraint text is preserved in both artifacts.
-
-For textual resolution, identical exact text values are treated as one textual resolution target for ambiguity purposes.
-
-This reflects provenance duplication of the same constraint rather than two distinguishable meanings.
-
-If the Analyst constraint has an ID, the ID remains an additional valid unambiguous reference key.
-
-### 7.5 Ambiguity rule
-
-A generated `relevant_constraints` reference is valid only when it identifies one unambiguous known constraint target.
-
-Conceptually:
-
-```text
-0 distinct matching targets  → invalid
-1 distinct matching target   → valid
->1 distinct matching targets → ambiguous and invalid
-```
-
-Important distinction:
-
-- identical textual duplicates across upstream artifacts collapse to one textual target;
-- genuinely different constraints that expose the same reference key are ambiguous and fail closed.
-
-Example of a genuine ambiguity:
-
-```text
-ProblemAnalysis.constraints:
-- id: "SECURITY"
-  text: "Must run offline"
-
-- id: null
-  text: "SECURITY"
-```
-
-Reference:
-
-```text
-"SECURITY"
-```
-
-may mean either the first constraint's ID or the second constraint's exact text and is therefore ambiguous.
-
-The application MUST NOT guess which one was intended.
-
-### 7.6 Unresolved references
-
-A reference with no match against the current upstream constraint universe is invalid.
-
-The application MUST NOT:
-
-- create a new constraint implicitly;
-- rewrite the reference;
-- perform fuzzy matching;
-- silently drop the reference;
-- accept it merely because it appears plausible.
-
-The participant must fail its generated output before trusted `SolutionAlternatives` is returned.
-
-### 7.7 Scope of the guarantee
-
-Successful resolution proves only that a generated reference points to a known upstream constraint.
-
-It does not prove that:
-
-- the alternative interpreted the constraint correctly;
-- the constraint is actually material to that alternative;
-- the generated alternative satisfies the constraint;
-- the Analyst identified every relevant constraint.
-
-Those are semantic-quality concerns, not structural-reference guarantees.
-
-## 8. Structural vs Contextual Validation Ownership
-
-### Pydantic/model responsibility
-
-Pydantic owns rules that depend only on the candidate generated output, including:
+Pydantic owns invariants that depend only on candidate generated output:
 
 - required fields;
 - nested structure;
-- strict text types;
-- empty/whitespace-only required text rejection;
+- strict textual types;
+- non-empty required text;
 - closed-schema behavior;
-- supported `QualitativeLevel` values;
-- valid alternatives collection cardinality;
+- supported enum values;
+- immutable collections/models;
+- alternative cardinality `0 | 2 | 3`;
 - unique alternative IDs;
-- conditional non-empty `generation_notes` requirement when alternatives are empty;
-- immutable validated collections.
+- conditional presence of `GenerationNotes` for zero alternatives;
+- `ConstraintReference` source/kind structural compatibility;
+- local shape of `FindingReference`.
 
-### Solution Architect/application responsibility
+### 10.2 SolutionArchitect/application responsibility
 
-The participant/application boundary owns rules requiring the trusted current upstream context, including:
+The participant boundary owns contextual checks requiring actual trusted upstream data:
 
-- resolving every `relevant_constraints` reference against `ReviewInput.constraints` and `ProblemAnalysis.constraints`;
+- resolving every `ConstraintReference` against the correct declared upstream source;
+- resolving `GenerationNotes.blocking_missing_information` against current `ProblemAnalysis.missing_information`;
+- resolving `GenerationNotes.blocking_uncertainties` against current `ProblemAnalysis.uncertainties`;
 - rejecting unresolved references;
-- rejecting genuinely ambiguous references;
-- accepting exact textual references to original constraints even when the Analyst omitted them;
-- preserving fail-closed behavior when contextual resolution fails;
-- normalizing generated structural/contextual failures into the participant output-validation error category.
+- rejecting genuinely ambiguous contextual references;
+- ensuring invalid generated data never becomes trusted `SolutionAlternatives`.
 
-Provider/transport failures remain distinct from generated-output validation failures.
+Generated structural and contextual failures are normalized into a Solution Architect output-validation error category.
 
-## 9. Role Boundary
+Provider/transport errors remain distinct and are not misreported as contract failures.
 
-`SolutionAlternative` and `SolutionAlternatives` deliberately contain no fields for:
+## 11. Role Boundary
+
+These contracts deliberately contain no fields for:
 
 - ranking;
 - preferred alternative;
@@ -492,37 +529,36 @@ Provider/transport failures remain distinct from generated-output validation fai
 - risk assessment;
 - critical review.
 
-Because generated-output contracts are closed, unexpected top-level or nested fields representing those responsibilities are rejected.
+Closed schemas reject unexpected structured role-leakage fields.
 
-This prevents structured role leakage.
+The model does not claim to detect every possible role violation embedded in arbitrary legitimate prose fields.
 
-The data model does not claim to detect every possible role violation embedded in arbitrary natural-language prose inside otherwise legitimate text fields.
+## 12. Semantic Quality Boundary
 
-## 10. Semantic Quality Boundary
-
-The following properties are required by product behavior but are not completely provable through deterministic schema validation alone:
+The following remain required product behaviors but are not completely provable through deterministic schema validation:
 
 - alternatives are meaningfully distinct;
-- an alternative is genuinely compatible with the stated objective;
+- an alternative genuinely supports the stated objective;
 - trade-offs are substantively correct;
 - all important constraints were recognized;
-- a partial or conditional solution is accurately characterized;
-- no free-text wording subtly declares a winner;
-- a no-alternative explanation identifies the correct semantic blockers.
+- a conditional alternative is characterized appropriately;
+- prose does not subtly declare a winner;
+- the no-alternative explanation is substantively correct;
+- all truly material blockers were identified.
 
 This increment deliberately does not introduce:
 
 - embeddings;
 - fuzzy similarity thresholds;
 - secondary LLM judging;
-- a hidden Critic stage;
+- a hidden Critic;
 - domain-specific semantic rule engines.
 
-Representative deterministic fixtures and later real-model evaluation against canonical reference scenarios are responsible for evaluating those semantic behaviors.
+Representative deterministic fixtures and later real-model evaluation against canonical reference scenarios are responsible for those semantic behaviors.
 
-## 11. Provider-Neutral Serialization Relationship
+## 13. Provider-Neutral Serialization Relationship
 
-The Solution Architect may serialize the already-trusted `ReviewInput` and `ProblemAnalysis` into standard Python/JSON-compatible structures before supplying them through the existing `LLMPort`.
+The Solution Architect may serialize trusted `ReviewInput` and `ProblemAnalysis` into standard Python/JSON-compatible structures before supplying them through `LLMPort`.
 
 Conceptually:
 
@@ -535,37 +571,31 @@ payload
 This serialization:
 
 - is provider-neutral;
-- contains no provider SDK objects;
-- does not alter the semantic contracts;
+- contains no SDK types;
+- does not alter semantic contracts;
 - does not establish trust in generated output;
 - does not replace local validation.
 
-Provider-specific request/response adaptation remains outside this increment.
+## 14. Error Semantics
 
-## 12. Error Semantics
+Malformed or context-invalid generated content must produce an explicit Solution Architect output-validation failure.
 
-Malformed or context-invalid generated Solution Architect content must result in an explicit Solution Architect output-validation failure.
+Representative failures include:
 
-The application should distinguish this category from:
-
-- invalid user input;
-- provider/transport failure;
-- unexpected internal failure.
-
-Representative output-validation failures include:
-
-- missing mandatory alternative fields;
-- unsupported implementation-complexity value;
+- missing mandatory alternative content;
+- unsupported complexity value;
 - invalid alternative count;
 - duplicate alternative IDs;
-- zero alternatives without non-empty `generation_notes`;
-- unknown structured role-leakage fields;
-- unresolved relevant-constraint reference;
-- genuinely ambiguous relevant-constraint reference.
+- zero alternatives without `GenerationNotes`;
+- blank generation explanation;
+- invalid `ConstraintReference` source/kind pair;
+- unresolved or ambiguous constraint reference;
+- unresolved or ambiguous no-alternative blocker reference;
+- unknown structured role-leakage fields.
 
-The exact Python exception class belongs to implementation, not to this semantic data contract.
+The exact Python exception class belongs to implementation.
 
-## 13. Deferred Data
+## 15. Deferred Data
 
 This increment intentionally does not model:
 
@@ -582,20 +612,19 @@ This increment intentionally does not model:
 - provider request/response models;
 - UI view models;
 - formal assumption references;
+- generic repository-wide reference infrastructure;
 - semantic-similarity scores;
 - quantitative complexity estimates.
 
-Those concepts remain deferred until an approved later increment requires them.
-
-## 14. Traceability to Approved Sources
+## 16. Traceability to Approved Sources
 
 This data model remains subordinate to and consistent with:
 
-- `specs/002-solution-architect/spec.md` — approved Slice 2 behavior and scope;
-- `specs/002-solution-architect/plan.md` — approved implementation and validation ownership decisions;
-- `docs/02-requirements.md` — Solution Architect requirements;
-- `docs/03-architecture.md` — explicit participant contracts and validation before trusted Review state;
-- `docs/04-agent-model.md` — Solution Architect input/output contracts, no-alternative case, invariants, and prohibited behavior;
-- `docs/05-quality-security.md` — deterministic validation, alternative distinctness, assumption preservation, valid references, and fail-closed generated data;
-- `.specify/memory/constitution.md` — structured contracts, role integrity, traceability, minimal architecture, provider independence, and deterministic testability;
-- `docs/adr/ADR-0001-pydantic-v2-for-structured-contracts.md` — approved Pydantic v2 validation policy and structural/contextual validation boundary.
+- `specs/002-solution-architect/spec.md`;
+- `specs/002-solution-architect/plan.md`;
+- `docs/02-requirements.md`;
+- `docs/03-architecture.md`;
+- `docs/04-agent-model.md`;
+- `docs/05-quality-security.md`;
+- `.specify/memory/constitution.md`;
+- `docs/adr/ADR-0001-pydantic-v2-for-structured-contracts.md`.
