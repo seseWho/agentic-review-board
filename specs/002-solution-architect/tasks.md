@@ -2,7 +2,7 @@
 
 **Input**: Approved design documents from `specs/002-solution-architect/`  
 **Prerequisites**: approved `spec.md`, `plan.md`, `data-model.md`, accepted `docs/adr/ADR-0001-pydantic-v2-for-structured-contracts.md`, and merged Slice 1 contracts on `main`  
-**Status**: Approved — ready for implementation
+**Status**: Approved — implementation in progress
 
 Tests are mandatory because the specification, Quality & Security baseline, Constitution, and ADR require deterministic verification of generated-contract validation, contextual traceability, role integrity, and fail-closed behavior.
 
@@ -26,12 +26,12 @@ Every implementation task follows:
 
 ### Tests first
 
-- [ ] T001 [P] [US1] Create `tests/unit/test_solution_alternatives.py` with happy-path structural tests for `QualitativeLevel`, `ConstraintSource`, `ConstraintReferenceKind`, `ConstraintReference`, `FindingReference`, `GenerationNotes`, `SolutionAlternative`, and `SolutionAlternatives`, including exact `LOW`/`MEDIUM`/`HIGH` acceptance, allowed constraint source/kind combinations, required strict non-empty semantic text, optional review-local finding IDs, 2- and 3-alternative valid cardinalities, optional generation notes when alternatives exist, unique alternative IDs, closed generated-output schemas, tuple-backed immutable collections, and post-validation immutability.
+- [X] T001 [P] [US1] Create `tests/unit/test_solution_alternatives.py` with happy-path structural tests for `QualitativeLevel`, `ConstraintSource`, `ConstraintReferenceKind`, `ConstraintReference`, `FindingReference`, `GenerationNotes`, `SolutionAlternative`, and `SolutionAlternatives`, including exact `LOW`/`MEDIUM`/`HIGH` acceptance, allowed constraint source/kind combinations, required strict non-empty semantic text, optional review-local finding IDs, 2- and 3-alternative valid cardinalities, optional generation notes when alternatives exist, unique alternative IDs, closed generated-output schemas, tuple-backed immutable collections, and post-validation immutability.
 
 ### Implementation
 
-- [ ] T002 [US1] Create `src/agentic_review_board/domain/shared.py` with the closed `QualitativeLevel` enum containing only `LOW`, `MEDIUM`, and `HIGH`, without quantitative semantics or provider-specific behavior.
-- [ ] T003 [US1] Create `src/agentic_review_board/domain/solutions.py` implementing Pydantic v2 `ConstraintSource`, `ConstraintReferenceKind`, `ConstraintReference`, `FindingReference`, `GenerationNotes`, `SolutionAlternative`, and `SolutionAlternatives` exactly as approved in `data-model.md`, including closed/frozen generated contracts, strict non-empty semantic text, immutable validated collections, `REVIEW_INPUT + ID` rejection, alternative cardinality `0 | 2 | 3`, required `GenerationNotes` when alternatives are empty, and unique alternative IDs.
+- [X] T002 [US1] Create `src/agentic_review_board/domain/shared.py` with the closed `QualitativeLevel` enum containing only `LOW`, `MEDIUM`, and `HIGH`, without quantitative semantics or provider-specific behavior.
+- [X] T003 [US1] Create `src/agentic_review_board/domain/solutions.py` implementing Pydantic v2 `ConstraintSource`, `ConstraintReferenceKind`, `ConstraintReference`, `FindingReference`, `GenerationNotes`, `SolutionAlternative`, and `SolutionAlternatives` exactly as approved in `data-model.md`, including closed/frozen generated contracts, strict non-empty semantic text, immutable validated collections, `REVIEW_INPUT + ID` rejection, alternative cardinality `0 | 2 | 3`, required `GenerationNotes` when alternatives are empty, and unique alternative IDs.
 
 **Checkpoint**: `tests/unit/test_solution_alternatives.py` passes independently for all normal structural contract behavior without invoking `LLMPort`.
 
@@ -45,12 +45,12 @@ Every implementation task follows:
 
 ### Tests first
 
-- [ ] T004 [US1] Create the happy-path portion of `tests/unit/test_solution_architect.py` using a deterministic `LLMPort` fake to assert exactly one Solution Architect invocation, explicit propagation of both `ReviewInput` and trusted `ProblemAnalysis`, absence of later-stage artifacts from the payload, acceptance of a valid two-alternative result, acceptance of a valid three-alternative result, preservation of upstream input objects, and no ranking/preferred/final-recommendation fields in trusted output.
-- [ ] T005 [US1] Extend `tests/unit/test_solution_architect.py` with contextual constraint-reference success cases proving that `REVIEW_INPUT + TEXT` resolves against original `ReviewInput.constraints` even when the Analyst omitted that constraint, identical duplicate `ReviewInput.constraints` text still resolves as one textual target, `PROBLEM_ANALYSIS + ID` resolves by a supplied finding ID, and `PROBLEM_ANALYSIS + TEXT` resolves by exact finding text when unambiguous.
+- [X] T004 [US1] Create the happy-path portion of `tests/unit/test_solution_architect.py` using a deterministic `LLMPort` fake to assert exactly one Solution Architect invocation, explicit propagation of both `ReviewInput` and trusted `ProblemAnalysis`, absence of later-stage artifacts from the payload, acceptance of a valid two-alternative result, acceptance of a valid three-alternative result, preservation of upstream input objects, and no ranking/preferred/final-recommendation fields in trusted output.
+- [X] T005 [US1] Extend `tests/unit/test_solution_architect.py` with contextual constraint-reference success cases proving that `REVIEW_INPUT + TEXT` resolves against original `ReviewInput.constraints` even when the Analyst omitted that constraint, identical duplicate `ReviewInput.constraints` text still resolves as one textual target, `PROBLEM_ANALYSIS + ID` resolves by a supplied finding ID, and `PROBLEM_ANALYSIS + TEXT` resolves by exact finding text when unambiguous.
 
 ### Implementation
 
-- [ ] T006 [US1] Create `src/agentic_review_board/participants/solution_architect.py` with `SolutionArchitect` and a dedicated Solution Architect output-validation error category; invoke the existing unchanged `LLMPort`, send only provider-neutral `review_input` and `problem_analysis` payload sections, treat the generated mapping as untrusted, construct `SolutionAlternatives` through local Pydantic validation, perform contextual constraint-reference validation against the current trusted upstream artifacts, and return only trusted `SolutionAlternatives`.
+- [X] T006 [US1] Create `src/agentic_review_board/participants/solution_architect.py` with `SolutionArchitect` and a dedicated Solution Architect output-validation error category; invoke the existing unchanged `LLMPort`, send only provider-neutral `review_input` and `problem_analysis` payload sections, treat the generated mapping as untrusted, construct `SolutionAlternatives` through local Pydantic validation, perform contextual constraint-reference validation against the current trusted upstream artifacts, and return only trusted `SolutionAlternatives`.
 
 **Checkpoint**: US1 succeeds deterministically with no network access, no concrete provider SDK, no orchestration layer, and no downstream participant implementation.
 
