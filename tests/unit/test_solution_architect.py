@@ -13,7 +13,8 @@ class FakeLLM:
 
     def generate_structured(
         self,
-        *,        role: str,
+        *,
+        role: str,
         payload: Mapping[str, object],
     ) -> Mapping[str, object]:
         self.calls.append((role, payload))
@@ -35,7 +36,11 @@ def review_input(*, duplicate_constraint: bool = False) -> ReviewInput:
     )
 
 
-def problem_analysis(*, include_offline_constraint: bool = True) -> ProblemAnalysis:
+def problem_analysis(
+    *,
+    include_offline_constraint: bool = True,
+    include_blockers: bool = False,
+) -> ProblemAnalysis:
     constraints: tuple[AnalysisFinding, ...]
     if include_offline_constraint:
         constraints = (
@@ -45,13 +50,23 @@ def problem_analysis(*, include_offline_constraint: bool = True) -> ProblemAnaly
     else:
         constraints = (AnalysisFinding(id="CON-002", text="Keep deployment simple"),)
 
+    missing_information = (
+        AnalysisFinding(
+            id="MISS-001",
+            text="Available deployment infrastructure is unknown.",
+        ),
+    ) if include_blockers else ()
+    uncertainties = (
+        AnalysisFinding(text="Operational ownership is unclear."),
+    ) if include_blockers else ()
+
     return ProblemAnalysis(
         objective="Identify viable deployment approaches.",
         facts=(),
         constraints=constraints,
         assumptions=(AnalysisFinding(id="ASM-001", text="Local compute can host the workload."),),
-        missing_information=(),
-        uncertainties=(),
+        missing_information=missing_information,
+        uncertainties=uncertainties,
     )
 
 
@@ -106,6 +121,24 @@ def response_from(alternatives: list[dict[str, object]]) -> dict[str, object]:
 
 def two_alternative_response() -> dict[str, object]:
     return response_from(base_alternatives())
+
+
+def no_alternative_response() -> dict[str, object]:
+    return {
+        "alternatives": [],
+        "generation_notes": {
+            "explanation": "The current evidence does not support two meaningful alternatives.",
+            "blocking_missing_information": [
+                {
+                    "id": "MISS-001",
+                    "text": "Available deployment infrastructure is unknown.",
+                }
+            ],
+            "blocking_uncertainties": [
+                {"text": "Operational ownership is unclear."}
+            ],
+        },
+    }
 
 
 def test_solution_architect_returns_trusted_two_alternative_result() -> None:
@@ -236,3 +269,57 @@ def test_problem_analysis_constraint_resolves_by_exact_text_when_unambiguous() -
     )
 
     assert result.alternatives[0].relevant_constraints[0].value == "Must run offline"
+
+
+def test_solution_architect_returns_structured_no_alternative_result_with_valid_blockers() -> None:
+    result = SolutionArchitect(FakeLLM(no_alternative_response())).propose(
+        review_input(),
+        problem_analysis(include_blockers=True),
+    )
+
+    assert result.alternatives == ()
+    assert result.generation_notes is not None
+    assert result.generation_notes.blocking_missing_information[0].id == "MISS-001"
+    assert result.generation_notes.blocking_uncertainties[0].id is None
+
+
+def test_generation_notes_id_and_text_must_resolve_to_same_missing_information_finding() -> None:
+    result = SolutionArchitect(FakeLLM(no_alternative_response())).propose(
+        review_input(),
+        problem_analysis(include_blockers=True),
+    )
+
+    assert result.generation_notes is not None
+    blocker = result.generation_notes.blocking_missing_information[0]
+    assert blocker.id == "MISS-001"
+    assert blocker.text == "Available deployment infrastructure is unknown."
+
+
+def test_generation_notes_text_only_reference_resolves_when_unique() -> None:
+    result = SolutionArchitect(FakeLLM(no_alternative_response())).propose(
+        review_input(),
+        problem_analysis(include_blockers=True),
+    )
+
+    assert result.generation_notes is not None
+    blocker = result.generation_notes.blocking_uncertainties[0]
+    assert blocker.id is None
+    assert blocker.text == "Operational ownership is unclear."
+
+
+def test_generation_notes_blockers_are_validated_even_when_alternatives_are_present() -> None:
+    response = two_alternative_response()
+    response["generation_notes"] = {
+        "explanation": "One uncertainty still affects implementation planning.",
+        "blocking_missing_information": [],
+        "blocking_uncertainties": [{"text": "Operational ownership is unclear."}],
+    }
+
+    result = SolutionArchitect(FakeLLM(response)).propose(
+        review_input(),
+        problem_analysis(include_blockers=True),
+    )
+
+    assert len(result.alternatives) == 2
+    assert result.generation_notes is not None
+    assert result.generation_notes.blocking_uncertainties[0].text == "Operational ownership is unclear."
