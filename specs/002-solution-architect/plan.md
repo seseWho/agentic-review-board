@@ -3,21 +3,23 @@
 **Branch**: `002-solution-architect`  
 **Date**: 2026-08-20  
 **Spec**: `specs/002-solution-architect/spec.md`  
-**Status**: Approved — ready for data-model refinement
+**Status**: Approved — data-model refinement in progress
 
 ## 1. Summary
 
-Implement the smallest executable Solution Architect slice that consumes the already-trusted `ReviewInput` and `ProblemAnalysis` produced by the previous increment and returns trusted `SolutionAlternatives` without introducing review orchestration or later participant responsibilities.
+Implement the smallest executable Solution Architect slice that consumes the trusted `ReviewInput` and `ProblemAnalysis` from Slice 1 and returns trusted `SolutionAlternatives` without introducing review orchestration or later participant responsibilities.
 
 The increment introduces:
 
-- `QualitativeLevel` as the shared qualitative scale required now by solution implementation complexity;
-- `SolutionAlternative` as the structured representation of one candidate approach;
+- `QualitativeLevel` as the shared `LOW` / `MEDIUM` / `HIGH` scale;
+- `ConstraintReference` for explicit references to known upstream constraints;
+- `GenerationNotes` for structured generation context and explicit no-alternative blockers;
+- `SolutionAlternative` as one candidate approach;
 - `SolutionAlternatives` as the validated Solution Architect result;
-- a `SolutionArchitect` participant that receives only the original `ReviewInput` and trusted `ProblemAnalysis`, requests provider-neutral structured generation through the existing `LLMPort`, validates generated data, enforces contextual upstream-reference invariants, and returns trusted `SolutionAlternatives`;
-- deterministic tests covering normal alternatives, the explicit no-alternative case, fail-closed validation, upstream data propagation, reference validation, and post-validation immutability.
+- a `SolutionArchitect` participant that uses the existing provider-neutral `LLMPort`, performs local structural validation, performs contextual upstream-reference validation, and returns trusted output;
+- deterministic tests for normal alternatives, the no-alternative case, fail-closed behavior, reference validation, provider-failure separation, and immutability.
 
-The increment reuses the existing Pydantic v2 contract policy, provider-neutral `LLMPort`, Python package structure, and CI quality gates established by Slice 1.
+The increment reuses Pydantic v2, the existing Python package structure, and the current `LLMPort` unchanged.
 
 It does not implement the Review Orchestrator, stage lifecycle/status, Risk Reviewer, Critic, Coordinator, ranking, final recommendation, UI, persistence, RAG, tools, or a concrete model provider.
 
@@ -28,15 +30,10 @@ It does not implement the Review Orchestrator, stage lifecycle/status, Risk Revi
 **Development Dependencies**: existing pytest, Ruff, and mypy configuration  
 **Storage**: none  
 **Target Platform**: single local Python process and CI  
-**Project Type**: existing single Python package using the `src/` layout  
-**External Model Access**: reuse existing provider-neutral `LLMPort`; no concrete SDK or adapter  
-**Performance Goals**: no new latency SLA; this slice adds one participant invocation only when called directly  
-**Security Scope**: no credentials, persistence, external tools, autonomous actions, or confidential-data dependency  
-**Scale/Scope**: one new participant output contract, one participant, one shared qualitative enum, deterministic unit/contract tests
+**External Model Access**: existing provider-neutral `LLMPort`; no concrete SDK or adapter  
+**Security Scope**: no credentials, persistence, external tools, autonomous actions, or confidential-data dependency
 
-### Existing implementation reused
-
-This slice builds directly on the trusted contracts already present in `main`:
+Existing trusted contracts reused unchanged:
 
 ```text
 ReviewInput
@@ -46,114 +43,86 @@ FactFinding
 LLMPort
 ```
 
-No redesign of those contracts is required.
-
-The existing `LLMPort.generate_structured(role, payload)` signature is already sufficiently generic for the Solution Architect and remains unchanged.
-
 ## 3. Constitution Check
 
 ### I. Genuine Agent Collaboration and Role Integrity — PASS
 
-This is the first implemented downstream participant.
-
 The Solution Architect:
 
-- receives the original `ReviewInput`;
-- consumes the validated `ProblemAnalysis` produced by the Analyst slice;
+- consumes the original `ReviewInput`;
+- consumes validated `ProblemAnalysis`;
 - produces only `SolutionAlternatives`;
 - does not invoke another participant;
 - does not control workflow progression;
 - does not perform risk review, critique, ranking, or final recommendation.
 
-This produces genuine explicit upstream-to-downstream information flow without introducing the full Orchestrator prematurely.
+This is the first direct downstream consumption of the Analyst result and therefore demonstrates genuine structured collaboration without introducing the full Orchestrator prematurely.
 
 ### II. Structured Contracts and Validation — PASS
 
 Generated Solution Architect content remains untrusted until it passes:
 
-1. Pydantic structural/model validation against the closed `SolutionAlternatives` contract;
-2. contextual participant validation for references that must resolve against the actual trusted upstream review artifacts.
+1. Pydantic structural/model validation;
+2. contextual validation for references that require the actual trusted upstream artifacts.
 
-Malformed or context-invalid output never becomes trusted `SolutionAlternatives` data.
+Critical downstream information in the no-alternative path is not left only in free-form prose: blockers are represented explicitly in `GenerationNotes`.
+
+Invalid generated content never becomes trusted `SolutionAlternatives`.
 
 ### III. Traceability, Uncertainty, and Explicit Evidence — PASS
 
-The contract keeps alternatives, trade-offs, assumptions, implementation complexity, and relevant constraints structurally explicit.
-
-Solution-specific assumptions remain assumptions by construction and do not become facts.
-
-Relevant constraint references must resolve unambiguously to known constraints present in the supplied trusted `ReviewInput` or `ProblemAnalysis`.
-
-The no-alternative case preserves explicit uncertainty through `generation_notes` rather than manufacturing candidate variants. When missing information or uncertainty materially blocks useful comparison, that blocker must remain represented in the no-alternative explanation.
-
-Trusted generated collections are immutable after validation so accepted stage output cannot be altered without crossing validation again.
+- assumptions remain assumptions;
+- relevant constraints are explicit `ConstraintReference` values;
+- no-alternative blockers are explicit structured references to `ProblemAnalysis.missing_information` and `ProblemAnalysis.uncertainties`;
+- accepted generated collections are immutable after validation;
+- upstream outputs remain evidence rather than unquestioned truth.
 
 ### IV. Human Decision Authority — PASS
 
-The Solution Architect explores the solution space only.
-
-Its output contains no ranking, preferred alternative, final recommendation, external action, or autonomous decision behavior.
+The Solution Architect explores solution space only. It does not select, rank, recommend, or execute a solution.
 
 ### V. Minimal Architecture and Evidence-Driven Complexity — PASS
 
-No new framework, production dependency, adapter, database, orchestration framework, persistence layer, UI layer, RAG component, tool capability, broker, or distributed runtime is introduced.
+No new dependency, framework, database, orchestration framework, adapter, persistence layer, UI layer, semantic-similarity component, or tool capability is introduced.
 
-The existing Pydantic v2 decision and `LLMPort` are reused.
-
-A small shared qualitative enum is introduced only because the canonical Solution Architect contract requires qualitative implementation complexity now.
-
-No new ADR is required by this plan.
+`ConstraintReference` and `GenerationNotes` are small local value objects that replace ambiguous string conventions and make required cross-stage information explicit. They do not introduce a generic reference framework.
 
 ### VI. Provider Independence and Boundary Discipline — PASS
 
-The Solution Architect depends on the existing provider-neutral `LLMPort`.
-
-Provider SDK request types, provider response envelopes, authentication objects, endpoint details, and provider-native schema types remain outside domain and participant code.
-
-The participant supplies only provider-neutral structured data to the port.
+The existing `LLMPort.generate_structured(role, payload)` remains unchanged. Provider SDK types and transport envelopes stay outside domain and participant contracts.
 
 ### VII. Deterministic Testability and Visible Failure — PASS
 
-All new behavior is testable with a deterministic `LLMPort` fake and no network access.
-
-Tests cover valid alternatives, no-alternative behavior, structural failure, contextual reference failure, provider-failure separation, explicit upstream payload propagation, and immutability.
+All behavior is testable with a deterministic `LLMPort` fake and no network access.
 
 ### VIII. Security by Minimization and Least Capability — PASS
 
-The increment introduces no secrets, filesystem actions, external tools, persistence, browsing, collaboration integrations, or autonomous side effects.
-
-Only the current `ReviewInput` and required trusted `ProblemAnalysis` are supplied to the participant/model boundary.
+No new secrets, persistence, filesystem actions, browsing, collaboration integration, tools, or autonomous side effects are introduced.
 
 ### IX. Incremental Delivery and Explicit Architectural Decisions — PASS
 
-The increment adds one bounded product capability: Solution Architect output based on validated Analyst output.
+ADR-0001 already governs the relevant Pydantic and validation-boundary decisions. The new value objects are local refinements of approved contracts and do not justify a new ADR.
 
-ADR-0001 already governs the only material architectural dependency used here: Pydantic v2 for structured contracts and validation.
-
-The remaining choices in this plan are local contract and package-organization decisions and do not introduce a new framework, runtime pattern, integration, persistence model, or security consequence.
-
-**Constitution gate result**: PASS. No new ADR prerequisite is identified.
+**Constitution gate result**: PASS.
 
 ## 4. Architectural and Contract Decisions
 
-### 4.1 Reuse Pydantic v2 and the existing fail-closed policy
+### 4.1 Reuse Pydantic v2 and fail closed
 
-`SolutionAlternative` and `SolutionAlternatives` use Pydantic v2 under ADR-0001.
+Generated-output contracts use the established ADR-0001 policy:
 
-Generated-output contracts follow the established policy:
-
-- closed schemas where the contract is exhaustive (`extra="forbid"`);
+- `extra="forbid"` where the contract is closed;
 - frozen trusted models;
 - immutable validated collections;
-- strict generated semantic text rather than permissive primitive-to-string coercion;
-- non-empty validation for required generated text;
-- no silent semantic repair of malformed model output.
+- strict generated semantic text;
+- required text rejects empty/whitespace-only values;
+- no silent semantic repair.
 
-No additional validation library is introduced.
+Structural validity does not imply factual correctness or semantic quality.
 
 ### 4.2 Shared `QualitativeLevel`
 
-Introduce the canonical qualitative scale:
+Use the canonical shared values:
 
 ```text
 LOW
@@ -161,13 +130,80 @@ MEDIUM
 HIGH
 ```
 
-as one shared domain enum/value type.
+`SolutionAlternative.implementation_complexity` uses this scale as a relative engineering judgment, not as probability, duration, cost, or calibrated effort.
 
-It is used by `SolutionAlternative.implementation_complexity` in this slice and represents an ordinal engineering judgment, not a probability, duration estimate, effort estimate, or calibrated measurement.
+### 4.3 Explicit `ConstraintReference`
 
-A small shared domain module is justified because the Agent Model defines this as a shared concept and later canonical contracts also use the same semantic scale. This does not create a generic framework or new architectural layer.
+A relevant constraint reference must state what it refers to instead of overloading one string with source and interpretation semantics.
 
-### 4.3 `SolutionAlternative` contract
+Conceptually:
+
+```text
+ConstraintReference
+- source: REVIEW_INPUT | PROBLEM_ANALYSIS
+- kind: TEXT | ID
+- value: str
+```
+
+Rules:
+
+```text
+source = REVIEW_INPUT
+    → kind MUST be TEXT
+    → value MUST exactly match one ReviewInput.constraints textual value
+
+source = PROBLEM_ANALYSIS, kind = ID
+    → value MUST exactly match one supplied AnalysisFinding.id
+
+source = PROBLEM_ANALYSIS, kind = TEXT
+    → value MUST exactly match one ProblemAnalysis.constraints finding.text
+```
+
+Structural validation owns the allowed enum values, non-empty `value`, and the rule that `REVIEW_INPUT` cannot use `ID`.
+
+The `SolutionArchitect` contextual boundary owns resolution against the actual current upstream artifacts.
+
+No fuzzy matching, trimming, lowercasing, indexing convention, semantic similarity, or LLM-assisted repair is introduced.
+
+If a typed reference matches no current target it fails closed. If a typed reference is genuinely ambiguous inside its declared source/kind, it also fails closed.
+
+Repeated identical text in `ReviewInput.constraints` may be treated as the same textual target because the original contract provides no local identity for those strings. Distinct `ProblemAnalysis` findings with the same text make a `PROBLEM_ANALYSIS + TEXT` reference ambiguous; an available unique ID should be used instead.
+
+This design removes cross-source ambiguity and removes the need for special logic to decide whether a bare string is an ID or text.
+
+### 4.4 `GenerationNotes` as structured generation context
+
+Keep the canonical top-level shape:
+
+```text
+SolutionAlternatives
+- alternatives[]
+- generation_notes?
+```
+
+but refine `generation_notes` into a small structured value object:
+
+```text
+GenerationNotes
+- explanation: str
+- blocking_missing_information[]
+- blocking_uncertainties[]
+```
+
+The blocker collections contain explicit references to the corresponding `ProblemAnalysis` categories. Their exact reference representation is defined in `data-model.md` and remains local to this feature; no generic repository-wide reference framework is introduced.
+
+When alternatives are present, `generation_notes` remains optional.
+
+When `alternatives` is empty:
+
+- `generation_notes` is mandatory;
+- `explanation` is mandatory and non-empty;
+- material blocking missing information and uncertainties must be preserved through the corresponding structured blocker collections when applicable;
+- no artificial alternatives are manufactured to satisfy a count.
+
+This preserves the canonical no-alternative behavior while ensuring critical blockers remain structurally inspectable by later stages.
+
+### 4.5 `SolutionAlternative` contract
 
 Conceptually:
 
@@ -183,159 +219,82 @@ SolutionAlternative
 - relevant_constraints[]
 ```
 
-Contract intent:
+Rules:
 
-- `id` is required, non-empty, and review-local; no global ID or persistent identity is introduced;
-- `name` is required non-empty generated text;
-- `description` is required non-empty generated text;
-- `advantages`, `disadvantages`, and `assumptions` are explicit ordered collections of generated text;
-- `implementation_complexity` accepts only the shared qualitative values;
-- `relevant_constraints` is an ordered collection of references to known constraints in the supplied upstream review artifacts;
-- validated collections are immutable after successful validation.
+- `id` required, non-empty, review-local, with no mandatory prefix convention;
+- `name` required non-empty strict text;
+- `description` required non-empty strict text;
+- `advantages`, `disadvantages`, and `assumptions` are required ordered collections but may be empty when there is genuinely no corresponding material item;
+- `implementation_complexity` uses `QualitativeLevel`;
+- `relevant_constraints` contains `ConstraintReference` values;
+- validated collections are immutable.
 
-The plan does not impose an `ALT-001` formatting pattern because the canonical documents provide that as an example rather than a mandatory identifier syntax.
+The data model must not invent minimum item counts that the approved spec and canonical Agent Model do not require.
 
-Exact minimum cardinality for the text collections beyond their required presence will be refined in `data-model.md` without inventing requirements not supported by the approved spec or canonical documents.
+### 4.6 `SolutionAlternatives` cardinality
 
-### 4.4 `SolutionAlternatives` contract and cardinality
-
-Conceptually:
+Valid alternative counts are exactly:
 
 ```text
-SolutionAlternatives
-- alternatives[]
-- generation_notes?
+0
+2
+3
 ```
 
-The alternatives collection is always structurally present.
+Therefore:
 
-Valid cardinalities are:
+- 2 or 3 alternatives → normal comparison path;
+- 0 alternatives → valid only with required `GenerationNotes`;
+- 1 alternative → invalid;
+- >3 alternatives → invalid.
 
-```text
-0 alternatives
-or
-2 alternatives
-or
-3 alternatives
-```
+Alternative IDs must be unique within the result.
 
-A one-alternative result is invalid because the approved feature semantics are either a meaningful comparison set of two to three alternatives or an explicit statement that a useful alternative set cannot yet be formed.
+### 4.7 Assumption preservation
 
-More than three alternatives is invalid for the MVP slice.
+Alternative assumptions remain under `assumptions[]`. They may repeat an Analyst assumption or introduce a solution-specific assumption, but this slice provides no mechanism to promote an assumption into a fact or rewrite `ProblemAnalysis`.
 
-When `alternatives` is empty:
+### 4.8 Semantic distinctness boundary
 
-- `generation_notes` becomes conditionally required;
-- it must contain non-empty generated text explaining why meaningful alternatives cannot responsibly be formed;
-- when material missing information or unresolved uncertainty blocks useful comparison, `generation_notes` must identify that blocker rather than omitting or silently resolving it.
+The requirement that alternatives be meaningfully distinct is a semantic-quality invariant and cannot be proven reliably by Pydantic alone.
 
-Pydantic can deterministically validate the presence and non-empty nature of `generation_notes` in the zero-alternative case. Whether the natural-language explanation actually contains the correct reason and material blockers is a participant semantic-quality obligation and is evaluated through deterministic representative fixtures and later real-model evaluation; schema validation must not pretend to understand arbitrary prose.
+This slice deliberately does not introduce:
 
-When alternatives are present, `generation_notes` remains optional and may provide concise generation context, but it does not replace required per-alternative fields.
-
-Alternative IDs must be unique within one `SolutionAlternatives` result. Duplicate required IDs are a model-level structural invariant because the rule depends only on the candidate output.
-
-### 4.5 Relevant-constraint reference representation
-
-The Solution Architect receives both the original `ReviewInput` and the trusted `ProblemAnalysis`.
-
-The contextual reference policy must therefore preserve known constraints from either artifact rather than treating the Analyst output as the only source of constraint truth. This is important because canonical agent semantics explicitly treat upstream outputs as evidence that may contain omissions.
-
-`ProblemAnalysis.constraints` items may have a review-local ID, but Slice 1 intentionally made those IDs optional. `ReviewInput.constraints` are original user-provided text values and currently have no local IDs.
-
-Therefore this slice must not require every upstream constraint to gain an ID merely to support Solution Architect traceability.
-
-The minimal reference policy is:
-
-- each `relevant_constraints` entry is a non-empty provider-neutral textual reference;
-- the known-constraint universe for contextual resolution is the union of `ReviewInput.constraints` and `ProblemAnalysis.constraints`;
-- for `ProblemAnalysis.constraints`, a reference may resolve by an existing constraint ID when one is available or by exact constraint text;
-- for `ReviewInput.constraints`, a reference resolves by exact constraint text;
-- the Solution Architect/application boundary performs this contextual resolution after structural validation;
-- a reference is valid only when it resolves to exactly one known constraint in the current upstream artifacts;
-- zero matches are invalid because the reference is not traceable to a known constraint;
-- more than one match is invalid because the reference is ambiguous;
-- this is review-local structural traceability, not proof that the model interpreted the constraint correctly.
-
-`data-model.md` will define the exact field/type representation while preserving this resolution policy.
-
-This approach:
-
-- avoids retroactively making Analyst IDs mandatory;
-- preserves direct access to original user constraints even if the Analyst omits one;
-- avoids index-based references that are opaque to users;
-- avoids introducing persistent/global identifiers;
-- makes ambiguous references fail closed instead of guessing which constraint was intended.
-
-### 4.6 Assumption preservation
-
-Alternative assumptions remain under the explicit `assumptions[]` field.
-
-They may restate or depend on an Analyst assumption or introduce a solution-specific assumption, but this slice does not provide any mechanism that promotes them into `facts`.
-
-The implementation does not rewrite the upstream `ProblemAnalysis` and does not add facts to it.
-
-No additional evidence-scoring or assumption-promotion mechanism is introduced.
-
-### 4.7 Semantic distinctness boundary
-
-The requirement that alternatives be meaningfully distinct is a participant-quality invariant, but arbitrary semantic distinctness cannot be proven reliably by Pydantic schema validation alone.
-
-This slice therefore does **not** introduce:
-
-- embedding similarity;
-- fuzzy semantic heuristics;
-- a second LLM call to judge the first LLM;
+- embeddings;
+- fuzzy similarity thresholds;
+- a second LLM judge;
 - a hidden Critic stage;
-- hard-coded domain-specific alternative taxonomies.
+- domain-specific alternative taxonomies.
 
-The deterministic contract boundary enforces what can be established reliably, including valid cardinality, unique IDs, closed fields, required structure, qualitative complexity, and upstream constraint references.
+Deterministic validation enforces what is reliably structural. Canonical reference scenarios and later real-model evaluation assess semantic distinctness.
 
-Representative deterministic fixtures will contain genuinely different approaches, while canonical reference scenarios and later real-model evaluation remain the appropriate place to assess whether generated alternatives are materially distinct in meaning.
+### 4.9 Role-integrity boundary
 
-Obvious structural duplication such as duplicate alternative IDs is rejected, but the implementation must not claim that passing structural validation proves semantic originality or optimality.
+`SolutionAlternatives` contains no structured fields for ranking, preferred alternative, winner selection, final recommendation, final decision, risk assessment, or critical review.
 
-### 4.8 Role-integrity boundary
+Closed schemas reject those unexpected structured fields. Schema validation does not pretend to classify every possible role violation embedded in arbitrary prose.
 
-`SolutionAlternatives` contains no fields for:
+### 4.10 Provider-neutral upstream payload
 
-- ranking;
-- preferred alternative;
-- winner selection;
-- final recommendation;
-- final decision;
-- risk assessment;
-- critical review.
-
-Because generated-output contracts are closed, unexpected fields representing those later-stage responsibilities fail structural validation rather than entering trusted output.
-
-Semantic wording embedded inside an otherwise valid free-text field cannot be perfectly classified by schema validation. Role behavior in generated prose is therefore also covered by deterministic participant fixtures and later real-model evaluation rather than by pretending schema validation can understand arbitrary prose.
-
-### 4.9 Provider-neutral upstream payload
-
-The Solution Architect must demonstrate explicit consumption of both required upstream artifacts.
-
-Conceptually the `LLMPort` request payload contains two explicit provider-neutral sections:
+The model boundary receives two explicit provider-neutral sections:
 
 ```text
 review_input
 problem_analysis
 ```
 
-The participant may use the existing Pydantic serialization API to produce standard Python/JSON-compatible structures for those trusted models before passing them through `LLMPort`.
+Trusted Pydantic contracts may be serialized to standard Python/JSON-compatible structures before passing them to `LLMPort`.
 
-Provider-specific envelopes or SDK objects are prohibited.
+No later-stage artifacts or provider-specific objects are included.
 
-The payload contains no Risk Reviewer, Critic, Coordinator, global Review state, hidden conversation memory, or unrelated application data.
-
-### 4.10 Solution Architect validation boundary
+### 4.11 Validation boundary
 
 Conceptual execution:
 
 ```text
 ReviewInput + trusted ProblemAnalysis
               ↓
-       Solution Architect
+       SolutionArchitect
               ↓
            LLMPort
               ↓
@@ -348,49 +307,42 @@ ReviewInput + trusted ProblemAnalysis
    trusted SolutionAlternatives
 ```
 
-Pydantic owns invariants that depend only on the candidate generated output, including:
+Pydantic/model validation owns candidate-output-only invariants, including:
 
 - required fields and nested structure;
-- strict/valid field types;
-- closed-schema behavior;
-- allowed qualitative values;
-- alternative-count invariant;
-- conditional requirement for non-empty `generation_notes` in the zero-alternative case;
-- unique required alternative IDs;
-- immutable validated collections.
+- strict text;
+- closed schemas;
+- qualitative enum values;
+- valid alternative cardinality;
+- required generation notes in the zero-alternative case;
+- alternative ID uniqueness;
+- local `ConstraintReference` source/kind compatibility;
+- immutable collections.
 
-The Solution Architect/application boundary owns invariants requiring actual trusted upstream context, specifically resolving every `relevant_constraints` reference unambiguously against the current `ReviewInput.constraints` and `ProblemAnalysis.constraints`.
+The participant/application boundary owns invariants requiring trusted upstream context, including:
 
-Generated structural or contextual validation failures are normalized into a Solution Architect output-validation error category.
+- resolving `ConstraintReference` values;
+- resolving no-alternative blocker references against the current `ProblemAnalysis`;
+- rejecting unresolved or ambiguous contextual references.
 
-Provider/transport errors remain distinguishable and propagate rather than being incorrectly converted into schema errors.
-
-### 4.11 Input and trusted-output preservation
-
-The participant does not mutate `ReviewInput` or `ProblemAnalysis`.
-
-Both are already trusted frozen contracts from Slice 1.
-
-`SolutionAlternative` and `SolutionAlternatives` are also immutable after validation, including their nested collections, so later stages cannot modify accepted Architect output in place without crossing validation again.
+Generated structural/contextual validation failures are normalized into a Solution Architect output-validation error category. Provider/transport errors remain distinguishable and propagate separately.
 
 ## 5. Project Structure
 
 No new architectural layer is required.
 
-Proposed additions are limited to the existing domain and participant boundaries:
-
 ```text
 src/agentic_review_board/
 ├── application/
-│   └── ports.py                  # unchanged LLMPort
+│   └── ports.py                   # unchanged
 ├── domain/
-│   ├── analysis.py               # existing ProblemAnalysis
-│   ├── review.py                 # existing ReviewInput
-│   ├── shared.py                 # new QualitativeLevel
-│   └── solutions.py              # new SolutionAlternative / SolutionAlternatives
+│   ├── analysis.py                # existing
+│   ├── review.py                  # existing
+│   ├── shared.py                  # QualitativeLevel
+│   └── solutions.py               # references + GenerationNotes + solution contracts
 └── participants/
-    ├── analyst.py                # unchanged
-    └── solution_architect.py     # new participant
+    ├── analyst.py                 # unchanged
+    └── solution_architect.py      # new participant
 
 tests/
 └── unit/
@@ -398,16 +350,7 @@ tests/
     └── test_solution_architect.py
 ```
 
-Existing package `__init__.py` files may be updated only where required for normal package exposure; no facade or generic agent abstraction is introduced.
-
-Responsibilities:
-
-- `domain/shared.py`: shared qualitative level required by current canonical contracts;
-- `domain/solutions.py`: Solution Architect output models and local structural invariants;
-- `participants/solution_architect.py`: LLMPort interaction, explicit upstream payload construction, generated-output validation, contextual constraint-reference validation, and normalized participant output failure;
-- `tests/unit/`: deterministic contract and participant tests.
-
-No change to `application/ports.py` is expected because the current port already supports this participant.
+No generic `references.py`, agent superclass, orchestration abstraction, or extra layer is introduced.
 
 ## 6. Dependency Change
 
@@ -419,110 +362,87 @@ The slice reuses:
 pydantic>=2.13,<3
 ```
 
-under accepted ADR-0001.
-
-No provider SDK, similarity library, orchestration framework, settings library, persistence dependency, or other production package is justified.
-
-The project remains compatible with Python >=3.12 and the existing CI matrix.
+under ADR-0001.
 
 ## 7. Verification Strategy
 
-### 7.1 `QualitativeLevel` and `SolutionAlternative` contract tests
+### 7.1 Shared and alternative contract tests
 
 Verify at minimum:
 
-- `LOW`, `MEDIUM`, and `HIGH` are accepted implementation-complexity values;
-- unsupported complexity values are rejected;
-- required alternative ID, name, and description reject empty/whitespace-only generated text;
-- required collection fields are structurally present;
-- nested generated text rejects unrelated primitive coercion where strict text is required;
-- unknown fields are rejected;
-- externally list-shaped collections can be validated into ordered immutable representations;
-- trusted alternative collections cannot be mutated after validation.
+- `LOW`, `MEDIUM`, `HIGH` accepted and unsupported values rejected;
+- required alternative ID/name/description reject blank text;
+- required collection fields are present;
+- list-shaped external collections validate into immutable ordered representations;
+- unknown generated fields are rejected;
+- trusted output cannot be mutated after validation.
 
-### 7.2 `SolutionAlternatives` cardinality and no-alternative tests
+### 7.2 `ConstraintReference` tests
 
-Verify at minimum:
+Verify:
 
-- two valid alternatives are accepted;
-- three valid alternatives are accepted;
-- one alternative is rejected;
-- more than three alternatives are rejected;
-- zero alternatives with a valid non-empty explanation are accepted;
-- zero alternatives without `generation_notes` are rejected;
-- zero alternatives with blank `generation_notes` are rejected;
-- the representative zero-alternative fixture preserves the material missing information or uncertainty that blocks useful comparison when such a blocker exists;
-- `generation_notes` is optional when a valid alternative set exists;
-- duplicate alternative IDs are rejected;
-- top-level ranking, preferred-alternative, final-recommendation, or other unknown role-leakage fields are rejected;
-- validated `SolutionAlternatives` and nested collections remain immutable.
+- `REVIEW_INPUT + TEXT` is structurally valid;
+- `REVIEW_INPUT + ID` is structurally invalid;
+- `PROBLEM_ANALYSIS + ID` and `PROBLEM_ANALYSIS + TEXT` are structurally valid;
+- blank reference value is invalid;
+- contextual resolution succeeds for exact valid targets;
+- unresolved references fail;
+- genuinely ambiguous references inside the declared source/kind fail;
+- a ReviewInput constraint remains referenceable even if omitted by the Analyst;
+- no fuzzy or normalized matching is performed.
 
-### 7.3 Solution Architect happy-path tests
+### 7.3 `GenerationNotes` and no-alternative tests
 
-Using a deterministic fake `LLMPort`, verify at minimum:
+Verify:
 
-- the participant supplies both `ReviewInput` and the trusted `ProblemAnalysis` to the model boundary;
-- the payload contains no later-stage artifacts;
-- a valid two- or three-alternative generated mapping becomes trusted `SolutionAlternatives`;
-- a `ProblemAnalysis` constraint with an ID can be referenced and resolved;
-- a `ProblemAnalysis` constraint without an ID can still be referenced through exact text;
-- an original `ReviewInput` constraint can be referenced even if it was omitted from `ProblemAnalysis.constraints`;
-- a reference that matches exactly one known constraint is accepted;
-- valid input artifacts remain unchanged after participant execution.
+- 0 alternatives requires `GenerationNotes`;
+- explanation is non-empty;
+- blocker collections are structurally explicit;
+- valid blockers resolve to the corresponding current `ProblemAnalysis` findings;
+- unresolved or ambiguous blockers fail context validation;
+- representative underspecified fixtures preserve material blockers;
+- no artificial alternatives are manufactured.
 
-### 7.4 No-alternative participant tests
+### 7.4 `SolutionAlternatives` tests
 
-Verify an underspecified deterministic scenario where:
+Verify:
 
-- the returned alternatives collection is empty;
-- `generation_notes` explicitly explains why useful alternatives cannot yet be formed;
-- material missing information or uncertainty that blocks useful comparison remains explicit when applicable;
-- no artificial variants are manufactured by test fixtures;
-- the result is accepted as trusted `SolutionAlternatives`.
+- 2 alternatives accepted;
+- 3 alternatives accepted;
+- 1 rejected;
+- >3 rejected;
+- 0 accepted only with valid generation notes;
+- duplicate alternative IDs rejected;
+- structured role-leakage fields rejected;
+- nested collections remain immutable.
 
-A simplified version of the canonical underspecified/microservices scenario may be used as a fixture, but the test must validate behavioral properties rather than hard-code one prescribed answer.
+### 7.5 Participant happy-path tests
 
-### 7.5 Fail-closed and contextual-reference tests
+Using a deterministic fake `LLMPort`, verify:
 
-Verify representative invalid generated output:
+- both `ReviewInput` and `ProblemAnalysis` are supplied explicitly;
+- no later-stage artifacts are supplied;
+- valid generated output becomes trusted `SolutionAlternatives`;
+- upstream artifacts remain unchanged;
+- context references resolve before output is returned.
 
-- missing required top-level or nested content;
-- invalid qualitative complexity;
-- duplicate required alternative IDs;
-- invalid alternative cardinality;
-- zero-alternative result without required explanatory notes;
-- unknown role-leakage fields;
-- `relevant_constraints` entry that resolves to no known constraint in the actual current `ReviewInput` or `ProblemAnalysis`;
-- `relevant_constraints` entry that resolves to more than one known constraint and is therefore ambiguous;
-- malformed nested alternative content.
+### 7.6 Error separation
 
-Every such case must fail before trusted `SolutionAlternatives` is returned.
+Verify:
 
-### 7.6 Error-separation tests
-
-Verify that:
-
-- Pydantic/contract failures are normalized into the Solution Architect output-validation error category;
-- contextual invalid or ambiguous reference failures use the same participant output-validation category;
-- provider/transport exceptions raised by the fake `LLMPort` are not swallowed or misreported as schema failures.
+- structural/model failures become Solution Architect output-validation failures;
+- contextual reference failures use the same generated-output validation category;
+- provider/transport exceptions are not swallowed or relabeled as schema failures.
 
 ### 7.7 Semantic-quality evaluation boundary
 
-Deterministic fixtures should demonstrate materially different approaches and preserve visible trade-offs, but the unit test suite must not claim to prove arbitrary semantic distinctness from text alone.
+Unit tests must not claim to prove arbitrary semantic properties such as true alternative distinctness, objective compatibility, complete constraint recognition, or subtle ranking language in prose.
 
-Semantic properties such as:
+Those belong to representative scenario evaluation and later real-model integration unless a deterministic rule is separately justified.
 
-- whether two natural-language alternatives are genuinely distinct;
-- whether an alternative is truly compatible with the objective;
-- whether all important constraints were recognized;
-- whether prose subtly implies a winner;
-- whether a no-alternative explanation semantically identifies the correct blockers;
+### 7.8 Regression quality gates
 
-belong to participant prompt/model evaluation against canonical reference scenarios once real-model integration is introduced, unless a deterministic rule can be justified later.
-
-### 7.8 Existing regression and quality gates
-
-The complete existing suite remains green together with the new deterministic tests:
+The complete deterministic suite must pass:
 
 ```text
 pytest
@@ -531,69 +451,33 @@ mypy
 pip check
 ```
 
-on the supported CI Python versions.
-
-No live LLM endpoint is required.
+with no live LLM endpoint.
 
 ## 8. Deliberately Deferred
 
-This plan does not decide or implement:
+This plan does not implement or decide:
 
-- Review Orchestrator;
-- `Review` / `StageExecution` lifecycle;
-- stage status transitions;
-- Risk Reviewer;
-- Critic;
-- Coordinator;
-- ranking or preferred-alternative behavior;
-- final recommendation;
-- concrete LLM provider/model/endpoint protocol;
-- concrete LLM adapter;
-- prompt templates or prompt versioning;
-- retry or timeout policy;
-- embeddings or semantic-similarity validation;
-- automatic semantic judging by a second model;
-- UI framework;
-- persistence or review history;
-- RAG or document ingestion;
-- external tools or autonomous actions;
-- persistent/global identifiers;
-- quantitative implementation estimates or probabilities.
+- Review Orchestrator or stage lifecycle;
+- Risk Reviewer, Critic, Coordinator;
+- ranking or final recommendation;
+- concrete LLM provider/adapter;
+- prompt templates/versioning;
+- retries/timeouts;
+- embeddings or semantic judging;
+- UI;
+- persistence/history;
+- RAG/document ingestion;
+- external tools/autonomous actions;
+- persistent/global IDs;
+- generic cross-domain reference infrastructure;
+- quantitative complexity estimates.
 
 ## 9. ADR Status
 
-### ADR-0001 — Pydantic v2 for Structured Contracts and Validation
+ADR-0001 — **Use Pydantic v2 for Structured Contracts and Validation** — remains accepted and directly applicable.
 
-**Status:** Accepted and directly applicable.
-
-It already governs:
-
-- use of Pydantic models for review contracts;
-- closed generated-output validation;
-- frozen trusted review data where traceability requires immutability;
-- strictness/coercion policy;
-- structural versus contextual invariant ownership;
-- provider-neutral serialization boundaries;
-- local validation remaining mandatory even if a future provider supports native structured output.
-
-### New ADR assessment
-
-No new ADR is required for this plan.
-
-The slice introduces no new dependency, framework, persistence model, external integration, runtime/concurrency pattern, security capability, or model-provider choice.
-
-The new decisions — qualitative enum placement, solution-contract cardinality, and review-local constraint-reference resolution — are direct refinements of already-approved canonical contracts and are sufficiently local to be documented in this plan and the subsequent `data-model.md`.
-
-A new ADR should only be introduced if later planning or implementation evidence reveals a material architectural choice not covered by ADR-0001.
+No new ADR is required. `ConstraintReference` and `GenerationNotes` are local contract refinements that make approved semantics explicit without changing architecture, dependencies, runtime, security capability, or provider strategy.
 
 ## 10. Planning Follow-up
 
-After this plan is reviewed and approved, the next planning artifact should refine the exact structured data in:
-
-```text
-specs/002-solution-architect/data-model.md
-```
-
-That document should make the field-level contracts and validation ownership precise without changing the approved feature semantics.
-
-Only after the plan/data-model gate is accepted should implementation tasks be generated.
+`data-model.md` must define the exact field-level representation and validation ownership for the value objects above. Only after that model is reviewed and approved should implementation tasks be generated.
