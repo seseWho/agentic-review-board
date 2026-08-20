@@ -2,7 +2,7 @@
 
 **Feature Branch**: `002-solution-architect`  
 **Created**: 2026-08-20  
-**Status**: Draft — awaiting review  
+**Status**: Approved — ready for planning  
 **Input**: Second executable product increment derived from the canonical MVP documents and the completed Review Input + Analyst v0.1 slice.
 
 ## User Scenarios & Testing
