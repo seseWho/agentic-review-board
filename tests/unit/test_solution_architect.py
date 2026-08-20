@@ -83,6 +83,7 @@ def problem_analysis(
         ),
     ) if include_blockers else ()
 
+    uncertainties: tuple[AnalysisFinding, ...]
     if duplicate_uncertainty_text:
         uncertainties = (
             AnalysisFinding(id="UNC-001", text="Operational ownership is unclear."),
