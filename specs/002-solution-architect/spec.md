@@ -26,20 +26,20 @@ As a professional user, I want a validated problem analysis to be transformed in
 
 ---
 
-### User Story 2 - Preserve an honest no-alternative outcome (Priority: P1)
+### User Story 2 - Preserve an honest no-alternative result (Priority: P1)
 
 As a professional user, I want the Solution Architect to state when the available problem frame does not support multiple meaningful alternatives so that the review does not manufacture artificial choice or false completeness.
 
-**Why this priority**: The canonical Agent Model explicitly treats inability to generate genuine alternatives as a valid outcome. Preserving that limitation is necessary for uncertainty, traceability, and later decision quality.
+**Why this priority**: The canonical Agent Model explicitly treats inability to generate genuine alternatives as a valid `SolutionAlternatives` result. Preserving that limitation is necessary for uncertainty, traceability, and later decision quality.
 
-**Independent Test**: Supply a valid but underspecified `ReviewInput` and `ProblemAnalysis`, then provide a deterministic Solution Architect result that produces no alternatives and explicitly identifies why meaningful alternatives cannot yet be formed and which missing information or uncertainty blocks useful comparison.
+**Independent Test**: Supply a valid but underspecified `ReviewInput` and `ProblemAnalysis`, then provide a deterministic `SolutionAlternatives` result with no fabricated alternatives and an explicit explanation of why meaningful alternatives cannot yet be formed and which missing information or uncertainty blocks useful comparison.
 
 **Acceptance Scenarios**:
 
 1. **Given** the current problem frame cannot responsibly support two meaningful alternatives, **When** the Solution Architect produces its result, **Then** it does not fabricate superficial alternatives merely to satisfy a count.
-2. **Given** no meaningful alternative set can yet be formed, **When** the result is inspected, **Then** it explicitly states why alternatives cannot responsibly be generated.
-3. **Given** missing information or unresolved uncertainty blocks useful alternative generation, **When** the no-alternative result is produced, **Then** those blockers remain explicit and traceable to the current review artifacts where applicable.
-4. **Given** a no-alternative outcome, **When** it is validated, **Then** it remains a valid Solution Architect outcome rather than being silently repaired into fabricated alternatives.
+2. **Given** no meaningful alternative set can yet be formed, **When** the `SolutionAlternatives` result is inspected, **Then** it explicitly states why alternatives cannot responsibly be generated.
+3. **Given** missing information or unresolved uncertainty blocks useful alternative generation, **When** the result is produced, **Then** those blockers remain explicit and traceable to the current review artifacts where applicable.
+4. **Given** a valid `SolutionAlternatives` result that contains no alternatives because the current evidence is insufficient, **When** it is validated, **Then** it remains valid rather than being silently repaired into fabricated alternatives.
 
 ---
 
@@ -61,11 +61,13 @@ As a user, I want malformed or role-invalid Solution Architect output to fail ex
 
 - The Solution Architect requires both the original `ReviewInput` and a valid `ProblemAnalysis`; this slice does not define global workflow orchestration.
 - When meaningful alternatives exist, the valid result contains two or three alternatives; a single-alternative result is not treated as the normal multiple-alternative outcome.
-- When two or three meaningful alternatives cannot responsibly be formed, the valid outcome is an explicit no-alternative result rather than fabricated variants.
+- When two or three meaningful alternatives cannot responsibly be formed, `SolutionAlternatives` may contain no alternatives but must explicitly preserve the reason and the missing information or uncertainty that blocks useful comparison.
+- `SolutionAlternatives` may include optional generation notes consistent with the canonical Agent Model; generation notes do not replace mandatory per-alternative content when alternatives are present.
 - Alternative identifiers are review-local and need not be globally persistent, but required identifiers within one `SolutionAlternatives` result must not be ambiguous.
 - Alternatives may introduce solution-specific assumptions, but those assumptions remain assumptions even when repeated by later stages.
 - Implementation complexity is qualitative (`LOW`, `MEDIUM`, `HIGH`) and is not a duration estimate, cost estimate, probability, or calibrated measurement.
 - A known constraint may affect one alternative, several alternatives, or all alternatives; only materially relevant constraints need to be attached to each alternative.
+- Traceability to relevant constraints does not imply that every upstream constraint already has a local identifier. The concrete reference representation is deferred to data-model and implementation planning.
 - Structural validation can prove contract shape and reference validity where deterministic; it does not prove that two generated approaches are semantically optimal or objectively exhaustive.
 - The Solution Architect may produce a partial or conditional approach when appropriate, but it must make that limitation explicit rather than presenting it as unconditional satisfaction of the objective.
 
@@ -75,14 +77,14 @@ As a user, I want malformed or role-invalid Solution Architect output to fail ex
 
 - **FR-001**: The Solution Architect MUST consume the current original `ReviewInput` and a valid `ProblemAnalysis` and MUST NOT require outputs from later review stages.
 - **FR-002**: This increment MUST NOT mutate or rewrite the accepted `ReviewInput` or trusted `ProblemAnalysis` supplied to the Solution Architect.
-- **FR-003**: The Solution Architect MUST produce a structured `SolutionAlternatives` result.
+- **FR-003**: The Solution Architect MUST produce a structured `SolutionAlternatives` result containing an alternatives collection and MAY include generation notes consistent with the canonical Agent Model.
 - **FR-004**: When the current problem frame supports meaningful alternatives, `SolutionAlternatives` MUST contain between two and three alternatives.
 - **FR-005**: Each returned alternative MUST contain a review-local identifier, distinguishing name, concise description, principal advantages, principal disadvantages, important assumptions, qualitative implementation complexity, and materially relevant constraints.
 - **FR-006**: Returned alternatives MUST represent meaningfully distinct approaches rather than superficial wording variations.
 - **FR-007**: Implementation complexity MUST use only qualitative `LOW`, `MEDIUM`, or `HIGH` values in this increment.
 - **FR-008**: Solution-specific assumptions MUST remain explicitly distinguishable from user-provided facts and MUST NOT silently replace or rewrite upstream Analyst findings.
-- **FR-009**: Known constraints that materially shape or limit an alternative MUST remain explicit and traceable to the supplied upstream review artifacts.
-- **FR-010**: If two or three meaningful alternatives cannot responsibly be produced, the Solution Architect MUST return an explicit no-alternative outcome stating why useful alternatives cannot yet be formed and identifying material missing information or uncertainty that blocks comparison when applicable.
+- **FR-009**: Known constraints that materially shape or limit an alternative MUST remain explicit and traceable to the supplied upstream review artifacts; this requirement does not prescribe a specific reference encoding or require every upstream constraint to have an identifier.
+- **FR-010**: If two or three meaningful alternatives cannot responsibly be produced, `SolutionAlternatives` MUST explicitly state why useful alternatives cannot yet be formed and MUST identify material missing information or uncertainty that blocks comparison when applicable.
 - **FR-011**: The Solution Architect MUST NOT fabricate artificial variants merely to satisfy the normal alternative count.
 - **FR-012**: The Solution Architect MUST NOT rank alternatives, declare a preferred alternative, produce the final recommendation, or make the final decision.
 - **FR-013**: Model-generated Solution Architect output MUST be treated as untrusted until validated against the expected Solution Architect contract and applicable upstream-reference invariants.
@@ -106,15 +108,14 @@ This increment does not introduce:
 - external tool execution or autonomous actions;
 - organization-specific integration.
 
-Concrete implementation classes, package layout, validation syntax, reference encoding, provider SDKs, prompt representation, and serialization details belong to implementation planning or ADRs, not to this feature specification.
+Concrete implementation classes, package layout, validation syntax, exact reference encoding, provider SDKs, prompt representation, and serialization details belong to implementation planning or ADRs, not to this feature specification.
 
 ### Key Entities
 
 - **ReviewInput**: Immutable original user-provided problem and optional context established by the previous slice.
 - **ProblemAnalysis**: Trusted validated Analyst output used as explicit upstream evidence by the Solution Architect.
-- **SolutionAlternatives**: Validated Solution Architect result representing either two to three meaningful alternatives or an explicit no-alternative limitation.
+- **SolutionAlternatives**: Validated Solution Architect result containing the alternatives collection and optional generation notes. It represents either two to three meaningful alternatives when they can responsibly be formed, or an explicit limitation explaining why meaningful alternatives cannot yet be formed.
 - **SolutionAlternative**: One candidate approach with its own identity, description, trade-offs, assumptions, complexity, and relevant constraints.
-- **No-Alternative Outcome**: Explicit representation that the current review artifacts do not support responsible generation of two or three meaningful alternatives, together with the reason and material blockers.
 
 ## Success Criteria
 
@@ -123,7 +124,7 @@ Concrete implementation classes, package layout, validation syntax, reference en
 - **SC-001**: All acceptance scenarios in this specification can be exercised with deterministic substitutes and no live external LLM.
 - **SC-002**: A valid deterministic multiple-alternative result produces one trusted `SolutionAlternatives` containing exactly two or three structurally complete alternatives.
 - **SC-003**: Every alternative in the valid multiple-alternative scenario exposes its own description, advantages, disadvantages, assumptions, qualitative complexity, and relevant constraints without ranking semantics.
-- **SC-004**: A deterministic underspecified scenario can produce a valid explicit no-alternative outcome without manufacturing artificial variants.
+- **SC-004**: A deterministic underspecified scenario can produce a valid `SolutionAlternatives` result that explicitly explains why meaningful alternatives cannot yet be formed without manufacturing artificial variants.
 - **SC-005**: Every representative structurally invalid or role-invalid Solution Architect result in the feature test suite fails before becoming trusted `SolutionAlternatives` data.
 - **SC-006**: The Solution Architect receives and preserves the current `ReviewInput` and trusted `ProblemAnalysis` as explicit upstream artifacts, demonstrating the first direct downstream consumption of the Analyst result.
 - **SC-007**: No valid `SolutionAlternatives` contract produced by this increment contains final ranking, preferred-alternative, or final-recommendation semantics.
