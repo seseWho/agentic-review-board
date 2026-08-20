@@ -3,7 +3,7 @@
 **Feature:** `specs/002-solution-architect/spec.md`  
 **Plan:** `specs/002-solution-architect/plan.md`  
 **ADR:** `docs/adr/ADR-0001-pydantic-v2-for-structured-contracts.md`  
-**Status:** Draft — awaiting review
+**Status:** Approved — ready for task breakdown
 
 ## 1. Purpose
 
