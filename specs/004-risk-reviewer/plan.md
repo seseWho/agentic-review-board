@@ -3,7 +3,7 @@
 **Branch**: `004-risk-reviewer`  
 **Date**: 2026-08-21  
 **Spec**: `specs/004-risk-reviewer/spec.md`  
-**Status**: Draft — awaiting review and approval
+**Status**: Revised — awaiting review and approval
 
 ## 1. Summary
 
@@ -121,6 +121,8 @@ Invalid output fails closed and does not enter `StageExecution.output`.
 Each risk has explicit scope and structured basis. Alternative references and upstream finding references are validated against the current review artifacts.
 
 Assumptions remain assumptions. Missing information and residual uncertainty remain visible.
+
+Execution provenance and generated-output references remain distinct concepts: execution provenance proves same-review handoff through object identity, while generated references prove only that a reference resolves unambiguously within the current trusted review artifacts.
 
 ### IV. Human Decision Authority — PASS
 
@@ -244,7 +246,7 @@ ALTERNATIVES
 
 This avoids ambiguous free-form `affected_scope` text while remaining much smaller than a generic entity-reference system.
 
-### 4.5 Structured risk basis without a generic artifact framework
+### 4.5 Structured risk basis must identify why the risk exists
 
 Each material risk needs non-empty structured support grounded in visible current-review artifacts.
 
@@ -253,17 +255,38 @@ Risk basis must be able to refer minimally to:
 ```text
 ReviewInput content
 ProblemAnalysis finding
-SolutionAlternative
+specific SolutionAlternative characteristic
 ```
 
-The exact representation will be defined in `data-model.md` after examining existing reference patterns in:
+For a solution alternative, referencing only `ALT-001` is insufficient when the material basis is a particular characteristic of that alternative. The future data model must preserve enough detail to identify the relevant property, for example:
+
+```text
+alternative id
++ characteristic kind
++ characteristic value/reference
+```
+
+Representative characteristic kinds may include:
+
+```text
+ASSUMPTION
+ADVANTAGE
+DISADVANTAGE
+IMPLEMENTATION_COMPLEXITY
+RELEVANT_CONSTRAINT
+DESCRIPTION
+```
+
+The exact enum/field structure belongs to `data-model.md`; this plan requires only that downstream readers can determine not merely which alternative is implicated, but which visible characteristic supports the risk.
+
+The exact basis representation will be defined after examining existing reference patterns in:
 
 ```text
 FactFinding
 AnalysisFinding
 ConstraintReference
 FindingReference
-SolutionAlternative.id
+SolutionAlternative
 ```
 
 Design constraints:
@@ -274,7 +297,9 @@ Design constraints:
 - no global IDs;
 - no generic `ArtifactReference` hierarchy;
 - references validated contextually by the Risk Reviewer participant;
-- text fallback permitted only where current upstream contracts lack mandatory IDs and ambiguity is handled fail-closed.
+- text fallback permitted only where current upstream contracts lack mandatory IDs and ambiguity is handled fail-closed;
+- assumption-derived basis must remain distinguishable from fact-derived basis;
+- a generated textual/local reference proves resolution within the current review context, not historical provenance across reviews.
 
 ### 4.6 RiskAssessment may contain zero risks
 
@@ -322,15 +347,15 @@ RiskReviewer.assess(
 ) -> RiskAssessment
 ```
 
-Execution:
+Execution follows the existing participant serialization pattern:
 
 ```text
 LLMPort.generate_structured(
     role="risk_reviewer",
     payload={
-        review_input,
-        problem_analysis,
-        solution_alternatives,
+        "review_input": review_input.model_dump(mode="json"),
+        "problem_analysis": problem_analysis.model_dump(mode="json"),
+        "solution_alternatives": solution_alternatives.model_dump(mode="json"),
     },
 )
 ```
@@ -367,9 +392,20 @@ Pydantic/domain contracts validate intrinsic structure:
 The participant validates references that require current upstream context:
 
 - alternative IDs exist in current `SolutionAlternatives`;
+- alternative-characteristic references resolve against that current alternative;
 - ProblemAnalysis references resolve uniquely against the current artifact;
 - ReviewInput references correspond to visible current input;
 - zero-alternative input contains no alternative-specific risk scope/reference.
+
+Contextual reference validation answers:
+
+> Does this generated reference resolve unambiguously inside the trusted artifacts supplied to this Risk Reviewer execution?
+
+It does not answer:
+
+> Did this string historically originate in this Review rather than another equal-looking Review?
+
+That stronger same-execution provenance guarantee belongs to `StageExecution` and is enforced through exact object identity, not textual/local generated identifiers.
 
 Do not embed one entire Review context inside `RiskAssessment` just to perform validation.
 
@@ -442,9 +478,39 @@ risk.inputs.solution_alternatives
 
 The current in-memory identity rule remains appropriate because Slice 4 still has no persistence/rehydration.
 
-No equal-but-independent artifact is accepted as execution provenance.
+No equal-but-independent upstream object is accepted as `StageExecution` provenance, even if its value is identical.
 
-### 4.13 Extend valid Review lifecycle shapes minimally
+This object-identity rule is deliberately separate from contextual validation of generated local references inside `RiskAssessment`.
+
+### 4.13 Preserve identity-based Review semantics from Slice 3
+
+Canonical stage order remains useful for deterministic creation and presentation, but Review semantics must continue to use `StageIdentity` rather than tuple position.
+
+Slice 4 extensions to:
+
+- aggregate validators;
+- lifecycle coherence checks;
+- provenance checks;
+- transition preconditions;
+- stage retrieval;
+
+must resolve stages through identity-based lookup such as:
+
+```text
+review.stage(StageIdentity.RISK_REVIEWER)
+```
+
+and must not reintroduce positional assumptions such as:
+
+```text
+review.stages[2]
+```
+
+for semantic validation.
+
+`Review.create(...)` continues to emit canonical stage order; transitions continue to preserve the existing tuple order.
+
+### 4.14 Extend valid Review lifecycle shapes minimally
 
 Successful Slice 4 adds two new RUNNING prefixes after Solution Architect completion:
 
@@ -482,7 +548,7 @@ Existing Analyst/Architect failure shapes remain valid.
 
 `COMPLETED` remains unreachable because Critic and Coordinator are PENDING-only.
 
-### 4.14 Explicit Risk Reviewer transitions
+### 4.15 Explicit Risk Reviewer transitions
 
 Extend `Review` with narrow stage-specific transitions:
 
@@ -513,7 +579,7 @@ while preserving Analyst and Architect stages exactly.
 
 No generic transition engine is introduced.
 
-### 4.15 Extend explicit Orchestrator sequence, not architecture
+### 4.16 Extend explicit Orchestrator sequence, not architecture
 
 `ReviewOrchestrator` constructor becomes conceptually:
 
@@ -547,7 +613,7 @@ No stage loop, handler registry, graph engine, or plugin mechanism yet.
 
 Three stages are still small enough that explicit code is easier to inspect and safer to evolve.
 
-### 4.16 Risk Reviewer failure boundary
+### 4.17 Risk Reviewer failure boundary
 
 Catch exceptions only around:
 
@@ -571,7 +637,7 @@ Do not copy raw exception text into trusted Review state.
 
 Domain/lifecycle defects outside this participant call continue to propagate.
 
-### 4.17 Preserve review isolation
+### 4.18 Preserve review isolation
 
 The Orchestrator remains stateless regarding Review execution.
 
@@ -649,7 +715,7 @@ Verify:
 - zero risks accepted;
 - no numeric probability field exists.
 
-### 7.2 Participant structural-validation tests
+### 7.2 Participant structural-validation and role-integrity tests
 
 Drive deterministic raw mappings and verify:
 
@@ -659,7 +725,9 @@ Drive deterministic raw mappings and verify:
 - duplicate risk IDs rejected;
 - invalid scope shape rejected;
 - empty basis rejected;
-- extra/unexpected fields rejected.
+- extra/unexpected fields rejected;
+- generated `ranking`, `preferred_alternative`, `recommendation`, final-decision fields, or unsupported numeric probability fields are rejected rather than trusted;
+- Risk Reviewer output remains limited to risk analysis and does not silently absorb Coordinator responsibilities.
 
 ### 7.3 Contextual scope validation tests
 
@@ -673,19 +741,23 @@ Verify:
 
 ### 7.4 Contextual basis validation tests
 
-Verify references to current:
+Verify references resolve only against the trusted artifacts supplied to the current Risk Reviewer execution:
 
-- ReviewInput;
+- ReviewInput content;
 - ProblemAnalysis findings;
-- SolutionAlternative IDs.
+- specific characteristics of current SolutionAlternative items.
+
+For SolutionAlternative basis, verify enough detail is present to identify the characteristic supporting the risk rather than accepting an alternative ID alone as complete basis when a particular characteristic is claimed.
 
 Reject:
 
 - unknown references;
 - ambiguous text fallback;
 - mismatched ID/text where both are supplied;
-- cross-review/equal-looking but unrelated references where representable;
+- unknown or mismatched alternative characteristic references;
 - unsupported claims of source provenance.
+
+Do not assert that textual/local identifiers can distinguish two historically separate reviews containing equal values. Their contract is contextual resolution within the current trusted inputs only.
 
 ### 7.5 Zero-risk and zero-alternative tests
 
@@ -705,8 +777,10 @@ Extend existing tests for:
 - Critic/Coordinator still PENDING-only;
 - new valid RUNNING prefixes;
 - new valid INCOMPLETE Risk Reviewer failure shape;
-- same-instance Risk Reviewer provenance;
-- rejection of equal-but-independent upstream artifacts.
+- same-instance Risk Reviewer provenance for ReviewInput, ProblemAnalysis, and SolutionAlternatives;
+- rejection of equal-but-independent upstream objects as StageExecution provenance;
+- identity-based Review validation/lookup remains valid even if a directly constructed stage tuple is not in canonical order;
+- `Review.create(...)` still emits canonical order and transitions preserve it.
 
 ### 7.7 Transition tests
 
@@ -721,6 +795,7 @@ RUNNING → FAILED
 and:
 
 - only after Analyst + Architect completed;
+- transitions find stages by `StageIdentity`, not semantic tuple position;
 - preserved exact upstream stage objects;
 - exact trusted RiskAssessment output reuse;
 - atomic Review INCOMPLETE on Risk Reviewer failure;
@@ -790,7 +865,16 @@ python -m mypy
 python -m pip check
 ```
 
-Then inspect production source for scope creep.
+Then inspect production source to confirm Slice 4 adds no:
+
+- provider SDK;
+- direct Orchestrator → `LLMPort` dependency;
+- Critic/Coordinator implementation;
+- ranking/final-decision logic;
+- numeric probability/risk-scoring model;
+- persistence/RAG/UI/tools;
+- generic workflow/stage registry;
+- generic artifact/reference repository.
 
 ---
 
@@ -841,14 +925,16 @@ Before tasks are generated, `data-model.md` must refine exactly:
 - `Risk` fields;
 - `RiskAssessment` fields;
 - affected-scope representation and invariants;
-- risk-basis reference representation;
+- risk-basis reference representation, including alternative-characteristic granularity;
 - contextual resolution rules for ReviewInput, ProblemAnalysis, and SolutionAlternatives;
+- the explicit distinction between generated-reference contextual resolution and StageExecution same-instance provenance;
 - category representation;
 - zero-risk semantics;
 - uniqueness rules;
 - `RiskReviewerStageInput`;
 - StageInput/StageOutput union extension;
 - exact valid Slice 4 Review RUNNING/INCOMPLETE shapes;
+- identity-based stage lookup/validation requirements;
 - same-instance provenance rules;
 - Risk Reviewer transitions;
 - stable participant failure messages;
