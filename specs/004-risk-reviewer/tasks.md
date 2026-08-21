@@ -3,7 +3,7 @@
 **Input**: Approved design documents from `specs/004-risk-reviewer/`  
 **Prerequisites**: approved `spec.md`, approved `plan.md`, user-approved `data-model.md`, accepted `docs/adr/ADR-0001-pydantic-v2-for-structured-contracts.md`, and merged Slice 1–3 contracts on `main`  
 **Branch**: `004-risk-reviewer`  
-**Status**: Revised — awaiting review and approval
+**Status**: Approved — implementation may proceed incrementally
 
 Tests are mandatory because Slice 4 introduces a generated risk contract, contextual cross-artifact references, a third execution-stage provenance boundary, and a new mandatory participant failure boundary. All behavior must remain deterministic, inspectable, provider-neutral, and fail-closed.
 
