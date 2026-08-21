@@ -13,6 +13,7 @@ from agentic_review_board.domain.execution import (
     StageStatus,
 )
 from agentic_review_board.domain.review import ReviewInput
+from agentic_review_board.domain.solutions import SolutionAlternatives
 from agentic_review_board.participants.analyst import Analyst
 from agentic_review_board.participants.solution_architect import SolutionArchitect
 
@@ -142,7 +143,7 @@ def assert_fresh_created_review(review: Review) -> None:
 
 
 def test_orchestrator_executes_analyst_then_solution_architect_with_trusted_handoff(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     events: list[str] = []
     original_start_analyst = Review.start_analyst
@@ -209,7 +210,7 @@ def test_orchestrator_accepts_valid_zero_alternative_result_without_false_failur
 
     architect_stage = result.stage(StageIdentity.SOLUTION_ARCHITECT)
     assert architect_stage.status is StageStatus.COMPLETED
-    assert architect_stage.output is not None
+    assert isinstance(architect_stage.output, SolutionAlternatives)
     assert architect_stage.output.alternatives == ()
     assert result.status is ReviewStatus.RUNNING
 
