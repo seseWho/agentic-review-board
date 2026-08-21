@@ -4,6 +4,8 @@ from agentic_review_board.domain.analysis import ProblemAnalysis
 from agentic_review_board.domain.execution import (
     AnalystStageInput,
     Review,
+    ReviewError,
+    ReviewErrorKind,
     ReviewStatus,
     SolutionArchitectStageInput,
     StageIdentity,
@@ -38,6 +40,20 @@ def solution_alternatives() -> SolutionAlternatives:
                 "blocking_uncertainties": [],
             },
         }
+    )
+
+
+def analyst_error() -> ReviewError:
+    return ReviewError(
+        kind=ReviewErrorKind.EXECUTION,
+        message="Analyst execution failed",
+    )
+
+
+def architect_error() -> ReviewError:
+    return ReviewError(
+        kind=ReviewErrorKind.EXECUTION,
+        message="Solution Architect execution failed",
     )
 
 
@@ -122,3 +138,64 @@ def test_transitions_reject_illegal_repeated_or_out_of_order_calls() -> None:
     completed = architect_running.complete_solution_architect(solution_alternatives())
     with pytest.raises(ValueError):
         completed.complete_solution_architect(solution_alternatives())
+
+
+def test_fail_analyst_atomically_builds_incomplete_review() -> None:
+    running = Review.create(review_input()).start().start_analyst()
+    previous_architect = running.stage(StageIdentity.SOLUTION_ARCHITECT)
+
+    failed = running.fail_analyst(analyst_error())
+
+    analyst = failed.stage(StageIdentity.ANALYST)
+    assert failed.status is ReviewStatus.INCOMPLETE
+    assert analyst.status is StageStatus.FAILED
+    assert isinstance(analyst.inputs, AnalystStageInput)
+    assert analyst.inputs.review_input is failed.review_input
+    assert analyst.output is None
+    assert analyst.error == analyst_error()
+    assert failed.stage(StageIdentity.SOLUTION_ARCHITECT) is previous_architect
+    assert failed.stage(StageIdentity.SOLUTION_ARCHITECT).status is StageStatus.PENDING
+
+
+def test_fail_solution_architect_atomically_preserves_completed_analyst() -> None:
+    original_input = review_input()
+    analysis = problem_analysis()
+    architect_running = (
+        Review.create(original_input)
+        .start()
+        .start_analyst()
+        .complete_analyst(analysis)
+        .start_solution_architect()
+    )
+    previous_analyst = architect_running.stage(StageIdentity.ANALYST)
+
+    failed = architect_running.fail_solution_architect(architect_error())
+
+    analyst = failed.stage(StageIdentity.ANALYST)
+    architect = failed.stage(StageIdentity.SOLUTION_ARCHITECT)
+    assert failed.status is ReviewStatus.INCOMPLETE
+    assert analyst is previous_analyst
+    assert analyst.status is StageStatus.COMPLETED
+    assert analyst.output is analysis
+    assert architect.status is StageStatus.FAILED
+    assert isinstance(architect.inputs, SolutionArchitectStageInput)
+    assert architect.inputs.review_input is original_input
+    assert architect.inputs.problem_analysis is analysis
+    assert architect.output is None
+    assert architect.error == architect_error()
+
+
+def test_failure_transitions_require_current_stage_running() -> None:
+    created = Review.create(review_input())
+    running = created.start()
+
+    with pytest.raises(ValueError):
+        running.fail_analyst(analyst_error())
+    with pytest.raises(ValueError):
+        running.fail_solution_architect(architect_error())
+
+    analyst_completed = running.start_analyst().complete_analyst(problem_analysis())
+    with pytest.raises(ValueError):
+        analyst_completed.fail_analyst(analyst_error())
+    with pytest.raises(ValueError):
+        analyst_completed.fail_solution_architect(architect_error())
