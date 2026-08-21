@@ -4,7 +4,7 @@
 **Date**: 2026-08-21  
 **Spec**: `specs/004-risk-reviewer/spec.md`  
 **Plan**: `specs/004-risk-reviewer/plan.md`  
-**Status**: Revised — awaiting review and approval
+**Status**: Approved — ready for task breakdown and implementation planning
 
 ## 1. Purpose
 
