@@ -3,7 +3,7 @@
 **Feature:** `specs/003-review-orchestrator/spec.md`  
 **Plan:** `specs/003-review-orchestrator/plan.md`  
 **ADR:** `docs/adr/ADR-0001-pydantic-v2-for-structured-contracts.md`  
-**Status:** Draft — internally reviewed, awaiting user approval
+**Status:** Approved — ready for task breakdown
 
 ## 1. Purpose
 
