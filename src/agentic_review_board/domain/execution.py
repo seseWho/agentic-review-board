@@ -170,12 +170,14 @@ class Review(BaseModel):
 
     def _validate_canonical_stage_set(self) -> None:
         identities = tuple(stage.identity for stage in self.stages)
-        if identities != CANONICAL_STAGE_ORDER:
-            raise ValueError("review must contain the five canonical stages in canonical order")
+        if len(identities) != len(CANONICAL_STAGE_ORDER) or set(identities) != set(
+            CANONICAL_STAGE_ORDER
+        ):
+            raise ValueError("review must contain each of the five canonical stages exactly once")
 
     def _validate_same_execution_provenance(self) -> None:
-        analyst = self.stages[0]
-        architect = self.stages[1]
+        analyst = self.stage(StageIdentity.ANALYST)
+        architect = self.stage(StageIdentity.SOLUTION_ARCHITECT)
         if analyst.status is not StageStatus.PENDING:
             if not isinstance(analyst.inputs, AnalystStageInput):
                 raise ValueError("executed Analyst stage must expose AnalystStageInput")
@@ -200,9 +202,16 @@ class Review(BaseModel):
                 )
 
     def _validate_lifecycle_consistency(self) -> None:
-        analyst = self.stages[0]
-        architect = self.stages[1]
-        later = self.stages[2:]
+        analyst = self.stage(StageIdentity.ANALYST)
+        architect = self.stage(StageIdentity.SOLUTION_ARCHITECT)
+        later = tuple(
+            self.stage(identity)
+            for identity in (
+                StageIdentity.RISK_REVIEWER,
+                StageIdentity.CRITIC,
+                StageIdentity.COORDINATOR,
+            )
+        )
         if any(stage.status is not StageStatus.PENDING for stage in later):
             raise ValueError("later Slice 3 stages must remain pending")
         if self.status is ReviewStatus.CREATED:
