@@ -3,7 +3,7 @@
 **Input**: Approved design documents from `specs/004-risk-reviewer/`  
 **Prerequisites**: approved `spec.md`, approved `plan.md`, user-approved `data-model.md`, accepted `docs/adr/ADR-0001-pydantic-v2-for-structured-contracts.md`, and merged Slice 1–3 contracts on `main`  
 **Branch**: `004-risk-reviewer`  
-**Status**: Draft — awaiting review and approval
+**Status**: Revised — awaiting review and approval
 
 Tests are mandatory because Slice 4 introduces a generated risk contract, contextual cross-artifact references, a third execution-stage provenance boundary, and a new mandatory participant failure boundary. All behavior must remain deterministic, inspectable, provider-neutral, and fail-closed.
 
@@ -36,7 +36,7 @@ Every implementation task follows:
 - [ ] T003 [US2] Extend `tests/unit/test_risks.py` with discriminated-union construction tests proving each basis variant uses a literal `source` tag and that `RiskBasisReference` selects `ReviewInputBasisReference`, `ProblemAnalysisBasisReference`, or `SolutionAlternativeBasisReference` deterministically.
 - [ ] T004 [US2] Extend `tests/unit/test_risks.py` with intrinsic basis-reference tests: required strings non-blank; optional IDs non-blank when present; `SolutionAlternativeBasisReference` requires `ConstraintReference` only for `RELEVANT_CONSTRAINT` and `StrictStr` for every other characteristic; extra fields rejected.
 - [ ] T005 [US1] Extend `tests/unit/test_risks.py` with `Risk` and `RiskAssessment` tests: non-blank IDs/descriptions/category/mitigation/residual uncertainty; non-empty basis; exact duplicate basis rejection; unique Risk IDs; non-blank unique observations; zero-risk and fully empty assessments valid; arbitrary non-blank category labels accepted.
-- [ ] T006 [US1] Extend `tests/unit/test_risks.py` with role-integrity tests proving generated `ranking`, `preferred_alternative`, `recommendation`, `winner`, numeric `probability`, `likelihood`, and `risk_score` fields are rejected by the closed contracts.
+- [ ] T006 [US1] Extend `tests/unit/test_risks.py` with role-integrity tests proving generated `ranking`, `preferred_alternative`, `recommendation`, `winner`, numeric `probability`, `likelihood`, `risk_score`, `alternatives`, `replacement_alternative`, and `replacement_alternatives` fields are rejected by the closed contracts, so Risk Reviewer cannot rank, recommend, redefine, or silently replace candidate alternatives.
 
 ### Implementation
 
@@ -58,9 +58,9 @@ Every implementation task follows:
 - [ ] T009 [US1] Create `tests/unit/test_risk_reviewer.py` with a deterministic fake/recording `LLMPort` and a valid assessment test proving role `risk_reviewer`, JSON-compatible `model_dump(mode="json")` payloads for all three inputs, structural parsing, and trusted `RiskAssessment` return.
 - [ ] T010 [US2] Extend `tests/unit/test_risk_reviewer.py` with `ReviewInputBasisReference` resolution tests for every existing `ReviewInputSource`: exact scalar resolution for description/title/objective, unique collection-member resolution for constraints/context/stated facts, and fail-closed rejection of absent or ambiguous duplicate text.
 - [ ] T011 [US2] Extend `tests/unit/test_risk_reviewer.py` with `ProblemAnalysisBasisReference` resolution tests for FACT, CONSTRAINT, ASSUMPTION, MISSING_INFORMATION, and UNCERTAINTY: exact ID+text match; unique text-only fallback; rejection of unknown, mismatched, or ambiguous references; explicit preservation of assumption-derived support.
-- [ ] T012 [US2] Extend `tests/unit/test_risk_reviewer.py` with `SolutionAlternativeBasisReference` tests for DESCRIPTION, ADVANTAGE, DISADVANTAGE, ASSUMPTION, IMPLEMENTATION_COMPLEXITY, and structured `RELEVANT_CONSTRAINT`; reject unknown alternatives, characteristic/value mismatches, ambiguous duplicate text, and non-resolving `ConstraintReference` values.
+- [ ] T012 [US2] Extend `tests/unit/test_risk_reviewer.py` with `SolutionAlternativeBasisReference` tests for DESCRIPTION, ADVANTAGE, DISADVANTAGE, ASSUMPTION, IMPLEMENTATION_COMPLEXITY, and structured `RELEVANT_CONSTRAINT`; reject unknown alternatives, characteristic/value mismatches, ambiguous duplicate text, non-resolving `ConstraintReference` values, and duplicated identical `ConstraintReference` entries that make a relevant-constraint basis ambiguous rather than exactly resolvable.
 - [ ] T013 [US1] Extend `tests/unit/test_risk_reviewer.py` with affected-scope contextual tests: overall scope accepted without lookup; one/multiple current alternative IDs accepted; unknown IDs rejected; alternative scope rejected against valid zero-alternative `SolutionAlternatives`.
-- [ ] T014 [US3] Extend `tests/unit/test_risk_reviewer.py` with zero-risk and zero-alternative scenarios proving zero risks are trusted, zero alternatives still invoke Risk Reviewer, overall risks/observations remain valid, and no alternative-specific scope/basis can be fabricated when alternatives are empty.
+- [ ] T014 [US3] Extend `tests/unit/test_risk_reviewer.py` with zero-risk and zero-alternative scenarios proving zero risks are trusted, Risk Reviewer accepts and evaluates valid zero-alternative input, overall risks/observations remain valid, and no alternative-specific scope/basis can be fabricated when alternatives are empty.
 - [ ] T015 [US5] Extend `tests/unit/test_risk_reviewer.py` with malformed/extra-field/contextual-failure cases proving all structural or contextual generated-output failures raise dedicated `RiskReviewerOutputError`, expose no partially trusted output, and do not silently repair references.
 
 ### Implementation
@@ -104,10 +104,10 @@ Every implementation task follows:
 
 ### Tests first
 
-- [ ] T026 [US4] Extend `tests/unit/test_review_transitions.py` (or the repository's existing transition test file if transitions remain co-located) with `start_risk_reviewer()` happy-path and precondition tests: Review RUNNING, Analyst+Architect completed, Risk Reviewer pending, Critic/Coordinator pending, exact upstream objects captured, premature/repeated start rejected.
-- [ ] T027 [US4] Extend the transition tests with `complete_risk_reviewer(...)`: Risk Reviewer must be RUNNING; exact previous `RiskReviewerStageInput` preserved; exact supplied `RiskAssessment` reused as output; Review remains RUNNING; earlier stages and later PENDING stages unchanged.
-- [ ] T028 [US5] Extend the transition tests with `fail_risk_reviewer(...)`: atomically produce Review INCOMPLETE + Risk Reviewer FAILED, preserve exact recorded inputs and upstream completed stages, store no output, keep Critic/Coordinator PENDING, reject failure before start or after terminal state.
-- [ ] T029 [US4] Add transition regression tests using a valid noncanonical stage tuple order to prove `start/complete/fail_risk_reviewer` locate and replace stages by `StageIdentity` and preserve tuple order.
+- [ ] T026 [US4] Extend `tests/unit/test_review_transitions.py` with `start_risk_reviewer()` happy-path and precondition tests: Review RUNNING, Analyst+Architect completed, Risk Reviewer pending, Critic/Coordinator pending, exact upstream objects captured, premature/repeated start rejected.
+- [ ] T027 [US4] Extend `tests/unit/test_review_transitions.py` with `complete_risk_reviewer(...)`: Risk Reviewer must be RUNNING; exact previous `RiskReviewerStageInput` preserved; exact supplied `RiskAssessment` reused as output; Review remains RUNNING; earlier stages and later PENDING stages unchanged.
+- [ ] T028 [US5] Extend `tests/unit/test_review_transitions.py` with `fail_risk_reviewer(...)`: atomically produce Review INCOMPLETE + Risk Reviewer FAILED, preserve exact recorded inputs and upstream completed stages, store no output, keep Critic/Coordinator PENDING, reject failure before start or after terminal state.
+- [ ] T029 [US4] Extend `tests/unit/test_review_transitions.py` with a valid noncanonical stage tuple order to prove `start/complete/fail_risk_reviewer` locate and replace stages by `StageIdentity` and preserve tuple order.
 
 ### Implementation
 
@@ -127,10 +127,10 @@ Every implementation task follows:
 
 - [ ] T031 [US4] Extend `tests/unit/test_review_orchestrator.py` with successful three-stage orchestration: exact role order `analyst → solution_architect → risk_reviewer`; each stage input recorded before invocation; exact current ReviewInput/ProblemAnalysis/SolutionAlternatives passed; all three implemented stages COMPLETED; Critic/Coordinator PENDING; final Review RUNNING.
 - [ ] T032 [US3] Extend `tests/unit/test_review_orchestrator.py` with valid zero-risk and valid zero-alternative scenarios proving both still complete Risk Reviewer and preserve the approved final Slice 4 RUNNING state.
-- [ ] T033 [US5] Extend `tests/unit/test_review_orchestrator.py` with `RiskReviewerOutputError` failure: Risk Reviewer FAILED, Review INCOMPLETE, exact inputs retained, no trusted RiskAssessment, Analyst/Architect preserved, later stages pending, `OUTPUT_VALIDATION`, exact safe message `Risk Reviewer output validation failed`.
-- [ ] T034 [US5] Extend `tests/unit/test_review_orchestrator.py` with ordinary `Exception` from `RiskReviewer.assess(...)`: same preservation/stop behavior, `EXECUTION`, exact safe message `Risk Reviewer execution failed`, raw exception text absent.
+- [ ] T033 [US5] Extend `tests/unit/test_review_orchestrator.py` with an end-to-end generated-output validation failure using the real `RiskReviewer` and a deterministic recording `LLMPort` response that is structurally or contextually invalid; verify the participant raises `RiskReviewerOutputError`, the Orchestrator maps it to Risk Reviewer FAILED + Review INCOMPLETE, retains exact inputs, stores no trusted `RiskAssessment`, preserves Analyst/Architect, leaves later stages pending, records `OUTPUT_VALIDATION`, and uses exact safe message `Risk Reviewer output validation failed`.
+- [ ] T034 [US5] Extend `tests/unit/test_review_orchestrator.py` with an end-to-end ordinary execution failure using the real `RiskReviewer` and a deterministic recording `LLMPort` that raises an ordinary provider-style `Exception` during the Risk Reviewer call; verify Risk Reviewer FAILED + Review INCOMPLETE, preserved upstream work/inputs, no trusted RiskAssessment, `EXECUTION`, exact safe message `Risk Reviewer execution failed`, and no raw exception text in trusted state.
 - [ ] T035 [US5] Extend `tests/unit/test_review_orchestrator.py` with internal invariant/misuse cases proving failures outside the Risk Reviewer participant call propagate rather than being converted into `ReviewError`; prove `KeyboardInterrupt`/`SystemExit`-class `BaseException` signals are not swallowed.
-- [ ] T036 [US4] Extend `tests/unit/test_review_orchestrator.py` with sequential success→success and Risk-failure→fresh-review cases proving the same orchestrator/participant objects do not retain Review state or cross-review risk artifacts.
+- [ ] T036 Extend `tests/unit/test_review_orchestrator.py` with sequential success→success and Risk-failure→fresh-review cases proving the same orchestrator/participant objects do not retain Review state or cross-review risk artifacts.
 
 ### Implementation
 
@@ -150,7 +150,7 @@ Every implementation task follows:
 - [ ] T041 Run `python -m mypy` under the repository strict configuration and resolve typing issues for discriminated unions, `StrictStr | ConstraintReference`, `StageInput`/`StageOutput`, stage lookup, and Orchestrator narrowing without adding a new dependency/plugin unless separately justified and approved.
 - [ ] T042 Run `python -m pip check` and confirm no production dependency change is required.
 - [ ] T043 Inspect `src/agentic_review_board/` and `pyproject.toml` to confirm Slice 4 adds no provider SDK, direct Orchestrator→`LLMPort` dependency, Critic/Coordinator implementation, ranking/final recommendation, numeric risk probability/scoring, persistence/RAG/UI/tools, retries/timeouts/concurrency, generic workflow/stage registry, generic artifact/reference framework, or organization-wide taxonomy infrastructure.
-- [ ] T044 Review final implementation against `specs/004-risk-reviewer/spec.md`, `plan.md`, `data-model.md`, `docs/02-requirements.md`, `docs/03-architecture.md`, `docs/04-agent-model.md`, `docs/05-quality-security.md`, the Constitution, and ADR-0001; confirm every material risk basis is inspectable/current-input grounded, assumptions remain assumptions, generated-reference resolution is not confused with StageExecution provenance, and only Coordinator remains authorized to rank/recommend.
+- [ ] T044 Review final implementation against `specs/004-risk-reviewer/spec.md`, `plan.md`, `data-model.md`, `docs/02-requirements.md`, `docs/03-architecture.md`, `docs/04-agent-model.md`, `docs/05-quality-security.md`, the Constitution, and ADR-0001; confirm every material risk basis is inspectable/current-input grounded, assumptions remain assumptions, generated-reference resolution is not confused with StageExecution provenance, candidate alternatives are never redefined/replaced, and only Coordinator remains authorized to rank/recommend.
 
 **Final checkpoint**: T001–T044 complete, full deterministic suite green, Ruff/mypy/pip checks green, architectural scope confirmed, and Slice 4 remains limited to Risk Reviewer v0.1 plus the minimum third-stage execution/orchestration extension.
 
@@ -179,7 +179,7 @@ Cross-cutting verification (T039–T044)
 - T001–T006 are sequential because they all establish `tests/unit/test_risks.py`; T007–T008 follow the complete intrinsic test surface.
 - T009–T015 are sequential because they build one participant/context-validation test file; T016 follows structural tests and T017–T018 complete contextual/edge behavior.
 - T019–T022 extend existing execution-domain tests and should be completed before T023–T025 production changes.
-- T026–T029 are tests-first for transitions; T030 follows them and the completed aggregate invariants.
+- T026–T029 are tests-first for `tests/unit/test_review_transitions.py`; T030 follows them and the completed aggregate invariants.
 - T031–T036 extend the orchestration tests after participant/domain transitions are stable; T037–T038 implement only the behavior demanded by those tests.
 - T039–T044 run only after all story/implementation tasks are complete.
 
