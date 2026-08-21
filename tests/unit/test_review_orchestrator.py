@@ -109,6 +109,10 @@ def create_review() -> Review:
     )
 
 
+def create_named_review(description: str) -> Review:
+    return Review.create(ReviewInput(description=description))
+
+
 def orchestrator_with(llm: RecordingLLM) -> ReviewOrchestrator:
     return ReviewOrchestrator(Analyst(llm), SolutionArchitect(llm))
 
@@ -120,6 +124,17 @@ def assert_later_stages_pending(review: Review) -> None:
         StageIdentity.COORDINATOR,
     ):
         stage = review.stage(identity)
+        assert stage.status is StageStatus.PENDING
+        assert stage.inputs is None
+        assert stage.output is None
+        assert stage.error is None
+
+
+def assert_fresh_created_review(review: Review) -> None:
+    assert review.status is ReviewStatus.CREATED
+    assert len(review.stages) == 5
+    assert len({id(stage) for stage in review.stages}) == 5
+    for stage in review.stages:
         assert stage.status is StageStatus.PENDING
         assert stage.inputs is None
         assert stage.output is None
@@ -329,3 +344,85 @@ def test_orchestrator_does_not_swallow_base_exception_control_signals(
 
     with pytest.raises(type(control_signal)):
         orchestrator_with(llm).execute(create_review())
+
+
+def test_reused_orchestrator_keeps_sequential_successful_reviews_isolated() -> None:
+    llm = RecordingLLM(
+        {
+            "analyst": analyst_response(),
+            "solution_architect": two_alternative_response(),
+        }
+    )
+    orchestrator = orchestrator_with(llm)
+    first_created = create_named_review("First independent review.")
+    second_created = create_named_review("Second independent review.")
+
+    assert_fresh_created_review(first_created)
+    assert_fresh_created_review(second_created)
+    assert first_created.review_input is not second_created.review_input
+    for first_stage, second_stage in zip(first_created.stages, second_created.stages, strict=True):
+        assert first_stage is not second_stage
+
+    first_result = orchestrator.execute(first_created)
+
+    assert_fresh_created_review(second_created)
+    second_result = orchestrator.execute(second_created)
+
+    first_analyst = first_result.stage(StageIdentity.ANALYST)
+    second_analyst = second_result.stage(StageIdentity.ANALYST)
+    first_architect = first_result.stage(StageIdentity.SOLUTION_ARCHITECT)
+    second_architect = second_result.stage(StageIdentity.SOLUTION_ARCHITECT)
+
+    assert first_result.review_input is first_created.review_input
+    assert second_result.review_input is second_created.review_input
+    assert first_result.review_input is not second_result.review_input
+    assert first_analyst.output is not None
+    assert second_analyst.output is not None
+    assert first_analyst.output is not second_analyst.output
+    assert isinstance(first_architect.inputs, SolutionArchitectStageInput)
+    assert isinstance(second_architect.inputs, SolutionArchitectStageInput)
+    assert first_architect.inputs.problem_analysis is first_analyst.output
+    assert second_architect.inputs.problem_analysis is second_analyst.output
+    assert second_architect.inputs.problem_analysis is not first_analyst.output
+    assert first_result.status is ReviewStatus.RUNNING
+    assert second_result.status is ReviewStatus.RUNNING
+
+
+def test_incomplete_review_does_not_contaminate_next_fresh_review() -> None:
+    llm = RecordingLLM(
+        {
+            "analyst": invalid_analyst_response(),
+            "solution_architect": two_alternative_response(),
+        }
+    )
+    orchestrator = orchestrator_with(llm)
+    first_created = create_named_review("Review expected to fail validation.")
+
+    first_result = orchestrator.execute(first_created)
+    assert first_result.status is ReviewStatus.INCOMPLETE
+    assert first_result.stage(StageIdentity.ANALYST).status is StageStatus.FAILED
+
+    llm._responses = {
+        "analyst": analyst_response(),
+        "solution_architect": two_alternative_response(),
+    }
+    second_created = create_named_review("Fresh review after an incomplete review.")
+
+    assert_fresh_created_review(second_created)
+    for second_stage, first_stage in zip(second_created.stages, first_result.stages, strict=True):
+        assert second_stage is not first_stage
+
+    second_result = orchestrator.execute(second_created)
+    second_analyst = second_result.stage(StageIdentity.ANALYST)
+    second_architect = second_result.stage(StageIdentity.SOLUTION_ARCHITECT)
+
+    assert second_result.status is ReviewStatus.RUNNING
+    assert second_result.review_input is second_created.review_input
+    assert second_result.review_input is not first_result.review_input
+    assert second_analyst.status is StageStatus.COMPLETED
+    assert second_analyst.error is None
+    assert isinstance(second_architect.inputs, SolutionArchitectStageInput)
+    assert second_architect.inputs.review_input is second_result.review_input
+    assert second_architect.inputs.problem_analysis is second_analyst.output
+    assert second_architect.error is None
+    assert_later_stages_pending(second_result)
