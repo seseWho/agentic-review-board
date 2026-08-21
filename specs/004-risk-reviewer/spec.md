@@ -2,7 +2,7 @@
 
 **Feature Branch**: `004-risk-reviewer`  
 **Created**: 2026-08-21  
-**Status**: Draft — awaiting review and approval  
+**Status**: Approved — ready for implementation planning  
 **Input**: Fourth executable product increment derived from the canonical MVP documents and the completed Review Input + Analyst, Solution Architect, and Review Orchestrator slices.
 
 ## Purpose
@@ -56,15 +56,17 @@ As a professional user, I want the Risk Reviewer to identify material risks in a
 
 As a user, I want each material risk to remain traceable to the current review artifacts so that later stages can inspect why the risk exists and what it affects.
 
-**Independent Test**: Construct deterministic Risk Reviewer outputs that reference facts, constraints, assumptions, and alternatives; verify contextual validation accepts only references belonging to the current Risk Reviewer inputs.
+**Independent Test**: Construct deterministic Risk Reviewer outputs that reference facts, constraints, assumptions, and alternatives; verify contextual validation accepts only references resolvable against the current Risk Reviewer inputs.
 
 **Acceptance Scenarios**:
 
 1. **Given** a risk basis references an Analyst fact, constraint, assumption, missing-information item, or uncertainty, **When** output validation occurs, **Then** the reference must identify an item present in the supplied current `ProblemAnalysis`.
 2. **Given** a risk refers to an alternative, **When** output validation occurs, **Then** the alternative identifier must exist in the supplied current `SolutionAlternatives`.
-3. **Given** an equal-looking but unrelated or fabricated reference identifier, **When** output validation occurs, **Then** the Risk Reviewer output is rejected rather than silently repaired or accepted.
+3. **Given** a fabricated, unknown, ambiguous, or otherwise unresolvable reference, **When** output validation occurs, **Then** the Risk Reviewer output is rejected rather than silently repaired or accepted.
 4. **Given** upstream content contains an assumption, **When** Risk Reviewer uses it as risk basis, **Then** it remains identifiable as assumption-derived support and is not promoted into a user-provided fact.
 5. **Given** missing information materially limits risk interpretation, **When** Risk Reviewer reports that limitation, **Then** the uncertainty remains visible in structured output rather than being silently filled with invented detail.
+
+Generated textual/local references establish only that they resolve unambiguously within the current trusted Risk Reviewer inputs. Same-execution provenance between stages is a separate Review execution invariant and is enforced through exact in-memory object identity.
 
 ---
 
@@ -79,7 +81,7 @@ As a user, I want the Risk Reviewer to report only risks supported by the curren
 1. **Given** the visible review artifacts do not support a material risk, **When** the Risk Reviewer evaluates them, **Then** it is not required to fabricate a risk.
 2. **Given** no justified risk is identified, **When** the Risk Reviewer completes, **Then** the result may contain zero risks together with concise observations explaining the limited risk evidence or remaining uncertainty.
 3. **Given** the available Solution Architect result contains zero alternatives but is itself valid, **When** the Risk Reviewer executes, **Then** it may still assess risks affecting the overall proposal and SHALL NOT invent alternative-specific risks.
-4. **Given** a category taxonomy exists, **When** the Risk Reviewer produces output, **Then** it is not required to populate every category.
+4. **Given** risk categories are used, **When** the Risk Reviewer produces output, **Then** it is not required to populate every category.
 5. **Given** organization-specific policy, regulation, cost, or operational facts are absent from the current review input, **When** risk analysis occurs, **Then** the Risk Reviewer SHALL NOT invent those facts as established constraints.
 
 ---
@@ -126,7 +128,7 @@ As a user, I want invalid or failed Risk Reviewer execution to make the review v
 - A valid zero-risk `RiskAssessment` is permitted when no material risk can be justified. The participant SHALL NOT fabricate risks solely to satisfy a non-empty count.
 - `overall_observations[]` may capture concise cross-cutting risk observations, limitations, or remaining uncertainty; it SHALL NOT become a hidden final recommendation or ranking field.
 - Risk severity is qualitative (`LOW`, `MEDIUM`, `HIGH`) and SHALL NOT be treated as calibrated likelihood, impact probability, expected loss, or statistical confidence.
-- `category` is optional. No risk category is mandatory.
+- `category` is optional. No risk category is mandatory or exhaustive.
 - Risk basis must remain grounded in visible current-review artifacts. The Risk Reviewer does not browse, retrieve external policy, or introduce organization-specific facts in this slice.
 - A mitigation may reduce likelihood, impact, or exposure but does not erase the underlying risk.
 - A Risk Reviewer SHALL NOT redefine alternatives. If an alternative is weak or conditional, the reviewer assesses resulting exposure rather than silently replacing the alternative.
@@ -150,7 +152,7 @@ As a user, I want invalid or failed Risk Reviewer execution to make the review v
 - **FR-010**: Every `Risk` MUST contain a non-empty structured basis identifying visible review information that makes the risk relevant.
 - **FR-011**: Basis references to Analyst findings MUST resolve to items in the current `ProblemAnalysis` when explicit identifiers are used.
 - **FR-012**: Risk basis MUST NOT promote an Analyst assumption into a ReviewInput fact.
-- **FR-013**: A `Risk` MAY contain an optional category; category use MUST NOT require every category to appear.
+- **FR-013**: A `Risk` MAY contain an optional category; categories are labels rather than an exhaustive closed taxonomy, and category use MUST NOT require every category to appear.
 - **FR-014**: A `Risk` MAY contain an optional mitigation.
 - **FR-015**: Presence of mitigation MUST NOT remove or invalidate the risk automatically.
 - **FR-016**: A `Risk` MAY contain optional residual uncertainty explaining material unknowns remaining after mitigation or analysis.
@@ -264,7 +266,7 @@ Concrete Pydantic field representation, exact affected-scope structure, exact ba
 - **SC-001**: All Risk Reviewer contract, participant, and orchestration tests execute deterministically with no live external LLM or network dependency.
 - **SC-002**: A valid deterministic Risk Reviewer response produces a trusted structured `RiskAssessment` with only `LOW`, `MEDIUM`, or `HIGH` severity values.
 - **SC-003**: Every alternative-specific risk accepted into trusted state references only alternatives present in the current SolutionAlternatives input.
-- **SC-004**: Representative fabricated/unknown alternative or Analyst-item references are rejected before the output becomes trusted state.
+- **SC-004**: Representative fabricated, unknown, ambiguous, or otherwise unresolvable alternative or Analyst-item references are rejected before the output becomes trusted state.
 - **SC-005**: A valid zero-risk result completes Risk Reviewer successfully without fabricated risks.
 - **SC-006**: A valid zero-alternative Solution Architect result does not prevent Risk Reviewer from completing an overall-proposal risk assessment.
 - **SC-007**: A successful deterministic Slice 4 run invokes exactly Analyst → Solution Architect → Risk Reviewer, preserves exact same-review artifact provenance, and ends `RUNNING` with Critic/Coordinator `PENDING`.
