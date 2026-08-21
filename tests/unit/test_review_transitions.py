@@ -107,6 +107,27 @@ def test_transitions_preserve_unaffected_stage_objects_and_order() -> None:
     )
 
 
+def test_review_validation_and_lookup_use_identity_not_tuple_position() -> None:
+    running = Review.create(review_input()).start().start_analyst()
+    reordered_stages = (
+        running.stage(StageIdentity.COORDINATOR),
+        running.stage(StageIdentity.ANALYST),
+        running.stage(StageIdentity.CRITIC),
+        running.stage(StageIdentity.SOLUTION_ARCHITECT),
+        running.stage(StageIdentity.RISK_REVIEWER),
+    )
+
+    reordered = Review(
+        review_input=running.review_input,
+        status=ReviewStatus.RUNNING,
+        stages=reordered_stages,
+    )
+
+    assert reordered.stage(StageIdentity.ANALYST).status is StageStatus.RUNNING
+    assert reordered.stage(StageIdentity.SOLUTION_ARCHITECT).status is StageStatus.PENDING
+    assert reordered.stages == reordered_stages
+
+
 def test_transitions_reject_illegal_repeated_or_out_of_order_calls() -> None:
     created = Review.create(review_input())
 
