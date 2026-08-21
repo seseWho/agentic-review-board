@@ -56,6 +56,14 @@ def execution_error() -> ReviewError:
     )
 
 
+def pending_later_stages() -> tuple[StageExecution, StageExecution, StageExecution]:
+    return (
+        StageExecution(identity=StageIdentity.RISK_REVIEWER, status=StageStatus.PENDING),
+        StageExecution(identity=StageIdentity.CRITIC, status=StageStatus.PENDING),
+        StageExecution(identity=StageIdentity.COORDINATOR, status=StageStatus.PENDING),
+    )
+
+
 def test_execution_vocabularies_are_closed_and_exact() -> None:
     assert [identity.value for identity in StageIdentity] == [
         "ANALYST",
@@ -359,4 +367,319 @@ def test_unimplemented_stages_are_pending_only(identity: StageIdentity) -> None:
             identity=identity,
             status=StageStatus.RUNNING,
             inputs=AnalystStageInput(review_input=valid_review_input()),
+        )
+
+
+def test_review_accepts_every_valid_slice3_running_prefix() -> None:
+    review_input = valid_review_input()
+    analysis = valid_problem_analysis()
+    analyst_inputs = AnalystStageInput(review_input=review_input)
+    architect_inputs = SolutionArchitectStageInput(
+        review_input=review_input,
+        problem_analysis=analysis,
+    )
+    analyst_pending = StageExecution(
+        identity=StageIdentity.ANALYST,
+        status=StageStatus.PENDING,
+    )
+    analyst_running = StageExecution(
+        identity=StageIdentity.ANALYST,
+        status=StageStatus.RUNNING,
+        inputs=analyst_inputs,
+    )
+    analyst_completed = StageExecution(
+        identity=StageIdentity.ANALYST,
+        status=StageStatus.COMPLETED,
+        inputs=analyst_inputs,
+        output=analysis,
+    )
+    architect_pending = StageExecution(
+        identity=StageIdentity.SOLUTION_ARCHITECT,
+        status=StageStatus.PENDING,
+    )
+    architect_running = StageExecution(
+        identity=StageIdentity.SOLUTION_ARCHITECT,
+        status=StageStatus.RUNNING,
+        inputs=architect_inputs,
+    )
+    architect_completed = StageExecution(
+        identity=StageIdentity.SOLUTION_ARCHITECT,
+        status=StageStatus.COMPLETED,
+        inputs=architect_inputs,
+        output=valid_solution_alternatives(),
+    )
+
+    valid_prefixes = (
+        (analyst_pending, architect_pending),
+        (analyst_running, architect_pending),
+        (analyst_completed, architect_pending),
+        (analyst_completed, architect_running),
+        (analyst_completed, architect_completed),
+    )
+
+    for analyst_stage, architect_stage in valid_prefixes:
+        review = Review(
+            review_input=review_input,
+            status=ReviewStatus.RUNNING,
+            stages=(analyst_stage, architect_stage, *pending_later_stages()),
+        )
+        assert review.status is ReviewStatus.RUNNING
+
+
+def test_review_accepts_only_the_two_valid_slice3_incomplete_shapes() -> None:
+    review_input = valid_review_input()
+    analysis = valid_problem_analysis()
+    analyst_inputs = AnalystStageInput(review_input=review_input)
+    analyst_failed = StageExecution(
+        identity=StageIdentity.ANALYST,
+        status=StageStatus.FAILED,
+        inputs=analyst_inputs,
+        error=execution_error(),
+    )
+    analyst_completed = StageExecution(
+        identity=StageIdentity.ANALYST,
+        status=StageStatus.COMPLETED,
+        inputs=analyst_inputs,
+        output=analysis,
+    )
+    architect_pending = StageExecution(
+        identity=StageIdentity.SOLUTION_ARCHITECT,
+        status=StageStatus.PENDING,
+    )
+    architect_failed = StageExecution(
+        identity=StageIdentity.SOLUTION_ARCHITECT,
+        status=StageStatus.FAILED,
+        inputs=SolutionArchitectStageInput(
+            review_input=review_input,
+            problem_analysis=analysis,
+        ),
+        error=ReviewError(
+            kind=ReviewErrorKind.EXECUTION,
+            message="Solution Architect execution failed",
+        ),
+    )
+
+    analyst_failure = Review(
+        review_input=review_input,
+        status=ReviewStatus.INCOMPLETE,
+        stages=(analyst_failed, architect_pending, *pending_later_stages()),
+    )
+    architect_failure = Review(
+        review_input=review_input,
+        status=ReviewStatus.INCOMPLETE,
+        stages=(analyst_completed, architect_failed, *pending_later_stages()),
+    )
+
+    assert analyst_failure.status is ReviewStatus.INCOMPLETE
+    assert architect_failure.status is ReviewStatus.INCOMPLETE
+
+
+def test_review_rejects_missing_or_duplicate_canonical_stages() -> None:
+    review_input = valid_review_input()
+    created = Review.create(review_input)
+
+    with pytest.raises(ValidationError):
+        Review(
+            review_input=review_input,
+            status=ReviewStatus.CREATED,
+            stages=created.stages[:-1],
+        )
+
+    duplicate_analyst = (
+        created.stages[0],
+        created.stages[0],
+        *created.stages[2:],
+    )
+    with pytest.raises(ValidationError):
+        Review(
+            review_input=review_input,
+            status=ReviewStatus.CREATED,
+            stages=duplicate_analyst,
+        )
+
+
+def test_review_rejects_global_lifecycle_and_dependency_inconsistencies() -> None:
+    review_input = valid_review_input()
+    analysis = valid_problem_analysis()
+    analyst_inputs = AnalystStageInput(review_input=review_input)
+    architect_inputs = SolutionArchitectStageInput(
+        review_input=review_input,
+        problem_analysis=analysis,
+    )
+    analyst_pending = StageExecution(
+        identity=StageIdentity.ANALYST,
+        status=StageStatus.PENDING,
+    )
+    analyst_running = StageExecution(
+        identity=StageIdentity.ANALYST,
+        status=StageStatus.RUNNING,
+        inputs=analyst_inputs,
+    )
+    analyst_completed = StageExecution(
+        identity=StageIdentity.ANALYST,
+        status=StageStatus.COMPLETED,
+        inputs=analyst_inputs,
+        output=analysis,
+    )
+    analyst_failed = StageExecution(
+        identity=StageIdentity.ANALYST,
+        status=StageStatus.FAILED,
+        inputs=analyst_inputs,
+        error=execution_error(),
+    )
+    architect_pending = StageExecution(
+        identity=StageIdentity.SOLUTION_ARCHITECT,
+        status=StageStatus.PENDING,
+    )
+    architect_running = StageExecution(
+        identity=StageIdentity.SOLUTION_ARCHITECT,
+        status=StageStatus.RUNNING,
+        inputs=architect_inputs,
+    )
+    architect_completed = StageExecution(
+        identity=StageIdentity.SOLUTION_ARCHITECT,
+        status=StageStatus.COMPLETED,
+        inputs=architect_inputs,
+        output=valid_solution_alternatives(),
+    )
+    architect_failed = StageExecution(
+        identity=StageIdentity.SOLUTION_ARCHITECT,
+        status=StageStatus.FAILED,
+        inputs=architect_inputs,
+        error=ReviewError(
+            kind=ReviewErrorKind.EXECUTION,
+            message="Solution Architect execution failed",
+        ),
+    )
+
+    invalid_reviews = (
+        (ReviewStatus.CREATED, analyst_running, architect_pending),
+        (ReviewStatus.RUNNING, analyst_failed, architect_pending),
+        (ReviewStatus.RUNNING, analyst_pending, architect_running),
+        (ReviewStatus.INCOMPLETE, analyst_pending, architect_pending),
+        (ReviewStatus.INCOMPLETE, analyst_failed, architect_failed),
+        (ReviewStatus.COMPLETED, analyst_completed, architect_completed),
+    )
+
+    for status, analyst_stage, architect_stage in invalid_reviews:
+        with pytest.raises(ValidationError):
+            Review(
+                review_input=review_input,
+                status=status,
+                stages=(analyst_stage, architect_stage, *pending_later_stages()),
+            )
+
+
+def test_review_preserves_exact_same_execution_provenance() -> None:
+    review_input = valid_review_input()
+    analysis = valid_problem_analysis()
+    analyst_stage = StageExecution(
+        identity=StageIdentity.ANALYST,
+        status=StageStatus.COMPLETED,
+        inputs=AnalystStageInput(review_input=review_input),
+        output=analysis,
+    )
+    architect_stage = StageExecution(
+        identity=StageIdentity.SOLUTION_ARCHITECT,
+        status=StageStatus.RUNNING,
+        inputs=SolutionArchitectStageInput(
+            review_input=review_input,
+            problem_analysis=analysis,
+        ),
+    )
+
+    review = Review(
+        review_input=review_input,
+        status=ReviewStatus.RUNNING,
+        stages=(analyst_stage, architect_stage, *pending_later_stages()),
+    )
+
+    assert isinstance(analyst_stage.inputs, AnalystStageInput)
+    assert isinstance(architect_stage.inputs, SolutionArchitectStageInput)
+    assert analyst_stage.inputs.review_input is review.review_input
+    assert architect_stage.inputs.review_input is review.review_input
+    assert architect_stage.inputs.problem_analysis is analyst_stage.output
+
+
+def test_review_rejects_equal_but_independent_analyst_review_input_provenance() -> None:
+    review_input = valid_review_input()
+    equal_but_independent = ReviewInput.model_validate(review_input.model_dump())
+    assert equal_but_independent == review_input
+    assert equal_but_independent is not review_input
+
+    analyst_stage = StageExecution(
+        identity=StageIdentity.ANALYST,
+        status=StageStatus.RUNNING,
+        inputs=AnalystStageInput(review_input=equal_but_independent),
+    )
+
+    with pytest.raises(ValidationError):
+        Review(
+            review_input=review_input,
+            status=ReviewStatus.RUNNING,
+            stages=(
+                analyst_stage,
+                StageExecution(
+                    identity=StageIdentity.SOLUTION_ARCHITECT,
+                    status=StageStatus.PENDING,
+                ),
+                *pending_later_stages(),
+            ),
+        )
+
+
+def test_review_rejects_equal_but_independent_architect_review_input_provenance() -> None:
+    review_input = valid_review_input()
+    equal_but_independent = ReviewInput.model_validate(review_input.model_dump())
+    analysis = valid_problem_analysis()
+    analyst_stage = StageExecution(
+        identity=StageIdentity.ANALYST,
+        status=StageStatus.COMPLETED,
+        inputs=AnalystStageInput(review_input=review_input),
+        output=analysis,
+    )
+    architect_stage = StageExecution(
+        identity=StageIdentity.SOLUTION_ARCHITECT,
+        status=StageStatus.RUNNING,
+        inputs=SolutionArchitectStageInput(
+            review_input=equal_but_independent,
+            problem_analysis=analysis,
+        ),
+    )
+
+    with pytest.raises(ValidationError):
+        Review(
+            review_input=review_input,
+            status=ReviewStatus.RUNNING,
+            stages=(analyst_stage, architect_stage, *pending_later_stages()),
+        )
+
+
+def test_review_rejects_equal_but_independent_problem_analysis_provenance() -> None:
+    review_input = valid_review_input()
+    analysis = valid_problem_analysis()
+    equal_but_independent = ProblemAnalysis.model_validate(analysis.model_dump())
+    assert equal_but_independent == analysis
+    assert equal_but_independent is not analysis
+
+    analyst_stage = StageExecution(
+        identity=StageIdentity.ANALYST,
+        status=StageStatus.COMPLETED,
+        inputs=AnalystStageInput(review_input=review_input),
+        output=analysis,
+    )
+    architect_stage = StageExecution(
+        identity=StageIdentity.SOLUTION_ARCHITECT,
+        status=StageStatus.RUNNING,
+        inputs=SolutionArchitectStageInput(
+            review_input=review_input,
+            problem_analysis=equal_but_independent,
+        ),
+    )
+
+    with pytest.raises(ValidationError):
+        Review(
+            review_input=review_input,
+            status=ReviewStatus.RUNNING,
+            stages=(analyst_stage, architect_stage, *pending_later_stages()),
         )
