@@ -175,7 +175,7 @@ US2 and US3 are established primarily through the execution-domain phases becaus
 ### Task dependencies
 
 - T001–T002 are sequential because both establish `tests/unit/test_review_execution.py` and T002 extends T001.
-- T003 follows T001; T004 follows T002/T003 and completes local StageExecution behavior.
+- T003 follows T001–T002 so the full local contract tests exist before production execution-state code; T004 follows T003 and completes local `StageExecution` behavior against those tests.
 - T005–T006 are sequential because both extend `test_review_execution.py`.
 - T007 follows T005; T008 follows T006/T007 so aggregate provenance is applied on top of the globally valid Review shape.
 - T009–T010 are sequential in `test_review_execution.py`.
