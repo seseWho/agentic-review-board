@@ -3,7 +3,7 @@
 **Branch**: `003-review-orchestrator`  
 **Date**: 2026-08-21  
 **Spec**: `specs/003-review-orchestrator/spec.md`  
-**Status**: Draft — internally reviewed, awaiting user approval
+**Status**: Approved — ready for data-model refinement
 
 ## 1. Summary
 
