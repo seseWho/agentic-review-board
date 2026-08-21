@@ -18,6 +18,7 @@ The increment introduces:
 - stage-local typed input records for Analyst and Solution Architect execution provenance;
 - `StageExecution` as the validated immutable state snapshot for one canonical stage;
 - `Review` as one isolated immutable review-state snapshot containing the original `ReviewInput` and exactly five stage records;
+- cross-stage Review invariants that keep overall status, dependency order, and stage states mutually consistent;
 - `ReviewOrchestrator` as the application component that executes Analyst then Solution Architect, accepts only trusted participant outputs, records lifecycle transitions, stops on mandatory failure, and leaves later stages pending;
 - deterministic domain and orchestration tests covering state invariants, sequencing, propagation, failure, zero-alternative success, and review isolation.
 
@@ -33,7 +34,7 @@ CRITIC              = PENDING
 COORDINATOR         = PENDING
 ```
 
-`COMPLETED` exists in the review lifecycle contract but remains unreachable until all five mandatory stages are implemented and succeed.
+`COMPLETED` exists in the review lifecycle enum but remains unreachable for valid Slice 3 `Review` state because all five mandatory stages cannot yet complete.
 
 The increment reuses the existing Pydantic v2 dependency, `Analyst`, `SolutionArchitect`, their trusted output contracts, and the existing provider-neutral model boundary. It introduces no new production dependency, provider adapter, workflow framework, persistence, UI, or later-stage contract.
 
@@ -88,7 +89,7 @@ The Orchestrator owns progression. Analyst and Solution Architect remain semanti
 
 The Orchestrator accepts only already validated participant return values into `StageExecution.output`.
 
-`StageExecution` and `Review` enforce lifecycle invariants so impossible combinations such as `COMPLETED + error`, `FAILED + trusted output`, or `PENDING + execution inputs` are invalid review state.
+`StageExecution` and `Review` enforce lifecycle invariants so impossible combinations such as `COMPLETED + error`, `FAILED + trusted output`, `PENDING + execution inputs`, `RUNNING review + failed stage`, or `COMPLETED review + pending stages` are invalid review state.
 
 Generated-output validation remains inside the existing participant boundaries; orchestration does not duplicate or weaken those checks.
 
@@ -340,24 +341,85 @@ The `Review` contract validates:
 - each canonical stage identity appears exactly once;
 - no unexpected stage identity exists;
 - the original `ReviewInput` remains immutable;
-- stage state remains internally valid.
+- stage state remains internally valid;
+- overall `ReviewStatus` is consistent with the stage states and Slice 3 dependency order.
 
 A small domain creation helper or `Review` factory may construct this canonical initial state. Creation is domain state construction, not orchestration of participants.
 
-### 4.8 Review lifecycle transitions
+### 4.8 Review lifecycle and cross-stage coherence
 
-Slice 3 uses:
+The Review contract must make global lifecycle state truthful rather than trusting the Orchestrator to assemble arbitrary combinations.
+
+For Slice 3, enforce these review-level invariants:
+
+```text
+CREATED
+- all five stages are PENDING
+
+RUNNING
+- no stage is FAILED
+- Risk Reviewer, Critic, Coordinator remain PENDING
+- Solution Architect may be non-PENDING only if Analyst is COMPLETED
+- valid sequential-prefix states are allowed, including:
+    all PENDING immediately after review start,
+    Analyst RUNNING,
+    Analyst COMPLETED + Solution Architect PENDING/RUNNING/COMPLETED
+
+INCOMPLETE
+- at least one implemented mandatory stage is FAILED
+- if Analyst is FAILED, Solution Architect and all later stages are PENDING
+- if Solution Architect is FAILED, Analyst is COMPLETED and all later stages are PENDING
+
+COMPLETED
+- requires all five mandatory stages COMPLETED
+- therefore no valid Slice 3 Review can reach this state because the three later stages are restricted to PENDING
+```
+
+This prevents direct construction of states such as:
+
+```text
+ReviewStatus.RUNNING + Analyst FAILED
+ReviewStatus.INCOMPLETE + no failed stage
+ReviewStatus.COMPLETED + pending later stages
+Solution Architect RUNNING before Analyst COMPLETED
+```
+
+Slice 3 uses these lifecycle transitions:
 
 ```text
 CREATED → RUNNING
 RUNNING → INCOMPLETE
 ```
 
-`RUNNING → COMPLETED` exists conceptually in the canonical lifecycle but Slice 3 orchestration must never invoke it because three mandatory stages remain pending.
+`RUNNING → COMPLETED` remains part of the canonical future lifecycle but is not available through Slice 3 orchestration.
 
 Calling Slice 3 execution on a review that is not `CREATED` is an invalid application/lifecycle invocation. It must fail explicitly rather than being recorded as an ordinary participant failure.
 
-### 4.9 Single logical owner for trusted stage output
+### 4.9 Atomic Review transitions where global invariants span stage + review status
+
+Because `Review` validates cross-stage/global consistency, transitions that alter both a stage terminal state and the overall review status must construct the target state atomically.
+
+In particular, participant failure must not create an intermediate invalid snapshot such as:
+
+```text
+ReviewStatus.RUNNING
++ StageStatus.FAILED
+```
+
+Instead, the domain transition should produce one validated target snapshot equivalent to:
+
+```text
+failed stage → FAILED with ReviewError
+review status → INCOMPLETE
+```
+
+in the same Review construction.
+
+Successful stage start/completion keeps ReviewStatus `RUNNING` and replaces only the relevant stage snapshot, provided all cross-stage invariants remain satisfied.
+
+No transaction manager or event-sourcing mechanism is required; atomic here means one validated in-memory Review snapshot.
+
+### 4.10 Single logical owner for trusted stage output
 
 Do not add mutable stored fields such as:
 
@@ -372,7 +434,7 @@ The corresponding completed stage owns the trusted artifact. If typed review-lev
 
 The Solution Architect must receive the trusted Analyst result accepted into the current review execution, not a separately regenerated or repaired analysis.
 
-### 4.10 Orchestrator location and dependency direction
+### 4.11 Orchestrator location and dependency direction
 
 Introduce:
 
@@ -403,7 +465,7 @@ ReviewOrchestrator
           LLMPort
 ```
 
-### 4.11 Explicit synchronous orchestration sequence
+### 4.12 Explicit synchronous orchestration sequence
 
 Implement the sequence directly rather than creating a generic stage loop or registry before later participants exist.
 
@@ -418,8 +480,9 @@ execute(created_review):
     on success:
         analyst stage → COMPLETED with ProblemAnalysis
     on participant failure:
-        analyst stage → FAILED
-        review → INCOMPLETE
+        atomically:
+            analyst stage → FAILED
+            review → INCOMPLETE
         return review
 
     solution architect stage → RUNNING with SolutionArchitectStageInput
@@ -427,8 +490,9 @@ execute(created_review):
     on success:
         solution architect stage → COMPLETED with SolutionAlternatives
     on participant failure:
-        solution architect stage → FAILED
-        review → INCOMPLETE
+        atomically:
+            solution architect stage → FAILED
+            review → INCOMPLETE
         return review
 
     return review still RUNNING
@@ -438,7 +502,7 @@ Risk Reviewer, Critic, and Coordinator are never invoked in Slice 3.
 
 A generic participant registry, stage handler map, dynamic graph, recursive workflow, or plugin architecture is deferred until actual repetition justifies it.
 
-### 4.12 Participant failure boundary
+### 4.13 Participant failure boundary
 
 Catch exceptions only around the actual participant invocation boundary.
 
@@ -476,7 +540,7 @@ Do not copy arbitrary raw exception text into trusted review state.
 
 Orchestrator/domain errors occurring outside the participant call boundary must propagate rather than being mislabeled as participant failures.
 
-### 4.13 Zero-alternative result remains success
+### 4.14 Zero-alternative result remains success
 
 The Orchestrator must treat any trusted `SolutionAlternatives` returned by `SolutionArchitect.propose(...)` as a successful stage result, including:
 
@@ -488,7 +552,7 @@ provided the participant already validated the required generation notes and blo
 
 The Orchestrator does not reinterpret valid Solution Architect semantics.
 
-### 4.14 Review isolation
+### 4.15 Review isolation
 
 `ReviewOrchestrator` stores participant dependencies but no previous review state.
 
@@ -545,7 +609,7 @@ No orchestration library or multi-agent framework is introduced.
 
 ## 7. Verification Strategy
 
-### 7.1 Review creation and enum tests
+### 7.1 Review creation and global-consistency tests
 
 Verify:
 
@@ -555,7 +619,13 @@ Verify:
 - every new stage is `PENDING`;
 - no new stage has inputs, output, or error;
 - original `ReviewInput` is preserved unchanged;
-- duplicate/missing canonical stage identities are rejected where the public contract permits direct construction.
+- duplicate/missing canonical stage identities are rejected where the public contract permits direct construction;
+- `CREATED` with any non-PENDING stage is rejected;
+- `RUNNING` with a failed stage is rejected;
+- `INCOMPLETE` without a failed implemented stage is rejected;
+- Solution Architect non-PENDING before Analyst completion is rejected;
+- `COMPLETED` with any pending stage is rejected;
+- in Slice 3, direct valid construction of `COMPLETED` is impossible because later roles cannot leave `PENDING`.
 
 ### 7.2 StageExecution invariant tests
 
@@ -586,14 +656,19 @@ Verify trusted models/collections cannot be mutated after validation.
 Verify:
 
 ```text
+Stage:
 PENDING → RUNNING
 RUNNING → COMPLETED
 RUNNING → FAILED
-CREATED review → RUNNING
-RUNNING review → INCOMPLETE
+
+Review:
+CREATED → RUNNING
+RUNNING + participant failure → INCOMPLETE atomically
 ```
 
 Reject invalid lifecycle use such as executing a non-`CREATED` review or terminal stage transition back to running.
+
+Verify a failure transition never exposes an intermediate valid Review snapshot with `RUNNING + FAILED stage`.
 
 No Slice 3 transition helper should produce overall `COMPLETED`.
 
@@ -624,7 +699,7 @@ Verify:
 - no trusted Analyst output exists;
 - Solution Architect was never invoked and remains `PENDING`;
 - all later stages remain `PENDING`;
-- review becomes `INCOMPLETE`;
+- review becomes `INCOMPLETE` in the same target Review snapshot as the Analyst failure;
 - output-validation failure uses `OUTPUT_VALIDATION`;
 - generic invoked-participant failure uses `EXECUTION`;
 - stored error message is concise and stable rather than arbitrary exception text.
@@ -638,7 +713,7 @@ Verify:
 - completed Analyst stage and trusted `ProblemAnalysis` remain unchanged and inspectable;
 - Solution Architect ends `FAILED` with its input provenance and no trusted output;
 - later stages remain `PENDING`;
-- review is `INCOMPLETE`;
+- review becomes `INCOMPLETE` atomically with the Solution Architect failure;
 - error classification follows the same minimal boundary.
 
 ### 7.7 Zero-alternative success test
@@ -737,8 +812,9 @@ Before implementation tasks are generated, `data-model.md` must refine:
 - exact stage-output union;
 - `ReviewErrorKind` values and safe messages;
 - `StageExecution` structural/identity invariants;
-- `Review` five-stage invariants;
-- validated immutable transition operations;
+- `Review` five-stage and review-status/stage-coherence invariants;
+- validated immutable stage and Review transition operations;
+- atomic failure transition construction;
 - the exact mechanism for replacing one stage snapshot inside a Review without bypassing validation;
 - typing/narrowing needed for the Orchestrator to retrieve the trusted Analyst result safely.
 
