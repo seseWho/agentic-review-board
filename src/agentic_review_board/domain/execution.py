@@ -102,22 +102,18 @@ class StageExecution(BaseModel):
             if self.inputs is not None or self.output is not None or self.error is not None:
                 raise ValueError("pending stage must not contain inputs, output, or error")
             return
-
         if self.status is StageStatus.RUNNING:
             if self.inputs is None or self.output is not None or self.error is not None:
                 raise ValueError("running stage requires inputs and forbids output or error")
             return
-
         if self.status is StageStatus.COMPLETED:
             if self.inputs is None or self.output is None or self.error is not None:
                 raise ValueError("completed stage requires inputs and output and forbids error")
             return
-
         if self.status is StageStatus.FAILED:
             if self.inputs is None or self.output is not None or self.error is None:
                 raise ValueError("failed stage requires inputs and error and forbids output")
             return
-
         raise ValueError("unsupported stage status")
 
     def _validate_identity_types(self) -> None:
@@ -131,7 +127,6 @@ class StageExecution(BaseModel):
             ):
                 raise ValueError("completed Analyst stage requires ProblemAnalysis output")
             return
-
         if self.identity is StageIdentity.SOLUTION_ARCHITECT:
             if self.status is not StageStatus.PENDING and not isinstance(
                 self.inputs, SolutionArchitectStageInput
@@ -144,7 +139,6 @@ class StageExecution(BaseModel):
                     "completed Solution Architect stage requires SolutionAlternatives output"
                 )
             return
-
         if self.status is not StageStatus.PENDING:
             raise ValueError("unimplemented Slice 3 stages must remain pending")
 
@@ -182,13 +176,11 @@ class Review(BaseModel):
     def _validate_same_execution_provenance(self) -> None:
         analyst = self.stages[0]
         architect = self.stages[1]
-
         if analyst.status is not StageStatus.PENDING:
             if not isinstance(analyst.inputs, AnalystStageInput):
                 raise ValueError("executed Analyst stage must expose AnalystStageInput")
             if analyst.inputs.review_input is not self.review_input:
                 raise ValueError("Analyst input must reference the current ReviewInput instance")
-
         if architect.status is not StageStatus.PENDING:
             if not isinstance(architect.inputs, SolutionArchitectStageInput):
                 raise ValueError(
@@ -211,15 +203,12 @@ class Review(BaseModel):
         analyst = self.stages[0]
         architect = self.stages[1]
         later = self.stages[2:]
-
         if any(stage.status is not StageStatus.PENDING for stage in later):
             raise ValueError("later Slice 3 stages must remain pending")
-
         if self.status is ReviewStatus.CREATED:
             if any(stage.status is not StageStatus.PENDING for stage in self.stages):
                 raise ValueError("created review requires all stages pending")
             return
-
         if self.status is ReviewStatus.RUNNING:
             valid_prefixes = {
                 (StageStatus.PENDING, StageStatus.PENDING),
@@ -231,7 +220,6 @@ class Review(BaseModel):
             if (analyst.status, architect.status) not in valid_prefixes:
                 raise ValueError("running review has an invalid Slice 3 stage prefix")
             return
-
         if self.status is ReviewStatus.INCOMPLETE:
             valid_failures = {
                 (StageStatus.FAILED, StageStatus.PENDING),
@@ -240,12 +228,10 @@ class Review(BaseModel):
             if (analyst.status, architect.status) not in valid_failures:
                 raise ValueError("incomplete review must contain one failed implemented stage")
             return
-
         if self.status is ReviewStatus.COMPLETED:
             if any(stage.status is not StageStatus.COMPLETED for stage in self.stages):
                 raise ValueError("completed review requires all five stages completed")
             return
-
         raise ValueError("unsupported review status")
 
     @classmethod
@@ -257,4 +243,135 @@ class Review(BaseModel):
                 StageExecution(identity=identity, status=StageStatus.PENDING)
                 for identity in CANONICAL_STAGE_ORDER
             ),
+        )
+
+    def stage(self, identity: StageIdentity) -> StageExecution:
+        for stage in self.stages:
+            if stage.identity is identity:
+                return stage
+        raise ValueError(f"unknown stage identity: {identity}")
+
+    def start(self) -> "Review":
+        if self.status is not ReviewStatus.CREATED:
+            raise ValueError("only a created review can start")
+        return Review(review_input=self.review_input, status=ReviewStatus.RUNNING, stages=self.stages)
+
+    def start_analyst(self) -> "Review":
+        self._require_running_review()
+        analyst = self.stage(StageIdentity.ANALYST)
+        if analyst.status is not StageStatus.PENDING:
+            raise ValueError("Analyst stage must be pending before start")
+        return self._replace_stage(
+            StageExecution(
+                identity=StageIdentity.ANALYST,
+                status=StageStatus.RUNNING,
+                inputs=AnalystStageInput(review_input=self.review_input),
+            )
+        )
+
+    def complete_analyst(self, problem_analysis: ProblemAnalysis) -> "Review":
+        self._require_running_review()
+        analyst = self.stage(StageIdentity.ANALYST)
+        if analyst.status is not StageStatus.RUNNING or not isinstance(
+            analyst.inputs, AnalystStageInput
+        ):
+            raise ValueError("Analyst stage must be running before completion")
+        return self._replace_stage(
+            StageExecution(
+                identity=StageIdentity.ANALYST,
+                status=StageStatus.COMPLETED,
+                inputs=analyst.inputs,
+                output=problem_analysis,
+            )
+        )
+
+    def fail_analyst(self, error: ReviewError) -> "Review":
+        self._require_running_review()
+        analyst = self.stage(StageIdentity.ANALYST)
+        if analyst.status is not StageStatus.RUNNING or not isinstance(
+            analyst.inputs, AnalystStageInput
+        ):
+            raise ValueError("Analyst stage must be running before failure")
+        return self._replace_stage(
+            StageExecution(
+                identity=StageIdentity.ANALYST,
+                status=StageStatus.FAILED,
+                inputs=analyst.inputs,
+                error=error,
+            ),
+            review_status=ReviewStatus.INCOMPLETE,
+        )
+
+    def start_solution_architect(self) -> "Review":
+        self._require_running_review()
+        analyst = self.stage(StageIdentity.ANALYST)
+        architect = self.stage(StageIdentity.SOLUTION_ARCHITECT)
+        if analyst.status is not StageStatus.COMPLETED or not isinstance(
+            analyst.output, ProblemAnalysis
+        ):
+            raise ValueError("Analyst must be completed before Solution Architect starts")
+        if architect.status is not StageStatus.PENDING:
+            raise ValueError("Solution Architect stage must be pending before start")
+        return self._replace_stage(
+            StageExecution(
+                identity=StageIdentity.SOLUTION_ARCHITECT,
+                status=StageStatus.RUNNING,
+                inputs=SolutionArchitectStageInput(
+                    review_input=self.review_input,
+                    problem_analysis=analyst.output,
+                ),
+            )
+        )
+
+    def complete_solution_architect(self, alternatives: SolutionAlternatives) -> "Review":
+        self._require_running_review()
+        architect = self.stage(StageIdentity.SOLUTION_ARCHITECT)
+        if architect.status is not StageStatus.RUNNING or not isinstance(
+            architect.inputs, SolutionArchitectStageInput
+        ):
+            raise ValueError("Solution Architect stage must be running before completion")
+        return self._replace_stage(
+            StageExecution(
+                identity=StageIdentity.SOLUTION_ARCHITECT,
+                status=StageStatus.COMPLETED,
+                inputs=architect.inputs,
+                output=alternatives,
+            )
+        )
+
+    def fail_solution_architect(self, error: ReviewError) -> "Review":
+        self._require_running_review()
+        architect = self.stage(StageIdentity.SOLUTION_ARCHITECT)
+        if architect.status is not StageStatus.RUNNING or not isinstance(
+            architect.inputs, SolutionArchitectStageInput
+        ):
+            raise ValueError("Solution Architect stage must be running before failure")
+        return self._replace_stage(
+            StageExecution(
+                identity=StageIdentity.SOLUTION_ARCHITECT,
+                status=StageStatus.FAILED,
+                inputs=architect.inputs,
+                error=error,
+            ),
+            review_status=ReviewStatus.INCOMPLETE,
+        )
+
+    def _require_running_review(self) -> None:
+        if self.status is not ReviewStatus.RUNNING:
+            raise ValueError("review must be running for this transition")
+
+    def _replace_stage(
+        self,
+        replacement: StageExecution,
+        *,
+        review_status: ReviewStatus | None = None,
+    ) -> "Review":
+        stages = tuple(
+            replacement if stage.identity is replacement.identity else stage
+            for stage in self.stages
+        )
+        return Review(
+            review_input=self.review_input,
+            status=self.status if review_status is None else review_status,
+            stages=stages,
         )
