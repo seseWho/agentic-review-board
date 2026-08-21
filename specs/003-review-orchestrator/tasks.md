@@ -2,7 +2,7 @@
 
 **Input**: Approved design documents from `specs/003-review-orchestrator/`  
 **Prerequisites**: approved `spec.md`, `plan.md`, `data-model.md`, accepted `docs/adr/ADR-0001-pydantic-v2-for-structured-contracts.md`, and merged Slice 1 + Slice 2 contracts on `main`  
-**Status**: Approved — ready for implementation
+**Status**: Complete — verified by CI run #52
 
 Tests are mandatory because Slice 3 introduces lifecycle state, cross-stage provenance, failure propagation, and dependency ordering that must remain deterministic, inspectable, and provider-neutral.
 
@@ -27,13 +27,13 @@ Every implementation task follows:
 
 ### Tests first
 
-- [ ] T001 [US2] Create `tests/unit/test_review_execution.py` with contract tests for exact `StageIdentity`, `StageStatus`, `ReviewStatus`, and `ReviewErrorKind` values; closed/frozen `ReviewError`, `AnalystStageInput`, `SolutionArchitectStageInput`, `StageExecution`, and `Review`; immutable stage tuples; strict non-empty `ReviewError.message`; canonical `Review.create(...)`; exactly five unique canonical stage identities; `CREATED` review status; five fresh `PENDING` stages; and absence of inputs/output/error in every newly created stage.
-- [ ] T002 [US3] Extend `tests/unit/test_review_execution.py` with the full local `StageExecution` state matrix and identity/type tests: valid `PENDING`, `RUNNING`, `COMPLETED`, and `FAILED` shapes; rejection of output+error coexistence; Analyst accepting only `AnalystStageInput`/`ProblemAnalysis`; Solution Architect accepting only `SolutionArchitectStageInput`/`SolutionAlternatives`; and Risk Reviewer/Critic/Coordinator restricted to `PENDING` with no inputs/output/error in Slice 3.
+- [X] T001 [US2] Create `tests/unit/test_review_execution.py` with contract tests for exact `StageIdentity`, `StageStatus`, `ReviewStatus`, and `ReviewErrorKind` values; closed/frozen `ReviewError`, `AnalystStageInput`, `SolutionArchitectStageInput`, `StageExecution`, and `Review`; immutable stage tuples; strict non-empty `ReviewError.message`; canonical `Review.create(...)`; exactly five unique canonical stage identities; `CREATED` review status; five fresh `PENDING` stages; and absence of inputs/output/error in every newly created stage.
+- [X] T002 [US3] Extend `tests/unit/test_review_execution.py` with the full local `StageExecution` state matrix and identity/type tests: valid `PENDING`, `RUNNING`, `COMPLETED`, and `FAILED` shapes; rejection of output+error coexistence; Analyst accepting only `AnalystStageInput`/`ProblemAnalysis`; Solution Architect accepting only `SolutionArchitectStageInput`/`SolutionAlternatives`; and Risk Reviewer/Critic/Coordinator restricted to `PENDING` with no inputs/output/error in Slice 3.
 
 ### Implementation
 
-- [ ] T003 [US2] Create `src/agentic_review_board/domain/execution.py` with the closed lifecycle enums, `ReviewError`, stage-local input contracts, `StageInput`, `StageOutput`, `StageExecution`, canonical stage ordering, and `Review.create(...)`, using Pydantic v2 closed/frozen models and tuple-backed immutable collections exactly as approved in `data-model.md`.
-- [ ] T004 [US3] Complete `StageExecution` validation in `src/agentic_review_board/domain/execution.py` so every status/input/output/error combination and stage identity/type combination is fail-closed, including the pending-only restriction for the three unimplemented stages.
+- [X] T003 [US2] Create `src/agentic_review_board/domain/execution.py` with the closed lifecycle enums, `ReviewError`, stage-local input contracts, `StageInput`, `StageOutput`, `StageExecution`, canonical stage ordering, and `Review.create(...)`, using Pydantic v2 closed/frozen models and tuple-backed immutable collections exactly as approved in `data-model.md`.
+- [X] T004 [US3] Complete `StageExecution` validation in `src/agentic_review_board/domain/execution.py` so every status/input/output/error combination and stage identity/type combination is fail-closed, including the pending-only restriction for the three unimplemented stages.
 
 **Checkpoint**: `tests/unit/test_review_execution.py` passes for model construction and local stage invariants without invoking any participant or `LLMPort`.
 
@@ -47,13 +47,13 @@ Every implementation task follows:
 
 ### Tests first
 
-- [ ] T005 [US2] Extend `tests/unit/test_review_execution.py` with review-global lifecycle cases for every valid Slice 3 `RUNNING` prefix, both valid `INCOMPLETE` shapes, rejection of `CREATED` with non-pending stages, rejection of `RUNNING` with a failed stage, rejection of Solution Architect starting before Analyst completion, rejection of `INCOMPLETE` without exactly one failed implemented stage, rejection of both implemented stages failed, and proof that no valid Slice 3 `COMPLETED` review can be constructed while the later three stages are pending-only.
-- [ ] T006 [US3] Extend `tests/unit/test_review_execution.py` with cross-stage provenance cases proving that executed Analyst/Solution Architect input records must reference the current Review's exact `ReviewInput` instance, that Solution Architect must reference the exact trusted `ProblemAnalysis` instance owned by the completed Analyst stage, and that equal-but-independent or cross-review artifacts are rejected as execution provenance.
+- [X] T005 [US2] Extend `tests/unit/test_review_execution.py` with review-global lifecycle cases for every valid Slice 3 `RUNNING` prefix, both valid `INCOMPLETE` shapes, rejection of `CREATED` with non-pending stages, rejection of `RUNNING` with a failed stage, rejection of Solution Architect starting before Analyst completion, rejection of `INCOMPLETE` without exactly one failed implemented stage, rejection of both implemented stages failed, and proof that no valid Slice 3 `COMPLETED` review can be constructed while the later three stages are pending-only.
+- [X] T006 [US3] Extend `tests/unit/test_review_execution.py` with cross-stage provenance cases proving that executed Analyst/Solution Architect input records must reference the current Review's exact `ReviewInput` instance, that Solution Architect must reference the exact trusted `ProblemAnalysis` instance owned by the completed Analyst stage, and that equal-but-independent or cross-review artifacts are rejected as execution provenance.
 
 ### Implementation
 
-- [ ] T007 [US2] Complete `Review` aggregate validation in `src/agentic_review_board/domain/execution.py` for the exact five-stage set, review-status/stage-state coherence, valid sequential prefixes, valid incomplete-review patterns, later-stage pending-only semantics, and Slice 3 `COMPLETED` impossibility.
-- [ ] T008 [US3] Add same-instance provenance validation in `src/agentic_review_board/domain/execution.py` for `ReviewInput` and Analyst→Solution Architect handoff, keeping this identity rule explicitly limited to the current in-memory/no-rehydration Slice 3 model.
+- [X] T007 [US2] Complete `Review` aggregate validation in `src/agentic_review_board/domain/execution.py` for the exact five-stage set, review-status/stage-state coherence, valid sequential prefixes, valid incomplete-review patterns, later-stage pending-only semantics, and Slice 3 `COMPLETED` impossibility.
+- [X] T008 [US3] Add same-instance provenance validation in `src/agentic_review_board/domain/execution.py` for `ReviewInput` and Analyst→Solution Architect handoff, keeping this identity rule explicitly limited to the current in-memory/no-rehydration Slice 3 model.
 
 **Checkpoint**: The execution domain independently rejects every representative globally inconsistent or cross-review state described in `data-model.md`.
 
@@ -67,13 +67,13 @@ Every implementation task follows:
 
 ### Tests first
 
-- [ ] T009 [US2] Extend `tests/unit/test_review_execution.py` with transition tests for `start`, `start_analyst`, `complete_analyst`, `start_solution_architect`, and `complete_solution_architect`; assert original `ReviewInput` preservation, exact trusted-object reuse, unchanged unaffected stages, canonical stage order preservation, and explicit rejection of illegal/repeated/terminal transition attempts.
-- [ ] T010 [US4] Extend `tests/unit/test_review_execution.py` with `fail_analyst` and `fail_solution_architect` transition tests proving one-step construction of valid `INCOMPLETE + FAILED` snapshots, preservation of recorded inputs, absence of trusted output on the failed stage, preservation of earlier completed Analyst output when Solution Architect fails, and no valid intermediate `RUNNING + FAILED` Review snapshot.
+- [X] T009 [US2] Extend `tests/unit/test_review_execution.py` with transition tests for `start`, `start_analyst`, `complete_analyst`, `start_solution_architect`, and `complete_solution_architect`; assert original `ReviewInput` preservation, exact trusted-object reuse, unchanged unaffected stages, canonical stage order preservation, and explicit rejection of illegal/repeated/terminal transition attempts.
+- [X] T010 [US4] Extend `tests/unit/test_review_execution.py` with `fail_analyst` and `fail_solution_architect` transition tests proving one-step construction of valid `INCOMPLETE + FAILED` snapshots, preservation of recorded inputs, absence of trusted output on the failed stage, preservation of earlier completed Analyst output when Solution Architect fails, and no valid intermediate `RUNNING + FAILED` Review snapshot.
 
 ### Implementation
 
-- [ ] T011 [US2] Implement the explicit immutable Review transition operations in `src/agentic_review_board/domain/execution.py`, rebuilding complete validated target `Review` snapshots rather than mutating models or using unchecked `model_copy(update=...)`; include identity-based `Review.stage(...)` lookup and explicit precondition failures.
-- [ ] T012 [US4] Complete atomic failure transitions in `src/agentic_review_board/domain/execution.py` so failed stage state and overall `INCOMPLETE` status are constructed together, dependent stages remain `PENDING`, and prior completed artifacts remain inspectable.
+- [X] T011 [US2] Implement the explicit immutable Review transition operations in `src/agentic_review_board/domain/execution.py`, rebuilding complete validated target `Review` snapshots rather than mutating models or using unchecked `model_copy(update=...)`; include identity-based `Review.stage(...)` lookup and explicit precondition failures.
+- [X] T012 [US4] Complete atomic failure transitions in `src/agentic_review_board/domain/execution.py` so failed stage state and overall `INCOMPLETE` status are constructed together, dependent stages remain `PENDING`, and prior completed artifacts remain inspectable.
 
 **Checkpoint**: All domain lifecycle transitions are deterministic, immutable, fully validated, and require no orchestration framework.
 
@@ -87,12 +87,12 @@ Every implementation task follows:
 
 ### Tests first
 
-- [ ] T013 [US1] Create `tests/unit/test_review_orchestrator.py` with a successful deterministic orchestration scenario using the existing participants and a shared recording fake `LLMPort`; assert review `CREATED → RUNNING`, exact role call order `analyst` then `solution_architect`, each participant invoked once, stage inputs recorded before the corresponding invocation, exact same-instance `ReviewInput` and `ProblemAnalysis` provenance, both implemented stages `COMPLETED`, later three stages `PENDING`, final Slice 3 review status still `RUNNING`, and absence of ranking/final-review behavior.
-- [ ] T014 [US1] Extend `tests/unit/test_review_orchestrator.py` with a valid zero-alternative `SolutionAlternatives` scenario proving it completes Solution Architect successfully and leaves the review `RUNNING` rather than `INCOMPLETE`.
+- [X] T013 [US1] Create `tests/unit/test_review_orchestrator.py` with a successful deterministic orchestration scenario using the existing participants and a shared recording fake `LLMPort`; assert review `CREATED → RUNNING`, exact role call order `analyst` then `solution_architect`, each participant invoked once, stage inputs recorded before the corresponding invocation, exact same-instance `ReviewInput` and `ProblemAnalysis` provenance, both implemented stages `COMPLETED`, later three stages `PENDING`, final Slice 3 review status still `RUNNING`, and absence of ranking/final-review behavior.
+- [X] T014 [US1] Extend `tests/unit/test_review_orchestrator.py` with a valid zero-alternative `SolutionAlternatives` scenario proving it completes Solution Architect successfully and leaves the review `RUNNING` rather than `INCOMPLETE`.
 
 ### Implementation
 
-- [ ] T015 [US1] Create `src/agentic_review_board/application/orchestrator.py` with `ReviewOrchestrator(analyst, solution_architect)` and an explicit synchronous `execute(created_review)` sequence: start Review, start Analyst, invoke `Analyst.analyze`, complete Analyst, start Solution Architect using the trusted Analyst output from the current Review, invoke `SolutionArchitect.propose`, complete Solution Architect, and return the still-`RUNNING` Review; do not introduce a generic stage loop/registry and do not depend on `LLMPort` directly.
+- [X] T015 [US1] Create `src/agentic_review_board/application/orchestrator.py` with `ReviewOrchestrator(analyst, solution_architect)` and an explicit synchronous `execute(created_review)` sequence: start Review, start Analyst, invoke `Analyst.analyze`, complete Analyst, start Solution Architect using the trusted Analyst output from the current Review, invoke `SolutionArchitect.propose`, complete Solution Architect, and return the still-`RUNNING` Review; do not introduce a generic stage loop/registry and do not depend on `LLMPort` directly.
 
 **Checkpoint**: Happy-path Slice 3 orchestration succeeds with a deterministic fake, no network access, no provider SDK, and no later participant behavior.
 
@@ -106,13 +106,13 @@ Every implementation task follows:
 
 ### Tests first
 
-- [ ] T016 [US4] Extend `tests/unit/test_review_orchestrator.py` with Analyst failure cases for `AnalystOutputError` and an unrelated ordinary participant-call exception; assert Analyst `FAILED`, preserved Analyst input provenance, no trusted Analyst output, Solution Architect never invoked and remains `PENDING`, later stages remain `PENDING`, overall `INCOMPLETE`, `OUTPUT_VALIDATION` versus `EXECUTION` classification, and stable safe error text without copied raw exception details.
-- [ ] T017 [US4] Extend `tests/unit/test_review_orchestrator.py` with Solution Architect failure cases for `SolutionArchitectOutputError` and an unrelated ordinary participant-call exception; assert completed Analyst state/output remain unchanged and inspectable, Solution Architect `FAILED` with preserved inputs and no trusted output, later stages remain `PENDING`, overall `INCOMPLETE`, and correct safe error classification/message.
-- [ ] T018 [US4] Extend `tests/unit/test_review_orchestrator.py` with an application/lifecycle misuse case proving an error raised outside the actual participant invocation boundary is propagated to the caller and is not converted into a participant `ReviewError`; also prove `KeyboardInterrupt`/`SystemExit`-class control-flow signals are not intentionally swallowed by ordinary `Exception` handling.
+- [X] T016 [US4] Extend `tests/unit/test_review_orchestrator.py` with Analyst failure cases for `AnalystOutputError` and an unrelated ordinary participant-call exception; assert Analyst `FAILED`, preserved Analyst input provenance, no trusted Analyst output, Solution Architect never invoked and remains `PENDING`, later stages remain `PENDING`, overall `INCOMPLETE`, `OUTPUT_VALIDATION` versus `EXECUTION` classification, and stable safe error text without copied raw exception details.
+- [X] T017 [US4] Extend `tests/unit/test_review_orchestrator.py` with Solution Architect failure cases for `SolutionArchitectOutputError` and an unrelated ordinary participant-call exception; assert completed Analyst state/output remain unchanged and inspectable, Solution Architect `FAILED` with preserved inputs and no trusted output, later stages remain `PENDING`, overall `INCOMPLETE`, and correct safe error classification/message.
+- [X] T018 [US4] Extend `tests/unit/test_review_orchestrator.py` with an application/lifecycle misuse case proving an error raised outside the actual participant invocation boundary is propagated to the caller and is not converted into a participant `ReviewError`; also prove `KeyboardInterrupt`/`SystemExit`-class control-flow signals are not intentionally swallowed by ordinary `Exception` handling.
 
 ### Implementation
 
-- [ ] T019 [US4] Complete the participant failure boundaries in `src/agentic_review_board/application/orchestrator.py`: catch `AnalystOutputError`/`SolutionArchitectOutputError` only around their respective participant calls as `OUTPUT_VALIDATION`; map other ordinary participant-call `Exception` values to `EXECUTION`; use the four approved stable safe messages; invoke the corresponding atomic domain failure transition; return immediately after mandatory failure; and leave all domain/orchestrator errors outside those call boundaries unsuppressed.
+- [X] T019 [US4] Complete the participant failure boundaries in `src/agentic_review_board/application/orchestrator.py`: catch `AnalystOutputError`/`SolutionArchitectOutputError` only around their respective participant calls as `OUTPUT_VALIDATION`; map other ordinary participant-call `Exception` values to `EXECUTION`; use the four approved stable safe messages; invoke the corresponding atomic domain failure transition; return immediately after mandatory failure; and leave all domain/orchestrator errors outside those call boundaries unsuppressed.
 
 **Checkpoint**: Every representative participant failure fails closed, preserves valid upstream evidence, stops dependent execution, and stores no raw exception diagnostics in trusted review state.
 
@@ -126,11 +126,11 @@ Every implementation task follows:
 
 ### Tests first
 
-- [ ] T020 [US5] Extend `tests/unit/test_review_orchestrator.py` with sequential success→success and incomplete→fresh-review cases proving every `Review.create(...)` starts `CREATED` with five fresh `PENDING` stage records, the second review inherits no prior inputs/outputs/errors/status, each review preserves its own original `ReviewInput` instance, and Solution Architect receives only the Analyst artifact produced in its own current review.
+- [X] T020 [US5] Extend `tests/unit/test_review_orchestrator.py` with sequential success→success and incomplete→fresh-review cases proving every `Review.create(...)` starts `CREATED` with five fresh `PENDING` stage records, the second review inherits no prior inputs/outputs/errors/status, each review preserves its own original `ReviewInput` instance, and Solution Architect receives only the Analyst artifact produced in its own current review.
 
 ### Implementation/confirmation
 
-- [ ] T021 [US5] Confirm `src/agentic_review_board/application/orchestrator.py` stores only participant dependencies and no mutable/current/previous Review state; make only the minimum production change required if T020 exposes state leakage, without introducing an active-review repository or singleton.
+- [X] T021 [US5] Confirm `src/agentic_review_board/application/orchestrator.py` stores only participant dependencies and no mutable/current/previous Review state; make only the minimum production change required if T020 exposes state leakage, without introducing an active-review repository or singleton.
 
 **Checkpoint**: Sequential reviews are isolated while sharing the same participant/orchestrator objects.
 
@@ -140,11 +140,11 @@ Every implementation task follows:
 
 **Purpose**: Prove Slice 3 satisfies its approved scope and did not introduce accidental architecture expansion.
 
-- [ ] T022 Run the complete deterministic `pytest` suite with no live LLM/network dependency and confirm all Slice 1, Slice 2, and new Slice 3 tests pass.
-- [ ] T023 Run `ruff check .` and resolve all violations introduced by Slice 3 without weakening repository rules.
-- [ ] T024 Run `mypy` under the repository strict configuration and resolve all Slice 3 typing errors, especially `StageInput`/`StageOutput` narrowing and Review stage lookup, without adding a new plugin/dependency unless separately justified and approved.
-- [ ] T025 Run `pip check`, then inspect `pyproject.toml` and `src/agentic_review_board/` to confirm Slice 3 adds no production dependency, concrete provider SDK, direct Orchestrator→`LLMPort` dependency, Risk Reviewer/Critic/Coordinator implementation, ranking/final-decision logic, persistence, RAG, UI, tools, retries/timeouts, generic workflow engine, stage registry, or artifact repository.
-- [ ] T026 Review the final implementation against `specs/003-review-orchestrator/spec.md`, `plan.md`, `data-model.md`, `docs/02-requirements.md`, `docs/03-architecture.md`, `docs/04-agent-model.md`, `docs/05-quality-security.md`, the Constitution, and ADR-0001; confirm the exact successful end state remains `RUNNING + Analyst COMPLETED + Solution Architect COMPLETED + three later PENDING`, known participant failures are distinguishable from generic execution failures, and no unsupported claim of complete review is introduced.
+- [X] T022 Run the complete deterministic `pytest` suite with no live LLM/network dependency and confirm all Slice 1, Slice 2, and new Slice 3 tests pass.
+- [X] T023 Run `ruff check .` and resolve all violations introduced by Slice 3 without weakening repository rules.
+- [X] T024 Run `mypy` under the repository strict configuration and resolve all Slice 3 typing errors, especially `StageInput`/`StageOutput` narrowing and Review stage lookup, without adding a new plugin/dependency unless separately justified and approved.
+- [X] T025 Run `pip check`, then inspect `pyproject.toml` and `src/agentic_review_board/` to confirm Slice 3 adds no production dependency, concrete provider SDK, direct Orchestrator→`LLMPort` dependency, Risk Reviewer/Critic/Coordinator implementation, ranking/final-decision logic, persistence, RAG, UI, tools, retries/timeouts, generic workflow engine, stage registry, or artifact repository.
+- [X] T026 Review the final implementation against `specs/003-review-orchestrator/spec.md`, `plan.md`, `data-model.md`, `docs/02-requirements.md`, `docs/03-architecture.md`, `docs/04-agent-model.md`, `docs/05-quality-security.md`, the Constitution, and ADR-0001; confirm the exact successful end state remains `RUNNING + Analyst COMPLETED + Solution Architect COMPLETED + three later PENDING`, known participant failures are distinguishable from generic execution failures, and no unsupported claim of complete review is introduced.
 
 **Final checkpoint**: T001–T026 complete, full deterministic suite green, Ruff/mypy/pip checks green, architectural scope confirmed, and Slice 3 remains limited to Review Orchestrator v0.1.
 
