@@ -1,3 +1,4 @@
+from agentic_review_board.domain.analysis import ProblemAnalysis
 from agentic_review_board.domain.execution import Review, StageIdentity
 from agentic_review_board.participants.analyst import Analyst
 from agentic_review_board.participants.solution_architect import SolutionArchitect
@@ -23,8 +24,8 @@ class ReviewOrchestrator:
 
         review = review.start_solution_architect()
         analyst_stage = review.stage(StageIdentity.ANALYST)
-        if analyst_stage.output is None:
-            raise ValueError("completed Analyst stage must expose trusted output")
+        if not isinstance(analyst_stage.output, ProblemAnalysis):
+            raise ValueError("completed Analyst stage must expose trusted ProblemAnalysis")
         solution_alternatives = self._solution_architect.propose(
             review.review_input,
             analyst_stage.output,
