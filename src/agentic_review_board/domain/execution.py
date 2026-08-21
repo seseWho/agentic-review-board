@@ -167,6 +167,87 @@ class Review(BaseModel):
     status: ReviewStatus
     stages: tuple[StageExecution, ...]
 
+    @model_validator(mode="after")
+    def validate_review_state(self) -> Self:
+        self._validate_canonical_stage_set()
+        self._validate_same_execution_provenance()
+        self._validate_lifecycle_consistency()
+        return self
+
+    def _validate_canonical_stage_set(self) -> None:
+        identities = tuple(stage.identity for stage in self.stages)
+        if identities != CANONICAL_STAGE_ORDER:
+            raise ValueError("review must contain the five canonical stages in canonical order")
+
+    def _validate_same_execution_provenance(self) -> None:
+        analyst = self.stages[0]
+        architect = self.stages[1]
+
+        if analyst.status is not StageStatus.PENDING:
+            if not isinstance(analyst.inputs, AnalystStageInput):
+                raise ValueError("executed Analyst stage must expose AnalystStageInput")
+            if analyst.inputs.review_input is not self.review_input:
+                raise ValueError("Analyst input must reference the current ReviewInput instance")
+
+        if architect.status is not StageStatus.PENDING:
+            if not isinstance(architect.inputs, SolutionArchitectStageInput):
+                raise ValueError(
+                    "executed Solution Architect stage must expose SolutionArchitectStageInput"
+                )
+            if architect.inputs.review_input is not self.review_input:
+                raise ValueError(
+                    "Solution Architect input must reference the current ReviewInput instance"
+                )
+            if analyst.status is not StageStatus.COMPLETED:
+                raise ValueError("Solution Architect requires a completed Analyst stage")
+            if not isinstance(analyst.output, ProblemAnalysis):
+                raise ValueError("completed Analyst stage must expose ProblemAnalysis")
+            if architect.inputs.problem_analysis is not analyst.output:
+                raise ValueError(
+                    "Solution Architect must reference the exact current Analyst output instance"
+                )
+
+    def _validate_lifecycle_consistency(self) -> None:
+        analyst = self.stages[0]
+        architect = self.stages[1]
+        later = self.stages[2:]
+
+        if any(stage.status is not StageStatus.PENDING for stage in later):
+            raise ValueError("later Slice 3 stages must remain pending")
+
+        if self.status is ReviewStatus.CREATED:
+            if any(stage.status is not StageStatus.PENDING for stage in self.stages):
+                raise ValueError("created review requires all stages pending")
+            return
+
+        if self.status is ReviewStatus.RUNNING:
+            valid_prefixes = {
+                (StageStatus.PENDING, StageStatus.PENDING),
+                (StageStatus.RUNNING, StageStatus.PENDING),
+                (StageStatus.COMPLETED, StageStatus.PENDING),
+                (StageStatus.COMPLETED, StageStatus.RUNNING),
+                (StageStatus.COMPLETED, StageStatus.COMPLETED),
+            }
+            if (analyst.status, architect.status) not in valid_prefixes:
+                raise ValueError("running review has an invalid Slice 3 stage prefix")
+            return
+
+        if self.status is ReviewStatus.INCOMPLETE:
+            valid_failures = {
+                (StageStatus.FAILED, StageStatus.PENDING),
+                (StageStatus.COMPLETED, StageStatus.FAILED),
+            }
+            if (analyst.status, architect.status) not in valid_failures:
+                raise ValueError("incomplete review must contain one failed implemented stage")
+            return
+
+        if self.status is ReviewStatus.COMPLETED:
+            if any(stage.status is not StageStatus.COMPLETED for stage in self.stages):
+                raise ValueError("completed review requires all five stages completed")
+            return
+
+        raise ValueError("unsupported review status")
+
     @classmethod
     def create(cls, review_input: ReviewInput) -> "Review":
         return cls(
