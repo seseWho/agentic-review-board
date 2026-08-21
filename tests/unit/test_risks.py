@@ -12,6 +12,7 @@ from agentic_review_board.domain.risks import (
     SolutionAlternativeBasisReference,
     SolutionAlternativeCharacteristicKind,
 )
+from agentic_review_board.domain.solutions import ConstraintReference
 
 
 def test_overall_scope_requires_no_alternative_ids() -> None:
@@ -207,3 +208,143 @@ def test_risk_basis_reference_rejects_unknown_discriminator_value() -> None:
                 "value": "Unsupported provenance.",
             }
         )
+
+
+def test_review_input_basis_reference_rejects_blank_value() -> None:
+    with pytest.raises(ValidationError):
+        ReviewInputBasisReference.model_validate(
+            {
+                "source": "REVIEW_INPUT",
+                "field": "description",
+                "value": " ",
+            }
+        )
+
+
+def test_problem_analysis_basis_reference_rejects_blank_text_and_optional_id() -> None:
+    with pytest.raises(ValidationError):
+        ProblemAnalysisBasisReference.model_validate(
+            {
+                "source": "PROBLEM_ANALYSIS",
+                "kind": "FACT",
+                "text": " ",
+            }
+        )
+
+    with pytest.raises(ValidationError):
+        ProblemAnalysisBasisReference.model_validate(
+            {
+                "source": "PROBLEM_ANALYSIS",
+                "kind": "FACT",
+                "text": "The capability must run offline.",
+                "id": " ",
+            }
+        )
+
+
+def test_solution_alternative_basis_reference_rejects_blank_required_text() -> None:
+    with pytest.raises(ValidationError):
+        SolutionAlternativeBasisReference.model_validate(
+            {
+                "source": "SOLUTION_ALTERNATIVE",
+                "alternative_id": " ",
+                "characteristic": "DESCRIPTION",
+                "value": "Run the capability locally.",
+            }
+        )
+
+    with pytest.raises(ValidationError):
+        SolutionAlternativeBasisReference.model_validate(
+            {
+                "source": "SOLUTION_ALTERNATIVE",
+                "alternative_id": "ALT-001",
+                "characteristic": "DESCRIPTION",
+                "value": " ",
+            }
+        )
+
+
+def test_relevant_constraint_requires_structured_constraint_reference() -> None:
+    reference = SolutionAlternativeBasisReference.model_validate(
+        {
+            "source": "SOLUTION_ALTERNATIVE",
+            "alternative_id": "ALT-001",
+            "characteristic": "RELEVANT_CONSTRAINT",
+            "value": {
+                "source": "PROBLEM_ANALYSIS",
+                "kind": "ID",
+                "value": "CON-001",
+            },
+        }
+    )
+
+    assert isinstance(reference.value, ConstraintReference)
+
+    with pytest.raises(ValidationError):
+        SolutionAlternativeBasisReference.model_validate(
+            {
+                "source": "SOLUTION_ALTERNATIVE",
+                "alternative_id": "ALT-001",
+                "characteristic": "RELEVANT_CONSTRAINT",
+                "value": "CON-001",
+            }
+        )
+
+
+def test_non_constraint_characteristics_require_strict_text_value() -> None:
+    constraint = ConstraintReference.model_validate(
+        {
+            "source": "PROBLEM_ANALYSIS",
+            "kind": "ID",
+            "value": "CON-001",
+        }
+    )
+
+    with pytest.raises(ValidationError):
+        SolutionAlternativeBasisReference(
+            alternative_id="ALT-001",
+            characteristic=SolutionAlternativeCharacteristicKind.DESCRIPTION,
+            value=constraint,
+        )
+
+
+@pytest.mark.parametrize(
+    ("model", "payload"),
+    [
+        (
+            ReviewInputBasisReference,
+            {
+                "source": "REVIEW_INPUT",
+                "field": "description",
+                "value": "Review a proposed technical change.",
+            },
+        ),
+        (
+            ProblemAnalysisBasisReference,
+            {
+                "source": "PROBLEM_ANALYSIS",
+                "kind": "FACT",
+                "text": "The capability must run offline.",
+            },
+        ),
+        (
+            SolutionAlternativeBasisReference,
+            {
+                "source": "SOLUTION_ALTERNATIVE",
+                "alternative_id": "ALT-001",
+                "characteristic": "DESCRIPTION",
+                "value": "Run the capability locally.",
+            },
+        ),
+    ],
+)
+def test_basis_reference_variants_forbid_extra_fields(
+    model: type[
+        ReviewInputBasisReference
+        | ProblemAnalysisBasisReference
+        | SolutionAlternativeBasisReference
+    ],
+    payload: dict[str, object],
+) -> None:
+    with pytest.raises(ValidationError):
+        model.model_validate({**payload, "unexpected": "not allowed"})
