@@ -1,7 +1,13 @@
 import pytest
 from pydantic import ValidationError
 
-from agentic_review_board.domain.risks import RiskScope, RiskScopeKind
+from agentic_review_board.domain.risks import (
+    ProblemAnalysisFindingKind,
+    RiskBasisSource,
+    RiskScope,
+    RiskScopeKind,
+    SolutionAlternativeCharacteristicKind,
+)
 
 
 def test_overall_scope_requires_no_alternative_ids() -> None:
@@ -65,3 +71,41 @@ def test_scope_is_closed_frozen_and_tuple_backed() -> None:
                 "unexpected": "not allowed",
             }
         )
+
+
+def test_risk_basis_source_values_are_closed_and_exact() -> None:
+    assert tuple(member.value for member in RiskBasisSource) == (
+        "REVIEW_INPUT",
+        "PROBLEM_ANALYSIS",
+        "SOLUTION_ALTERNATIVE",
+    )
+
+    with pytest.raises(ValueError):
+        RiskBasisSource("EXTERNAL_SOURCE")
+
+
+def test_problem_analysis_finding_kind_values_are_closed_and_exact() -> None:
+    assert tuple(member.value for member in ProblemAnalysisFindingKind) == (
+        "FACT",
+        "CONSTRAINT",
+        "ASSUMPTION",
+        "MISSING_INFORMATION",
+        "UNCERTAINTY",
+    )
+
+    with pytest.raises(ValueError):
+        ProblemAnalysisFindingKind("RECOMMENDATION")
+
+
+def test_solution_alternative_characteristic_kind_values_are_closed_and_exact() -> None:
+    assert tuple(member.value for member in SolutionAlternativeCharacteristicKind) == (
+        "DESCRIPTION",
+        "ADVANTAGE",
+        "DISADVANTAGE",
+        "ASSUMPTION",
+        "IMPLEMENTATION_COMPLEXITY",
+        "RELEVANT_CONSTRAINT",
+    )
+
+    with pytest.raises(ValueError):
+        SolutionAlternativeCharacteristicKind("NAME")
