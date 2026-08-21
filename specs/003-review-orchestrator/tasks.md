@@ -2,7 +2,7 @@
 
 **Input**: Approved design documents from `specs/003-review-orchestrator/`  
 **Prerequisites**: approved `spec.md`, `plan.md`, `data-model.md`, accepted `docs/adr/ADR-0001-pydantic-v2-for-structured-contracts.md`, and merged Slice 1 + Slice 2 contracts on `main`  
-**Status**: Draft — internally reviewed, awaiting user approval
+**Status**: Approved — ready for implementation
 
 Tests are mandatory because Slice 3 introduces lifecycle state, cross-stage provenance, failure propagation, and dependency ordering that must remain deterministic, inspectable, and provider-neutral.
 
