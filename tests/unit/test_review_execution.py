@@ -14,6 +14,7 @@ from agentic_review_board.domain.execution import (
     StageStatus,
 )
 from agentic_review_board.domain.review import ReviewInput
+from agentic_review_board.domain.solutions import SolutionAlternatives
 
 
 def valid_review_input() -> ReviewInput:
@@ -32,6 +33,26 @@ def valid_problem_analysis() -> ProblemAnalysis:
         assumptions=(),
         missing_information=(),
         uncertainties=(),
+    )
+
+
+def valid_solution_alternatives() -> SolutionAlternatives:
+    return SolutionAlternatives.model_validate(
+        {
+            "alternatives": [],
+            "generation_notes": {
+                "explanation": "The available evidence is insufficient for useful alternatives.",
+                "blocking_missing_information": [],
+                "blocking_uncertainties": [],
+            },
+        }
+    )
+
+
+def execution_error() -> ReviewError:
+    return ReviewError(
+        kind=ReviewErrorKind.EXECUTION,
+        message="Analyst execution failed",
     )
 
 
@@ -146,3 +167,196 @@ def test_review_create_builds_fresh_canonical_created_state() -> None:
         assert stage.inputs is None
         assert stage.output is None
         assert stage.error is None
+
+
+def test_analyst_stage_accepts_exact_valid_local_lifecycle_shapes() -> None:
+    review_input = valid_review_input()
+    inputs = AnalystStageInput(review_input=review_input)
+    analysis = valid_problem_analysis()
+
+    pending = StageExecution(identity=StageIdentity.ANALYST, status=StageStatus.PENDING)
+    running = StageExecution(
+        identity=StageIdentity.ANALYST,
+        status=StageStatus.RUNNING,
+        inputs=inputs,
+    )
+    completed = StageExecution(
+        identity=StageIdentity.ANALYST,
+        status=StageStatus.COMPLETED,
+        inputs=inputs,
+        output=analysis,
+    )
+    failed = StageExecution(
+        identity=StageIdentity.ANALYST,
+        status=StageStatus.FAILED,
+        inputs=inputs,
+        error=execution_error(),
+    )
+
+    assert pending.inputs is None
+    assert running.inputs is inputs
+    assert completed.output is analysis
+    assert failed.error is not None
+
+
+def test_solution_architect_stage_accepts_exact_valid_local_lifecycle_shapes() -> None:
+    review_input = valid_review_input()
+    analysis = valid_problem_analysis()
+    inputs = SolutionArchitectStageInput(
+        review_input=review_input,
+        problem_analysis=analysis,
+    )
+    alternatives = valid_solution_alternatives()
+
+    pending = StageExecution(
+        identity=StageIdentity.SOLUTION_ARCHITECT,
+        status=StageStatus.PENDING,
+    )
+    running = StageExecution(
+        identity=StageIdentity.SOLUTION_ARCHITECT,
+        status=StageStatus.RUNNING,
+        inputs=inputs,
+    )
+    completed = StageExecution(
+        identity=StageIdentity.SOLUTION_ARCHITECT,
+        status=StageStatus.COMPLETED,
+        inputs=inputs,
+        output=alternatives,
+    )
+    failed = StageExecution(
+        identity=StageIdentity.SOLUTION_ARCHITECT,
+        status=StageStatus.FAILED,
+        inputs=inputs,
+        error=ReviewError(
+            kind=ReviewErrorKind.EXECUTION,
+            message="Solution Architect execution failed",
+        ),
+    )
+
+    assert pending.inputs is None
+    assert running.inputs is inputs
+    assert completed.output is alternatives
+    assert failed.error is not None
+
+
+@pytest.mark.parametrize(
+    ("status", "inputs", "output", "error"),
+    [
+        (StageStatus.PENDING, AnalystStageInput(review_input=valid_review_input()), None, None),
+        (StageStatus.PENDING, None, valid_problem_analysis(), None),
+        (StageStatus.PENDING, None, None, execution_error()),
+        (StageStatus.RUNNING, None, None, None),
+        (
+            StageStatus.RUNNING,
+            AnalystStageInput(review_input=valid_review_input()),
+            valid_problem_analysis(),
+            None,
+        ),
+        (
+            StageStatus.RUNNING,
+            AnalystStageInput(review_input=valid_review_input()),
+            None,
+            execution_error(),
+        ),
+        (
+            StageStatus.COMPLETED,
+            AnalystStageInput(review_input=valid_review_input()),
+            None,
+            None,
+        ),
+        (
+            StageStatus.COMPLETED,
+            AnalystStageInput(review_input=valid_review_input()),
+            valid_problem_analysis(),
+            execution_error(),
+        ),
+        (
+            StageStatus.FAILED,
+            AnalystStageInput(review_input=valid_review_input()),
+            None,
+            None,
+        ),
+        (
+            StageStatus.FAILED,
+            AnalystStageInput(review_input=valid_review_input()),
+            valid_problem_analysis(),
+            execution_error(),
+        ),
+    ],
+)
+def test_stage_execution_rejects_invalid_lifecycle_shapes(
+    status: StageStatus,
+    inputs: AnalystStageInput | None,
+    output: ProblemAnalysis | None,
+    error: ReviewError | None,
+) -> None:
+    with pytest.raises(ValidationError):
+        StageExecution(
+            identity=StageIdentity.ANALYST,
+            status=status,
+            inputs=inputs,
+            output=output,
+            error=error,
+        )
+
+
+def test_stage_execution_rejects_identity_input_output_mismatches() -> None:
+    review_input = valid_review_input()
+    analysis = valid_problem_analysis()
+    analyst_inputs = AnalystStageInput(review_input=review_input)
+    architect_inputs = SolutionArchitectStageInput(
+        review_input=review_input,
+        problem_analysis=analysis,
+    )
+
+    invalid_cases = (
+        {
+            "identity": StageIdentity.ANALYST,
+            "status": StageStatus.RUNNING,
+            "inputs": architect_inputs,
+        },
+        {
+            "identity": StageIdentity.ANALYST,
+            "status": StageStatus.COMPLETED,
+            "inputs": analyst_inputs,
+            "output": valid_solution_alternatives(),
+        },
+        {
+            "identity": StageIdentity.SOLUTION_ARCHITECT,
+            "status": StageStatus.RUNNING,
+            "inputs": analyst_inputs,
+        },
+        {
+            "identity": StageIdentity.SOLUTION_ARCHITECT,
+            "status": StageStatus.COMPLETED,
+            "inputs": architect_inputs,
+            "output": analysis,
+        },
+    )
+
+    for case in invalid_cases:
+        with pytest.raises(ValidationError):
+            StageExecution.model_validate(case)
+
+
+@pytest.mark.parametrize(
+    "identity",
+    [
+        StageIdentity.RISK_REVIEWER,
+        StageIdentity.CRITIC,
+        StageIdentity.COORDINATOR,
+    ],
+)
+def test_unimplemented_stages_are_pending_only(identity: StageIdentity) -> None:
+    pending = StageExecution(identity=identity, status=StageStatus.PENDING)
+
+    assert pending.inputs is None
+    assert pending.output is None
+    assert pending.error is None
+
+    with pytest.raises(ValidationError):
+        StageExecution(
+            identity=identity,
+            status=StageStatus.RUNNING,
+            inputs=AnalystStageInput(review_input=valid_review_input()),
+        )
