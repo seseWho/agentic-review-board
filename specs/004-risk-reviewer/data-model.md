@@ -4,36 +4,40 @@
 **Date**: 2026-08-21  
 **Spec**: `specs/004-risk-reviewer/spec.md`  
 **Plan**: `specs/004-risk-reviewer/plan.md`  
-**Status**: Draft — awaiting review and approval
+**Status**: Revised — awaiting review and approval
 
 ## 1. Purpose
 
 This document refines the exact Slice 4 contracts and invariants required to introduce Risk Reviewer v0.1 and extend the existing Review execution model through the third stage.
 
-The design must satisfy four simultaneous goals:
+The design must:
 
-1. represent risk exposure explicitly and inspectably;
+1. represent material risk exposure explicitly;
 2. preserve traceability to visible current-review artifacts;
-3. avoid overstating what local textual references can prove;
-4. extend the existing explicit orchestration model without introducing a generic artifact or workflow framework.
+3. distinguish generated-reference resolution from same-execution provenance;
+4. preserve fact/assumption semantics;
+5. remain minimal and specific to Risk Reviewer;
+6. extend the existing explicit orchestrator without a generic workflow/reference framework.
 
 Slice 4 remains in-memory, synchronous, provider-neutral, and persistence-free.
 
 ---
 
-## 2. Existing Contracts Reused Unchanged
+## 2. Existing Contracts Reused
 
-The following current contracts remain authoritative:
+The following existing contracts remain authoritative:
 
 ```text
 ReviewInput
+ReviewInputSource
 ProblemAnalysis
 FactFinding
 AnalysisFinding
 SolutionAlternatives
 SolutionAlternative
 ConstraintReference
-FindingReference
+ConstraintReferenceKind
+ConstraintSource
 QualitativeLevel
 ReviewError
 ReviewErrorKind
@@ -42,7 +46,7 @@ StageStatus
 ReviewStatus
 ```
 
-`QualitativeLevel` continues to mean:
+`QualitativeLevel` remains exactly:
 
 ```text
 LOW
@@ -50,13 +54,13 @@ MEDIUM
 HIGH
 ```
 
-for ordinal qualitative judgment only.
+for qualitative ordinal judgment only.
 
-No numeric probability or calibrated risk-score semantics are added.
+No probability, calibrated likelihood, risk score, expected loss, or confidence percentage is introduced.
 
 ---
 
-## 3. Risk Domain Contracts
+## 3. Risk Domain Module
 
 Add:
 
@@ -64,7 +68,7 @@ Add:
 src/agentic_review_board/domain/risks.py
 ```
 
-All models in this module SHALL be:
+All models in this module SHALL use:
 
 ```text
 Pydantic v2
@@ -72,11 +76,15 @@ extra = forbid
 frozen = true
 ```
 
-Collection fields SHALL use tuples.
+Collections SHALL use tuples.
 
 Required text SHALL be strict and non-blank.
 
-### 3.1 RiskScopeKind
+---
+
+## 4. Risk Scope
+
+### 4.1 RiskScopeKind
 
 ```text
 RiskScopeKind
@@ -86,12 +94,10 @@ RiskScopeKind
 
 Semantics:
 
-- `OVERALL`: the risk applies to the proposal/review as a whole;
-- `ALTERNATIVES`: the risk applies to one or more identified candidate alternatives.
+- `OVERALL`: applies to the proposal/review as a whole;
+- `ALTERNATIVES`: applies to one or more identified current candidate alternatives.
 
-This enum does not encode severity, ranking, probability, or recommendation.
-
-### 3.2 RiskScope
+### 4.2 RiskScope
 
 ```text
 RiskScope
@@ -102,67 +108,77 @@ RiskScope
 Intrinsic invariants:
 
 ```text
-kind == OVERALL
-→ alternative_ids must be empty
+OVERALL
+→ alternative_ids == ()
 
-kind == ALTERNATIVES
-→ alternative_ids must contain >= 1 item
-→ every id must be non-blank
-→ ids must be unique within the scope
+ALTERNATIVES
+→ len(alternative_ids) >= 1
+→ every id non-blank
+→ ids unique
 ```
 
 Contextual invariant owned by `RiskReviewer`:
 
 ```text
 for every alternative_id
-→ exactly one SolutionAlternative with that id exists
-  in the current SolutionAlternatives input
+→ exactly one current SolutionAlternative has that id
 ```
 
-If current `SolutionAlternatives.alternatives` is empty:
+If `SolutionAlternatives.alternatives` is empty:
 
 ```text
-ALTERNATIVES scope is invalid
 OVERALL scope remains valid
+ALTERNATIVES scope is contextually invalid
 ```
-
-### 3.3 RiskCategory
-
-Use a small closed enum for the canonical MVP categories:
-
-```text
-RiskCategory
-- TECHNICAL
-- SECURITY
-- PRIVACY
-- OPERATIONAL
-- MAINTAINABILITY
-- COST
-- EXTERNAL_DEPENDENCY
-- ORGANIZATIONAL
-```
-
-`Risk.category` is optional.
-
-Rationale:
-
-- the canonical Agent Model supplies these categories explicitly;
-- a closed enum gives deterministic validation;
-- no requirement exists for arbitrary organization-specific category taxonomies in Slice 4;
-- absence of category remains valid;
-- no category is mandatory and the participant must not manufacture risks merely to populate the enum.
-
-Adding or customizing categories later is a contract change, not a reason to introduce a taxonomy framework now.
 
 ---
 
-## 4. Risk Basis References
+## 5. Optional Risk Category
 
-A material risk must expose why it exists using visible review artifacts.
+The canonical documents provide representative categories, not an exhaustive ontology.
 
-Slice 4 uses a **Risk Reviewer-specific tagged union**, not a generic cross-stage artifact-reference framework.
+Therefore Slice 4 uses:
 
-Conceptually:
+```text
+category: StrictStr | None = None
+```
+
+Intrinsic rule:
+
+```text
+if category is not None
+→ category must be non-blank
+```
+
+Representative prompt/display labels may include:
+
+```text
+technical
+security
+privacy
+operational
+maintainability
+cost
+external dependency
+organizational
+```
+
+But the trusted contract does not restrict categories to that list.
+
+This avoids both:
+
+- inventing a taxonomy framework;
+- incorrectly rejecting a grounded category such as `legal` or `compliance`.
+
+Category never determines severity or ranking automatically.
+
+---
+
+## 6. Risk Basis References
+
+Each material Risk must contain a non-empty structured `basis` explaining why it exists.
+
+Slice 4 uses a Risk Reviewer-specific discriminated union:
 
 ```text
 RiskBasisReference =
@@ -171,9 +187,9 @@ RiskBasisReference =
     | SolutionAlternativeBasisReference
 ```
 
-Pydantic should use a deterministic discriminator such as `source`.
+This is deliberately not a generic cross-stage artifact-reference framework.
 
-### 4.1 RiskBasisSource
+### 6.1 RiskBasisSource
 
 ```text
 RiskBasisSource
@@ -182,28 +198,36 @@ RiskBasisSource
 - SOLUTION_ALTERNATIVE
 ```
 
-### 4.2 ReviewInputField
+### 6.2 Pydantic discriminator requirement
 
-A risk may be based on visible content from the original ReviewInput.
+The union uses:
 
-```text
-ReviewInputField
-- DESCRIPTION
-- TITLE
-- OBJECTIVE
-- CONSTRAINT
-- CONTEXT
-- STATED_FACT
+```python
+Field(discriminator="source")
 ```
 
-This enum is intentionally more precise than the existing Analyst `ReviewInputSource` where collection members need exact contextual resolution.
+Therefore every variant SHALL expose `source` as a literal tag, not merely as the shared enum type.
 
-### 4.3 ReviewInputBasisReference
+Conceptually:
+
+```python
+source: Literal[RiskBasisSource.REVIEW_INPUT] = RiskBasisSource.REVIEW_INPUT
+```
+
+and equivalently for the other variants.
+
+This is required for valid deterministic Pydantic v2 discriminated-union construction.
+
+---
+
+## 7. ReviewInputBasisReference
+
+Reuse the existing `ReviewInputSource` enum rather than creating a second vocabulary.
 
 ```text
 ReviewInputBasisReference
-- source: REVIEW_INPUT
-- field: ReviewInputField
+- source: Literal[REVIEW_INPUT]
+- field: ReviewInputSource
 - value: StrictStr
 ```
 
@@ -225,21 +249,25 @@ OBJECTIVE
 → review_input.objective is not None
 → value == review_input.objective
 
-CONSTRAINT
+CONSTRAINTS
 → value occurs exactly once in review_input.constraints
 
 CONTEXT
 → value occurs exactly once in review_input.context
 
-STATED_FACT
+STATED_FACTS
 → value occurs exactly once in review_input.stated_facts
 ```
 
-If repeated collection values make a text reference ambiguous, fail closed.
+If a collection contains the same text more than once, a text-only generated reference is ambiguous and fails closed.
 
-This contract proves that the referenced visible value resolves in the current ReviewInput. It does not prove historical origin across equal-valued review objects.
+Successful resolution means only that the value resolves unambiguously inside the current `ReviewInput` supplied to the participant.
 
-### 4.4 ProblemAnalysisFindingKind
+---
+
+## 8. ProblemAnalysisBasisReference
+
+### 8.1 ProblemAnalysisFindingKind
 
 ```text
 ProblemAnalysisFindingKind
@@ -250,13 +278,13 @@ ProblemAnalysisFindingKind
 - UNCERTAINTY
 ```
 
-This explicit kind preserves the fact/assumption distinction required by the constitution.
+This kind is explicit so assumption-derived basis remains structurally distinct from fact-derived basis.
 
-### 4.5 ProblemAnalysisBasisReference
+### 8.2 Contract
 
 ```text
 ProblemAnalysisBasisReference
-- source: PROBLEM_ANALYSIS
+- source: Literal[PROBLEM_ANALYSIS]
 - kind: ProblemAnalysisFindingKind
 - text: StrictStr
 - id: StrictStr | None = None
@@ -267,7 +295,7 @@ Intrinsic invariants:
 - `text` non-blank;
 - `id`, when present, non-blank.
 
-Contextual resolution selects exactly one current Analyst finding collection from `kind`:
+Contextual collection selection:
 
 ```text
 FACT                → problem_analysis.facts
@@ -277,7 +305,7 @@ MISSING_INFORMATION → problem_analysis.missing_information
 UNCERTAINTY         → problem_analysis.uncertainties
 ```
 
-Resolution rule:
+Resolution:
 
 ```text
 id present
@@ -293,13 +321,15 @@ No match or multiple matches:
 → RiskReviewerOutputError
 ```
 
-A `kind=ASSUMPTION` reference remains assumption-derived support. The Risk Reviewer must not relabel it as fact-derived support.
+`ASSUMPTION` never becomes `FACT` merely because Risk Reviewer references it.
 
-### 4.6 SolutionAlternativeCharacteristicKind
+---
 
-A reference to only an alternative ID is insufficient when the risk basis is a specific alternative characteristic.
+## 9. SolutionAlternativeBasisReference
 
-Use:
+A plain alternative ID can identify affected scope, but it is insufficient as risk basis when the risk depends on a specific alternative characteristic.
+
+### 9.1 SolutionAlternativeCharacteristicKind
 
 ```text
 SolutionAlternativeCharacteristicKind
@@ -311,22 +341,31 @@ SolutionAlternativeCharacteristicKind
 - RELEVANT_CONSTRAINT
 ```
 
-No `NAME` characteristic is required because a display label alone does not materially justify risk exposure.
+`NAME` is intentionally excluded because a display label does not materially justify risk exposure.
 
-### 4.7 SolutionAlternativeBasisReference
+### 9.2 Contract
 
 ```text
 SolutionAlternativeBasisReference
-- source: SOLUTION_ALTERNATIVE
+- source: Literal[SOLUTION_ALTERNATIVE]
 - alternative_id: StrictStr
 - characteristic: SolutionAlternativeCharacteristicKind
-- value: StrictStr
+- value: StrictStr | ConstraintReference
 ```
 
 Intrinsic invariants:
 
 - `alternative_id` non-blank;
-- `value` non-blank.
+- when `value` is text, it is non-blank;
+- characteristic/value shape is compatible:
+
+```text
+RELEVANT_CONSTRAINT
+→ value must be ConstraintReference
+
+all other characteristics
+→ value must be StrictStr
+```
 
 Contextual resolution first requires exactly one current alternative with:
 
@@ -334,7 +373,7 @@ Contextual resolution first requires exactly one current alternative with:
 alternative.id == alternative_id
 ```
 
-Then resolve characteristic:
+Then:
 
 ```text
 DESCRIPTION
@@ -353,33 +392,20 @@ IMPLEMENTATION_COMPLEXITY
 → value == alternative.implementation_complexity.value
 
 RELEVANT_CONSTRAINT
-→ value identifies exactly one serialized existing ConstraintReference
+→ value equals exactly one current alternative.relevant_constraints item
 ```
 
-#### Relevant-constraint encoding
+No custom `<SOURCE>:<KIND>:<VALUE>` encoding is introduced.
 
-To avoid introducing a nested generic reference hierarchy, `RELEVANT_CONSTRAINT` basis uses one canonical deterministic text encoding of the existing `ConstraintReference`:
+Reusing the existing structured `ConstraintReference` keeps the generated contract closer to the already trusted Solution Architect output and removes unnecessary serialization rules.
 
-```text
-<SOURCE>:<KIND>:<VALUE>
-```
+---
 
-Examples:
+## 10. RiskBasisReference Union
 
-```text
-REVIEW_INPUT:TEXT:Must run offline
-PROBLEM_ANALYSIS:ID:CON-001
-```
+Conceptually:
 
-The Risk Reviewer participant computes this encoding from current `alternative.relevant_constraints` and requires exactly one match.
-
-This encoding is review-local and inspectable; it is not a persistent identifier.
-
-### 4.8 RiskBasisReference union
-
-Conceptual discriminated union:
-
-```text
+```python
 RiskBasisReference = Annotated[
     ReviewInputBasisReference
     | ProblemAnalysisBasisReference
@@ -388,47 +414,50 @@ RiskBasisReference = Annotated[
 ]
 ```
 
-Every Risk must contain at least one basis reference.
+Every `Risk` SHALL contain at least one basis reference.
 
-Duplicate basis entries are not useful. `Risk` SHALL reject exact duplicate basis references within its basis tuple.
+Exact duplicate basis references inside one Risk are rejected.
+
+Generated basis references are resolved contextually against the trusted current inputs before `RiskAssessment` becomes trusted.
 
 ---
 
-## 5. Risk
+## 11. Risk
 
 ```text
 Risk
 - id: StrictStr
-- category: RiskCategory | None
+- category: StrictStr | None = None
 - description: StrictStr
 - affected_scope: RiskScope
 - severity: QualitativeLevel
 - basis: tuple[RiskBasisReference, ...]
-- mitigation: StrictStr | None
-- residual_uncertainty: StrictStr | None
+- mitigation: StrictStr | None = None
+- residual_uncertainty: StrictStr | None = None
 ```
 
 Intrinsic invariants:
 
 1. `id` non-blank.
 2. `description` non-blank.
-3. `basis` contains >= 1 reference.
-4. Exact duplicate basis references are forbidden.
-5. `mitigation`, when present, non-blank.
-6. `residual_uncertainty`, when present, non-blank.
-7. `severity` is `LOW`, `MEDIUM`, or `HIGH` through existing `QualitativeLevel`.
-8. No numeric probability, likelihood, score, rank, recommendation, or preferred-alternative field exists.
+3. optional category non-blank when present.
+4. basis contains at least one item.
+5. exact duplicate basis references forbidden.
+6. optional mitigation non-blank when present.
+7. optional residual uncertainty non-blank when present.
+8. severity uses existing `QualitativeLevel` only.
+9. no probability, likelihood, score, rank, recommendation, winner, or preferred-alternative field exists.
 
-Semantic rules enforced by role/contract tests:
+Semantic role rules:
 
-- mitigation does not remove the Risk object;
-- category is optional;
+- mitigation does not remove the Risk;
 - scope does not imply ranking;
-- basis must resolve against current visible inputs before Risk becomes trusted.
+- category remains descriptive only;
+- basis must resolve before trusted propagation.
 
 ---
 
-## 6. RiskAssessment
+## 12. RiskAssessment
 
 ```text
 RiskAssessment
@@ -438,11 +467,13 @@ RiskAssessment
 
 Intrinsic invariants:
 
-1. `risks` may be empty.
-2. Risk IDs must be unique within the assessment.
-3. Every observation must be non-blank.
-4. Exact duplicate observations are forbidden.
-5. Extra fields are forbidden, therefore generated fields such as:
+1. risks may be empty;
+2. risk IDs unique within the assessment;
+3. every observation non-blank;
+4. exact duplicate observations forbidden;
+5. extra fields forbidden.
+
+Therefore fields such as:
 
 ```text
 ranking
@@ -455,9 +486,9 @@ risk_score
 
 are rejected structurally.
 
-### 6.1 Zero-risk semantics
+### 12.1 Zero-risk semantics
 
-This is valid:
+Valid:
 
 ```text
 RiskAssessment(
@@ -468,20 +499,20 @@ RiskAssessment(
 )
 ```
 
-An empty `risks` tuple does not imply:
+Also structurally valid:
 
-- the proposal is safe;
-- risk is zero;
-- alternatives are equivalent;
-- a recommendation is justified.
+```text
+RiskAssessment(
+    risks=(),
+    overall_observations=(),
+)
+```
 
-`overall_observations` may describe limitations or remaining uncertainty but must not become a hidden ranking or recommendation channel.
-
-No requirement forces `overall_observations` to be non-empty when `risks` is empty; an entirely empty assessment remains structurally valid. Whether a model chooses to explain limited evidence is prompt/quality behavior, not a domain invariant.
+Zero risks does not imply safety, zero exposure, equivalence, or recommendation readiness.
 
 ---
 
-## 7. Risk Reviewer Participant Contract
+## 13. Risk Reviewer Participant Contract
 
 Add:
 
@@ -489,7 +520,7 @@ Add:
 src/agentic_review_board/participants/risk_reviewer.py
 ```
 
-### 7.1 Public API
+### 13.1 Public API
 
 ```text
 RiskReviewer.assess(
@@ -499,7 +530,7 @@ RiskReviewer.assess(
 ) -> RiskAssessment
 ```
 
-### 7.2 Provider-neutral call
+### 13.2 Provider-neutral payload
 
 ```text
 raw = llm.generate_structured(
@@ -512,7 +543,7 @@ raw = llm.generate_structured(
 )
 ```
 
-### 7.3 Validation sequence
+### 13.3 Validation sequence
 
 ```text
 raw Mapping[str, object]
@@ -526,73 +557,62 @@ _validate_basis_references(...)
 trusted RiskAssessment
 ```
 
-Structural Pydantic validation failures map to:
+Structural Pydantic failures:
 
 ```text
 RiskReviewerOutputError("invalid Risk Reviewer output")
 ```
 
-Contextual unresolved/ambiguous references also map to `RiskReviewerOutputError`.
+Contextual unresolved/ambiguous references also raise `RiskReviewerOutputError`.
 
-No raw generated mapping enters Review state.
+No invalid/raw mapping enters Review state.
 
-### 7.4 Contextual scope validation
+---
 
-For each Risk:
+## 14. Contextual Validation Meaning
+
+### 14.1 Scope
 
 ```text
 OVERALL
 → no alternative lookup
 
 ALTERNATIVES
-→ every id must resolve to exactly one current alternative
+→ every alternative id resolves exactly once
 ```
 
-Unknown alternative id:
-
-```text
-→ RiskReviewerOutputError
-```
-
-### 7.5 Contextual basis validation
-
-For every `Risk.basis` item:
+### 14.2 Basis
 
 ```text
 REVIEW_INPUT
-→ resolve against current ReviewInput
+→ resolve current ReviewInput field/value
 
 PROBLEM_ANALYSIS
-→ resolve against current ProblemAnalysis collection selected by kind
+→ resolve current Analyst collection item
 
 SOLUTION_ALTERNATIVE
 → resolve current alternative
-→ resolve exact characteristic within that alternative
+→ resolve exact characteristic/value
 ```
 
 No semantic repair occurs.
 
-### 7.6 Contextual reference meaning
+### 14.3 What contextual references prove
 
-Successful resolution means only:
+Successful reference resolution means:
 
 ```text
 this generated reference resolves unambiguously
-inside the trusted artifacts passed to this Risk Reviewer call
+inside the trusted artifacts supplied to this Risk Reviewer execution
 ```
 
-It does not mean:
+It does not prove historical/global provenance across equal-valued reviews.
 
-```text
-this local string carries historical provenance
-or globally identifies an artifact across reviews
-```
-
-That distinction is intentional.
+Same-execution provenance is handled separately by Review/StageExecution object identity.
 
 ---
 
-## 8. Execution Model Extension
+## 15. Execution Model Extension
 
 Update:
 
@@ -600,7 +620,7 @@ Update:
 src/agentic_review_board/domain/execution.py
 ```
 
-### 8.1 RiskReviewerStageInput
+### 15.1 RiskReviewerStageInput
 
 ```text
 RiskReviewerStageInput
@@ -616,7 +636,7 @@ extra = forbid
 frozen = true
 ```
 
-### 8.2 StageInput union
+### 15.2 StageInput
 
 ```text
 StageInput =
@@ -625,7 +645,7 @@ StageInput =
     | RiskReviewerStageInput
 ```
 
-### 8.3 StageOutput union
+### 15.3 StageOutput
 
 ```text
 StageOutput =
@@ -634,94 +654,61 @@ StageOutput =
     | RiskAssessment
 ```
 
-### 8.4 StageExecution identity/type matrix
+### 15.4 StageExecution type matrix
 
-#### ANALYST
-
-Unchanged.
-
-#### SOLUTION_ARCHITECT
-
-Unchanged.
-
-#### RISK_REVIEWER
+Risk Reviewer:
 
 ```text
 PENDING
-inputs = None
-output = None
-error = None
+→ inputs=None, output=None, error=None
 
 RUNNING
-inputs = RiskReviewerStageInput
-output = None
-error = None
+→ inputs=RiskReviewerStageInput
+→ output=None, error=None
 
 COMPLETED
-inputs = RiskReviewerStageInput
-output = RiskAssessment
-error = None
+→ inputs=RiskReviewerStageInput
+→ output=RiskAssessment
+→ error=None
 
 FAILED
-inputs = RiskReviewerStageInput
-output = None
-error = ReviewError
+→ inputs=RiskReviewerStageInput
+→ output=None
+→ error=ReviewError
 ```
 
-#### CRITIC / COORDINATOR
+Critic and Coordinator remain PENDING-only in Slice 4.
 
-Slice 4 rule:
-
-```text
-must remain PENDING
-```
-
-Any non-PENDING Critic or Coordinator stage is invalid in Slice 4.
+Any non-PENDING Critic/Coordinator stage remains invalid.
 
 ---
 
-## 9. Review Same-Execution Provenance
+## 16. Same-Execution Provenance
 
-`Review` validation continues to use object identity for in-memory execution provenance.
-
-All semantic lookups use `StageIdentity`, never stage tuple position.
+All semantic stage lookup uses `StageIdentity`, never tuple position.
 
 For Risk Reviewer when non-PENDING:
 
 ```text
-risk.inputs.review_input
-    is review.review_input
+risk.inputs.review_input is review.review_input
+risk.inputs.problem_analysis is analyst.output
+risk.inputs.solution_alternatives is architect.output
 ```
 
-and Analyst must be completed with:
+Preconditions for those identity checks:
 
 ```text
-ProblemAnalysis
+Analyst COMPLETED with ProblemAnalysis
+Solution Architect COMPLETED with SolutionAlternatives
 ```
 
-and Solution Architect must be completed with:
+Equal-but-independent upstream objects are invalid as StageExecution provenance even when values are equal.
 
-```text
-SolutionAlternatives
-```
-
-Then:
-
-```text
-risk.inputs.problem_analysis
-    is analyst.output
-
-risk.inputs.solution_alternatives
-    is architect.output
-```
-
-Equal-but-independent objects are invalid for StageExecution provenance.
-
-This rule applies to direct Review construction as well as transitions.
+This identity rule applies to direct Review construction and transitions.
 
 ---
 
-## 10. Review Stage Set and Ordering
+## 17. Stage Set and Ordering
 
 Canonical identities remain exactly:
 
@@ -733,36 +720,32 @@ CRITIC
 COORDINATOR
 ```
 
-Every Review must contain exactly one StageExecution for each identity.
+Every Review contains exactly one StageExecution for each identity.
 
-Validation remains set/identity based:
+Validation remains identity/set based:
 
 ```text
 len(identities) == 5
 set(identities) == set(CANONICAL_STAGE_ORDER)
 ```
 
-It must not require tuple order equality.
+Tuple order equality is not a semantic invariant.
 
-`Review.create()` still emits canonical order.
+`Review.create()` emits canonical order.
 
-`_replace_stage()` preserves whatever tuple order is present in an already valid Review.
+`_replace_stage()` preserves the tuple order of an already valid Review.
 
-Semantic validation uses:
+All semantic lookup uses:
 
 ```text
 review.stage(StageIdentity....)
 ```
 
-not:
-
-```text
-review.stages[index]
-```
+not positional indexes.
 
 ---
 
-## 11. Slice 4 Review Lifecycle Matrix
+## 18. Slice 4 Lifecycle Matrix
 
 Let:
 
@@ -774,9 +757,9 @@ C = Critic
 K = Coordinator
 ```
 
-Critic and Coordinator must be PENDING for every non-COMPLETED Slice 4 state.
+For Slice 4, C and K remain PENDING for all reachable states.
 
-### 11.1 CREATED
+### 18.1 CREATED
 
 Exactly:
 
@@ -789,9 +772,9 @@ C PENDING
 K PENDING
 ```
 
-### 11.2 RUNNING valid prefixes
+### 18.2 RUNNING
 
-Valid Slice 4 RUNNING stage triples `(A, S, R)` are exactly:
+Valid `(A, S, R)` prefixes exactly:
 
 ```text
 (PENDING,   PENDING,   PENDING)
@@ -803,7 +786,7 @@ Valid Slice 4 RUNNING stage triples `(A, S, R)` are exactly:
 (COMPLETED, COMPLETED, COMPLETED)
 ```
 
-For all seven:
+Always:
 
 ```text
 C PENDING
@@ -812,130 +795,129 @@ K PENDING
 
 No other RUNNING combination is valid.
 
-### 11.3 INCOMPLETE valid failure shapes
+### 18.3 INCOMPLETE
 
-Exactly one implemented stage is failed and all downstream stages remain PENDING.
-
-Valid `(A, S, R)` tuples:
+Valid `(A, S, R)` shapes exactly:
 
 ```text
-(FAILED,    PENDING, PENDING)
-(COMPLETED, FAILED,  PENDING)
+(FAILED,    PENDING,   PENDING)
+(COMPLETED, FAILED,    PENDING)
 (COMPLETED, COMPLETED, FAILED)
 ```
 
-And always:
+Always:
 
 ```text
 C PENDING
 K PENDING
 ```
 
-### 11.4 COMPLETED
+Exactly one implemented stage is failed and every downstream stage remains PENDING.
 
-Contractual global rule remains:
+### 18.4 COMPLETED
+
+Global contractual rule remains:
 
 ```text
 Review COMPLETED
 → all five stages COMPLETED
 ```
 
-Because Critic and Coordinator are PENDING-only in Slice 4, no Slice 4 transition can produce Review `COMPLETED`.
-
-Direct construction of a fully completed five-stage Review is still rejected by StageExecution type rules because Critic/Coordinator outputs are not implemented yet.
+Slice 4 cannot produce this state because Critic/Coordinator remain unimplemented/PENDING-only.
 
 ---
 
-## 12. Review Transitions
+## 19. Risk Reviewer Review Transitions
 
 Existing Analyst and Solution Architect transitions remain unchanged.
 
-Add exactly three Risk Reviewer transitions.
+Add exactly:
 
-### 12.1 start_risk_reviewer()
+```text
+start_risk_reviewer()
+complete_risk_reviewer(risk_assessment)
+fail_risk_reviewer(error)
+```
+
+### 19.1 start_risk_reviewer()
 
 Preconditions:
 
 ```text
-Review.status == RUNNING
-Analyst.status == COMPLETED
-Analyst.output is ProblemAnalysis
-Solution Architect.status == COMPLETED
-Solution Architect.output is SolutionAlternatives
-Risk Reviewer.status == PENDING
+Review RUNNING
+Analyst COMPLETED with ProblemAnalysis
+Solution Architect COMPLETED with SolutionAlternatives
+Risk Reviewer PENDING
+Critic PENDING
+Coordinator PENDING
 ```
 
-Transition result:
+Result:
 
 ```text
-Risk Reviewer.status = RUNNING
+Risk Reviewer RUNNING
 inputs = RiskReviewerStageInput(
     review_input=self.review_input,
     problem_analysis=analyst.output,
     solution_alternatives=architect.output,
 )
-output = None
-error = None
+output=None
+error=None
+Review remains RUNNING
 ```
 
-Review status remains `RUNNING`.
+Existing Analyst and Architect StageExecution objects remain unchanged.
 
-The exact existing Analyst and Architect StageExecution objects are preserved.
-
-### 12.2 complete_risk_reviewer(risk_assessment)
+### 19.2 complete_risk_reviewer(...)
 
 Preconditions:
 
 ```text
-Review.status == RUNNING
-Risk Reviewer.status == RUNNING
+Review RUNNING
+Risk Reviewer RUNNING
 Risk Reviewer.inputs is RiskReviewerStageInput
-risk_assessment is RiskAssessment by type boundary
 ```
 
-Transition result:
+Result:
 
 ```text
-Risk Reviewer.status = COMPLETED
-inputs = exact previous RiskReviewerStageInput object
+Risk Reviewer COMPLETED
+inputs = exact previous input object
 output = exact supplied RiskAssessment object
-error = None
+error=None
+Review remains RUNNING
+Critic/Coordinator remain PENDING
 ```
 
-Review remains `RUNNING`.
-
-Critic and Coordinator remain PENDING.
-
-### 12.3 fail_risk_reviewer(error)
+### 19.3 fail_risk_reviewer(...)
 
 Preconditions:
 
 ```text
-Review.status == RUNNING
-Risk Reviewer.status == RUNNING
+Review RUNNING
+Risk Reviewer RUNNING
 Risk Reviewer.inputs is RiskReviewerStageInput
-error is ReviewError by type boundary
 ```
 
-Atomic transition result:
+Atomic result:
 
 ```text
-Review.status = INCOMPLETE
-Risk Reviewer.status = FAILED
-inputs = exact previous RiskReviewerStageInput object
-output = None
-error = supplied ReviewError
+Review INCOMPLETE
+Risk Reviewer FAILED
+inputs = exact previous input object
+output=None
+error=supplied ReviewError
 Critic PENDING
 Coordinator PENDING
 ```
 
-Analyst and Architect stages are preserved exactly.
+Analyst and Architect stages remain exactly preserved.
 
 ---
 
-## 13. Orchestrator Typing and Narrowing
+## 20. Orchestrator Typing and Boundary
 
-`ReviewOrchestrator` constructor conceptually becomes:
+Constructor conceptually becomes:
 
 ```text
 ReviewOrchestrator(
@@ -951,14 +933,14 @@ After Solution Architect completion:
 review = review.start_risk_reviewer()
 ```
 
-Retrieve by identity:
+Retrieve upstream stages by identity:
 
 ```text
 analyst_stage = review.stage(StageIdentity.ANALYST)
 architect_stage = review.stage(StageIdentity.SOLUTION_ARCHITECT)
 ```
 
-Narrow explicitly:
+Internal invariant guards:
 
 ```text
 if not isinstance(analyst_stage.output, ProblemAnalysis):
@@ -968,9 +950,9 @@ if not isinstance(architect_stage.output, SolutionAlternatives):
     raise ValueError(...)
 ```
 
-These checks are internal invariant guards and remain **outside** the participant try/except boundary.
+These guards remain outside participant try/except handling.
 
-Participant call:
+Participant boundary:
 
 ```text
 try:
@@ -980,9 +962,9 @@ try:
         architect_stage.output,
     )
 except RiskReviewerOutputError:
-    ...
+    ... OUTPUT_VALIDATION ...
 except Exception:
-    ...
+    ... EXECUTION ...
 ```
 
 Then:
@@ -991,13 +973,13 @@ Then:
 return review.complete_risk_reviewer(risk_assessment)
 ```
 
-The Orchestrator does not call `LLMPort` directly.
+The Orchestrator never calls `LLMPort` directly.
 
 ---
 
-## 14. Failure Mapping
+## 21. Failure Mapping
 
-### 14.1 Known generated-output validation failure
+Known generated-output validation failure:
 
 ```text
 RiskReviewerOutputError
@@ -1007,68 +989,54 @@ RiskReviewerOutputError
 )
 ```
 
-### 14.2 Other ordinary participant exception
+Other ordinary participant exception:
 
 ```text
-Exception raised by RiskReviewer.assess(...)
+Exception from RiskReviewer.assess(...)
 → ReviewError(
     kind=EXECUTION,
     message="Risk Reviewer execution failed",
 )
 ```
 
-No raw exception text is stored.
+No raw exception detail, provider name, prompt, response, stack trace, secret, endpoint, or private reasoning is stored.
 
-No provider name, prompt, response, stack trace, secret, endpoint, or private reasoning is copied into ReviewError.
-
-### 14.3 Internal invariant failure
-
-Errors raised while:
-
-- starting/completing/failing a Review transition;
-- retrieving stages;
-- narrowing trusted stage outputs;
-- validating Review aggregate invariants;
-
-remain outside the participant exception boundary and propagate to the caller.
+Internal transition/stage/aggregate errors remain outside participant exception mapping and propagate.
 
 `KeyboardInterrupt`, `SystemExit`, and other `BaseException` subclasses are not swallowed.
 
 ---
 
-## 15. Required Validation Examples
+## 22. Validation Examples
 
-### Valid overall risk
+### 22.1 Overall risk
 
 ```text
 Risk(
     id="RISK-001",
-    category=TECHNICAL,
+    category="technical",
     description="The design may exceed the available offline compute budget.",
-    affected_scope=RiskScope(
-        kind=OVERALL,
-        alternative_ids=(),
-    ),
+    affected_scope=RiskScope(kind=OVERALL, alternative_ids=()),
     severity=HIGH,
     basis=(
         ReviewInputBasisReference(
             source=REVIEW_INPUT,
-            field=CONSTRAINT,
+            field=CONSTRAINTS,
             value="Must run offline",
         ),
     ),
-    mitigation="Benchmark the target hardware before selecting the implementation.",
-    residual_uncertainty="Actual production workload size is not yet known.",
+    mitigation="Benchmark the target hardware before selection.",
+    residual_uncertainty="Production workload size is unknown.",
 )
 ```
 
-### Valid alternative-specific risk
+### 22.2 Alternative-specific risk
 
 ```text
 Risk(
     id="RISK-002",
-    category=MAINTAINABILITY,
-    description="ALT-001 depends on a high-complexity implementation.",
+    category="maintainability",
+    description="ALT-001 has high implementation complexity.",
     affected_scope=RiskScope(
         kind=ALTERNATIVES,
         alternative_ids=("ALT-001",),
@@ -1082,12 +1050,25 @@ Risk(
             value="HIGH",
         ),
     ),
-    mitigation=None,
-    residual_uncertainty=None,
 )
 ```
 
-### Valid assumption-derived risk basis
+### 22.3 Relevant-constraint basis
+
+```text
+SolutionAlternativeBasisReference(
+    source=SOLUTION_ALTERNATIVE,
+    alternative_id="ALT-001",
+    characteristic=RELEVANT_CONSTRAINT,
+    value=ConstraintReference(
+        source=PROBLEM_ANALYSIS,
+        kind=ID,
+        value="CON-001",
+    ),
+)
+```
+
+### 22.4 Assumption-derived basis
 
 ```text
 ProblemAnalysisBasisReference(
@@ -1098,40 +1079,11 @@ ProblemAnalysisBasisReference(
 )
 ```
 
-It remains visibly assumption-derived.
+The assumption remains visibly an assumption.
 
-### Invalid scope
+### 22.5 Invalid role leakage
 
-```text
-kind=OVERALL
-alternative_ids=("ALT-001",)
-```
-
-Rejected structurally.
-
-### Invalid alternative reference
-
-```text
-kind=ALTERNATIVES
-alternative_ids=("ALT-999",)
-```
-
-Structurally valid but rejected contextually if `ALT-999` is not in current SolutionAlternatives.
-
-### Invalid weak alternative basis
-
-A generated object containing only:
-
-```text
-source=SOLUTION_ALTERNATIVE
-alternative_id=ALT-001
-```
-
-is rejected because the discriminated model also requires `characteristic` and `value`.
-
-### Invalid role leakage
-
-```text
+```json
 {
   "risks": [],
   "overall_observations": [],
@@ -1143,137 +1095,133 @@ Rejected because `extra="forbid"`.
 
 ---
 
-## 16. Test Matrix Derived from the Model
+## 23. Required Test Matrix
 
-### Risk-domain intrinsic tests
+### Domain / Pydantic
 
-- all contracts frozen / extra-forbid;
+- discriminated union constructs successfully using Literal source tags;
+- all models frozen and extra-forbid;
 - required strings reject blank;
-- scope OVERALL/ALTERNATIVES compatibility;
-- alternative IDs unique within scope;
-- category optional and enum-restricted;
+- optional category rejects blank but accepts grounded arbitrary labels;
+- OVERALL/ALTERNATIVES scope shape enforced;
+- alternative IDs unique;
 - Risk basis non-empty;
-- duplicate exact basis rejected;
+- exact duplicate basis rejected;
 - Risk IDs unique within assessment;
-- observations reject blank/duplicate;
+- observations non-blank/unique;
 - zero-risk assessment valid;
-- unsupported ranking/recommendation/probability fields rejected.
+- ranking/recommendation/probability extra fields rejected.
 
-### Contextual ReviewInput basis tests
+### ReviewInput basis
 
-- description resolves;
-- optional title/objective resolve only when present;
-- current constraint/context/stated_fact resolves;
-- absent value rejected;
-- duplicate collection text is ambiguous and rejected.
+- every existing `ReviewInputSource` value resolves correctly;
+- scalar fields match exactly;
+- collection item resolves only when unique;
+- absent/ambiguous values rejected.
 
-### Contextual ProblemAnalysis basis tests
+### ProblemAnalysis basis
 
-For every finding kind:
+For each kind:
 
 - exact id+text resolves;
 - text-only resolves when unique;
 - unknown id/text rejected;
-- mismatched id+text rejected;
+- mismatched id/text rejected;
 - duplicate text without id rejected;
-- assumption kind remains separate from fact kind.
+- assumptions remain distinct from facts.
 
-### Contextual SolutionAlternative basis tests
+### SolutionAlternative basis
 
 - description resolves;
 - unique advantage/disadvantage/assumption resolves;
-- duplicate text is ambiguous and rejected;
-- implementation complexity resolves from enum value;
-- relevant constraint canonical encoding resolves;
+- duplicate text is ambiguous;
+- implementation complexity resolves by enum value;
+- structured `ConstraintReference` resolves exactly;
+- characteristic/value type mismatch rejected;
 - unknown alternative rejected;
-- characteristic/value mismatch rejected;
-- zero-alternative result cannot resolve any alternative basis.
+- zero alternatives cannot resolve alternative basis.
 
-### Execution/provenance tests
+### Execution / provenance
 
 - RiskReviewerStageInput accepted only for Risk Reviewer non-PENDING states;
 - completed Risk Reviewer requires RiskAssessment;
 - Critic/Coordinator non-PENDING rejected;
-- Risk Reviewer exact ReviewInput identity required;
+- exact ReviewInput identity required;
 - exact Analyst ProblemAnalysis identity required;
 - exact Architect SolutionAlternatives identity required;
-- equal-but-independent copies rejected;
-- reordered valid stage tuple remains semantically valid through identity lookup.
+- equal-but-independent upstream objects rejected;
+- reordered valid stage tuple remains valid via StageIdentity lookup.
 
-### Lifecycle tests
+### Lifecycle / transitions
 
 - all seven RUNNING prefixes accepted;
-- all three INCOMPLETE failure shapes accepted;
-- invalid skipped-stage combinations rejected;
-- `COMPLETED` unreachable in Slice 4.
+- all three INCOMPLETE shapes accepted;
+- skipped-stage combinations rejected;
+- Review COMPLETED unreachable in Slice 4;
+- start/complete/fail Risk Reviewer paths;
+- premature/repeated transitions rejected;
+- upstream stage objects preserved;
+- transitions operate correctly with valid noncanonical tuple order.
 
-### Transition tests
-
-- Risk Reviewer start/complete/fail happy paths;
-- start before Architect completion rejected;
-- repeated start rejected;
-- completion/failure before start rejected;
-- upstream stages preserved exactly;
-- Critic/Coordinator remain PENDING;
-- transitions work with noncanonical but valid tuple order.
-
-### Orchestrator tests
+### Orchestrator
 
 - exact role order Analyst → Solution Architect → Risk Reviewer;
-- inputs recorded before Risk Reviewer call;
+- Risk Reviewer stage input recorded before call;
 - exact trusted upstream objects passed;
-- RiskReviewerOutputError maps to OUTPUT_VALIDATION;
-- ordinary participant Exception maps to EXECUTION;
-- internal invariant error not converted;
+- RiskReviewerOutputError → OUTPUT_VALIDATION;
+- ordinary participant Exception → EXECUTION;
+- internal invariant errors propagate;
 - BaseException signals propagate;
-- zero-risk output completes Risk Reviewer;
+- zero-risk completes successfully;
 - zero-alternative upstream still invokes Risk Reviewer;
-- sequential reviews remain isolated.
+- sequential reviews isolated.
 
 ---
 
-## 17. Explicit Non-Goals
+## 24. Explicit Non-Goals
 
-This data model does not introduce:
+This model does not introduce:
 
 - Critic or Coordinator contracts;
-- ranking or recommendation fields;
-- risk probability/likelihood scores;
+- ranking/recommendation fields;
+- numeric risk probability/scoring;
 - impact matrices;
 - persistent/global IDs;
 - generic ArtifactReference abstractions;
 - generic stage payload models;
 - workflow registries;
-- persistence or rehydration semantics;
+- persistence/rehydration semantics;
 - retries/timeouts;
 - RAG/tools/browsing;
 - provider-specific types;
-- organization-custom risk taxonomy infrastructure.
+- organization-specific taxonomy infrastructure.
 
 ---
 
-## 18. Open Design Questions
+## 25. Open Design Questions
 
 None required before task breakdown.
 
-The selected contracts are intentionally sufficient for Slice 4 and deliberately avoid solving future Critic/Coordinator reference needs in advance.
+The selected contracts are intentionally sufficient for Slice 4.
 
-If implementation evidence later shows that duplicated reference-resolution logic across multiple future participants becomes a real maintenance problem, a reusable reference abstraction can be proposed separately with tests and architectural review.
+A reusable cross-stage reference abstraction should be considered only if later implementation evidence demonstrates repeated logic that materially harms maintainability.
 
 ---
 
-## 19. Approval Gate
+## 26. Approval Gate
 
-Before generating `tasks.md`, review this data model for:
+Before `tasks.md` is generated, confirm:
 
-- compatibility with canonical Risk Reviewer semantics;
-- basis-reference sufficiency without overengineering;
-- correct fact/assumption preservation;
-- correct separation of contextual references vs same-execution provenance;
-- consistency with existing Slice 3 identity-based Review semantics;
-- complete lifecycle matrix;
-- fail-closed output handling;
-- absence of ranking/recommendation leakage;
-- absence of premature generic abstractions.
+- discriminator uses Literal variant tags;
+- existing `ReviewInputSource` is reused;
+- risk category remains optional/open rather than an exhaustive enum;
+- alternative characteristic basis is sufficiently precise;
+- relevant constraints reuse structured `ConstraintReference`;
+- fact/assumption distinction is preserved;
+- contextual resolution and same-execution provenance remain separate;
+- identity-based Review semantics from Slice 3 remain intact;
+- lifecycle/failure matrices are complete;
+- no ranking/recommendation leakage exists;
+- no premature generic abstraction is introduced.
 
 Only after explicit approval should implementation tasks be generated.
