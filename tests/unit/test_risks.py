@@ -5,6 +5,8 @@ from agentic_review_board.domain.risks import (
     ProblemAnalysisBasisReference,
     ProblemAnalysisFindingKind,
     ReviewInputBasisReference,
+    Risk,
+    RiskAssessment,
     RiskBasisReference,
     RiskBasisSource,
     RiskScope,
@@ -348,3 +350,123 @@ def test_basis_reference_variants_forbid_extra_fields(
 ) -> None:
     with pytest.raises(ValidationError):
         model.model_validate({**payload, "unexpected": "not allowed"})
+
+
+def risk_payload(*, risk_id: str = "RISK-001") -> dict[str, object]:
+    return {
+        "id": risk_id,
+        "category": "technical",
+        "description": "Local lifecycle management may increase operational burden.",
+        "affected_scope": {"kind": "OVERALL", "alternative_ids": []},
+        "severity": "MEDIUM",
+        "basis": [
+            {
+                "source": "REVIEW_INPUT",
+                "field": "description",
+                "value": "Review a proposed technical change.",
+            }
+        ],
+        "mitigation": "Define a minimal local maintenance process.",
+        "residual_uncertainty": "Actual maintenance effort is not yet measured.",
+    }
+
+
+def test_risk_accepts_open_non_blank_category_label() -> None:
+    payload = risk_payload()
+    payload["category"] = "legal/compliance"
+
+    risk = Risk.model_validate(payload)
+
+    assert risk.category == "legal/compliance"
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("id", " "),
+        ("description", " "),
+        ("category", " "),
+        ("mitigation", " "),
+        ("residual_uncertainty", " "),
+    ],
+)
+def test_risk_rejects_blank_required_or_present_optional_text(
+    field: str,
+    value: str,
+) -> None:
+    payload = risk_payload()
+    payload[field] = value
+
+    with pytest.raises(ValidationError):
+        Risk.model_validate(payload)
+
+
+def test_risk_requires_non_empty_basis() -> None:
+    payload = risk_payload()
+    payload["basis"] = []
+
+    with pytest.raises(ValidationError):
+        Risk.model_validate(payload)
+
+
+def test_risk_rejects_exact_duplicate_basis_references() -> None:
+    payload = risk_payload()
+    basis_reference = {
+        "source": "REVIEW_INPUT",
+        "field": "description",
+        "value": "Review a proposed technical change.",
+    }
+    payload["basis"] = [basis_reference, basis_reference.copy()]
+
+    with pytest.raises(ValidationError):
+        Risk.model_validate(payload)
+
+
+def test_risk_assessment_requires_unique_risk_ids() -> None:
+    with pytest.raises(ValidationError):
+        RiskAssessment.model_validate(
+            {
+                "risks": [risk_payload(), risk_payload()],
+                "overall_observations": [],
+            }
+        )
+
+
+def test_risk_assessment_rejects_blank_or_duplicate_observations() -> None:
+    with pytest.raises(ValidationError):
+        RiskAssessment.model_validate(
+            {
+                "risks": [],
+                "overall_observations": [" "],
+            }
+        )
+
+    with pytest.raises(ValidationError):
+        RiskAssessment.model_validate(
+            {
+                "risks": [],
+                "overall_observations": [
+                    "Operational ownership remains unclear.",
+                    "Operational ownership remains unclear.",
+                ],
+            }
+        )
+
+
+def test_zero_risk_and_fully_empty_assessments_are_valid() -> None:
+    zero_risk = RiskAssessment.model_validate(
+        {
+            "risks": [],
+            "overall_observations": ["No material risk is justified by the current inputs."],
+        }
+    )
+    fully_empty = RiskAssessment.model_validate(
+        {
+            "risks": [],
+            "overall_observations": [],
+        }
+    )
+
+    assert zero_risk.risks == ()
+    assert fully_empty.risks == ()
+    assert fully_empty.overall_observations == ()
