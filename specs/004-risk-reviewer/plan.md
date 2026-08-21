@@ -3,7 +3,7 @@
 **Branch**: `004-risk-reviewer`  
 **Date**: 2026-08-21  
 **Spec**: `specs/004-risk-reviewer/spec.md`  
-**Status**: Revised — awaiting review and approval
+**Status**: Approved — ready for data-model refinement
 
 ## 1. Summary
 
