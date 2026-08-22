@@ -380,6 +380,34 @@ def test_risk_accepts_open_non_blank_category_label() -> None:
     assert risk.category == "legal/compliance"
 
 
+def test_all_risk_domain_models_are_frozen_and_extra_forbid() -> None:
+    models = (
+        RiskScope,
+        ReviewInputBasisReference,
+        ProblemAnalysisBasisReference,
+        SolutionAlternativeBasisReference,
+        Risk,
+        RiskAssessment,
+    )
+
+    for model in models:
+        assert model.model_config.get("frozen") is True
+        assert model.model_config.get("extra") == "forbid"
+
+
+def test_risk_optional_text_fields_may_be_omitted() -> None:
+    payload = risk_payload()
+    payload.pop("category")
+    payload.pop("mitigation")
+    payload.pop("residual_uncertainty")
+
+    risk = Risk.model_validate(payload)
+
+    assert risk.category is None
+    assert risk.mitigation is None
+    assert risk.residual_uncertainty is None
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [
