@@ -419,6 +419,68 @@ class Review(BaseModel):
             review_status=ReviewStatus.INCOMPLETE,
         )
 
+    def start_risk_reviewer(self) -> "Review":
+        self._require_running_review()
+        analyst = self.stage(StageIdentity.ANALYST)
+        architect = self.stage(StageIdentity.SOLUTION_ARCHITECT)
+        reviewer = self.stage(StageIdentity.RISK_REVIEWER)
+
+        if analyst.status is not StageStatus.COMPLETED or not isinstance(
+            analyst.output, ProblemAnalysis
+        ):
+            raise ValueError("Analyst must be completed before Risk Reviewer starts")
+        if architect.status is not StageStatus.COMPLETED or not isinstance(
+            architect.output, SolutionAlternatives
+        ):
+            raise ValueError("Solution Architect must be completed before Risk Reviewer starts")
+        if reviewer.status is not StageStatus.PENDING:
+            raise ValueError("Risk Reviewer stage must be pending before start")
+
+        return self._replace_stage(
+            StageExecution(
+                identity=StageIdentity.RISK_REVIEWER,
+                status=StageStatus.RUNNING,
+                inputs=RiskReviewerStageInput(
+                    review_input=self.review_input,
+                    problem_analysis=analyst.output,
+                    solution_alternatives=architect.output,
+                ),
+            )
+        )
+
+    def complete_risk_reviewer(self, assessment: RiskAssessment) -> "Review":
+        self._require_running_review()
+        reviewer = self.stage(StageIdentity.RISK_REVIEWER)
+        if reviewer.status is not StageStatus.RUNNING or not isinstance(
+            reviewer.inputs, RiskReviewerStageInput
+        ):
+            raise ValueError("Risk Reviewer stage must be running before completion")
+        return self._replace_stage(
+            StageExecution(
+                identity=StageIdentity.RISK_REVIEWER,
+                status=StageStatus.COMPLETED,
+                inputs=reviewer.inputs,
+                output=assessment,
+            )
+        )
+
+    def fail_risk_reviewer(self, error: ReviewError) -> "Review":
+        self._require_running_review()
+        reviewer = self.stage(StageIdentity.RISK_REVIEWER)
+        if reviewer.status is not StageStatus.RUNNING or not isinstance(
+            reviewer.inputs, RiskReviewerStageInput
+        ):
+            raise ValueError("Risk Reviewer stage must be running before failure")
+        return self._replace_stage(
+            StageExecution(
+                identity=StageIdentity.RISK_REVIEWER,
+                status=StageStatus.FAILED,
+                inputs=reviewer.inputs,
+                error=error,
+            ),
+            review_status=ReviewStatus.INCOMPLETE,
+        )
+
     def _require_running_review(self) -> None:
         if self.status is not ReviewStatus.RUNNING:
             raise ValueError("review must be running for this transition")
