@@ -967,10 +967,12 @@ def test_review_rejects_slice4_skips_multiple_failures_and_later_execution() -> 
             message="Risk Reviewer execution failed",
         ),
     )
-    critic_running = StageExecution(
+    critic_running = StageExecution.model_construct(
         identity=StageIdentity.CRITIC,
         status=StageStatus.RUNNING,
         inputs=AnalystStageInput(review_input=review_input),
+        output=None,
+        error=None,
     )
 
     invalid_stage_sets = (
