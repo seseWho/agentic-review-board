@@ -1083,7 +1083,7 @@ def test_risk_reviewer_rejects_equal_but_independent_upstream_provenance(field: 
     reviewer = StageExecution(
         identity=StageIdentity.RISK_REVIEWER,
         status=StageStatus.RUNNING,
-        inputs=RiskReviewerStageInput(**values),
+        inputs=RiskReviewerStageInput.model_validate(values),
     )
 
     with pytest.raises(ValidationError):
