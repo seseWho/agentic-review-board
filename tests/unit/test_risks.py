@@ -119,7 +119,7 @@ def test_solution_alternative_characteristic_kind_values_are_closed_and_exact() 
 
 
 def test_risk_basis_reference_discriminator_selects_review_input_variant() -> None:
-    reference = TypeAdapter(RiskBasisReference).validate_python(
+    reference: RiskBasisReference = TypeAdapter(RiskBasisReference).validate_python(
         {
             "source": "REVIEW_INPUT",
             "field": "description",
@@ -132,7 +132,7 @@ def test_risk_basis_reference_discriminator_selects_review_input_variant() -> No
 
 
 def test_risk_basis_reference_discriminator_selects_problem_analysis_variant() -> None:
-    reference = TypeAdapter(RiskBasisReference).validate_python(
+    reference: RiskBasisReference = TypeAdapter(RiskBasisReference).validate_python(
         {
             "source": "PROBLEM_ANALYSIS",
             "kind": "FACT",
@@ -146,7 +146,7 @@ def test_risk_basis_reference_discriminator_selects_problem_analysis_variant() -
 
 
 def test_risk_basis_reference_discriminator_selects_solution_alternative_variant() -> None:
-    reference = TypeAdapter(RiskBasisReference).validate_python(
+    reference: RiskBasisReference = TypeAdapter(RiskBasisReference).validate_python(
         {
             "source": "SOLUTION_ALTERNATIVE",
             "alternative_id": "ALT-001",
