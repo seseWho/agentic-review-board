@@ -7,11 +7,13 @@ from agentic_review_board.domain.execution import (
     ReviewError,
     ReviewErrorKind,
     ReviewStatus,
+    RiskReviewerStageInput,
     SolutionArchitectStageInput,
     StageIdentity,
     StageStatus,
 )
 from agentic_review_board.domain.review import ReviewInput
+from agentic_review_board.domain.risks import RiskAssessment
 from agentic_review_board.domain.solutions import SolutionAlternatives
 
 
@@ -43,6 +45,10 @@ def solution_alternatives() -> SolutionAlternatives:
     )
 
 
+def risk_assessment() -> RiskAssessment:
+    return RiskAssessment(risks=(), overall_observations=())
+
+
 def analyst_error() -> ReviewError:
     return ReviewError(
         kind=ReviewErrorKind.EXECUTION,
@@ -54,6 +60,28 @@ def architect_error() -> ReviewError:
     return ReviewError(
         kind=ReviewErrorKind.EXECUTION,
         message="Solution Architect execution failed",
+    )
+
+
+def risk_error() -> ReviewError:
+    return ReviewError(
+        kind=ReviewErrorKind.EXECUTION,
+        message="Risk Reviewer execution failed",
+    )
+
+
+def architect_completed_review(
+    original_input: ReviewInput,
+    analysis: ProblemAnalysis,
+    alternatives: SolutionAlternatives,
+) -> Review:
+    return (
+        Review.create(original_input)
+        .start()
+        .start_analyst()
+        .complete_analyst(analysis)
+        .start_solution_architect()
+        .complete_solution_architect(alternatives)
     )
 
 
@@ -220,3 +248,185 @@ def test_failure_transitions_require_current_stage_running() -> None:
         analyst_completed.fail_analyst(analyst_error())
     with pytest.raises(ValueError):
         analyst_completed.fail_solution_architect(architect_error())
+
+
+def test_start_risk_reviewer_records_exact_trusted_upstream_inputs() -> None:
+    original_input = review_input()
+    analysis = problem_analysis()
+    alternatives = solution_alternatives()
+    completed = architect_completed_review(original_input, analysis, alternatives)
+    previous_analyst = completed.stage(StageIdentity.ANALYST)
+    previous_architect = completed.stage(StageIdentity.SOLUTION_ARCHITECT)
+    previous_critic = completed.stage(StageIdentity.CRITIC)
+    previous_coordinator = completed.stage(StageIdentity.COORDINATOR)
+
+    started = completed.start_risk_reviewer()
+
+    reviewer = started.stage(StageIdentity.RISK_REVIEWER)
+    assert started.status is ReviewStatus.RUNNING
+    assert reviewer.status is StageStatus.RUNNING
+    assert isinstance(reviewer.inputs, RiskReviewerStageInput)
+    assert reviewer.inputs.review_input is original_input
+    assert reviewer.inputs.problem_analysis is analysis
+    assert reviewer.inputs.solution_alternatives is alternatives
+    assert reviewer.output is None
+    assert reviewer.error is None
+    assert started.stage(StageIdentity.ANALYST) is previous_analyst
+    assert started.stage(StageIdentity.SOLUTION_ARCHITECT) is previous_architect
+    assert started.stage(StageIdentity.CRITIC) is previous_critic
+    assert started.stage(StageIdentity.COORDINATOR) is previous_coordinator
+
+
+def test_start_risk_reviewer_rejects_premature_or_repeated_start() -> None:
+    original_input = review_input()
+    analysis = problem_analysis()
+    alternatives = solution_alternatives()
+    running = Review.create(original_input).start()
+
+    with pytest.raises(ValueError):
+        running.start_risk_reviewer()
+
+    analyst_completed = running.start_analyst().complete_analyst(analysis)
+    with pytest.raises(ValueError):
+        analyst_completed.start_risk_reviewer()
+
+    architect_running = analyst_completed.start_solution_architect()
+    with pytest.raises(ValueError):
+        architect_running.start_risk_reviewer()
+
+    completed = architect_running.complete_solution_architect(alternatives)
+    reviewer_running = completed.start_risk_reviewer()
+    with pytest.raises(ValueError):
+        reviewer_running.start_risk_reviewer()
+
+
+def test_complete_risk_reviewer_preserves_recorded_inputs_and_exact_output() -> None:
+    original_input = review_input()
+    analysis = problem_analysis()
+    alternatives = solution_alternatives()
+    assessment = risk_assessment()
+    reviewer_running = architect_completed_review(
+        original_input,
+        analysis,
+        alternatives,
+    ).start_risk_reviewer()
+    running_stage = reviewer_running.stage(StageIdentity.RISK_REVIEWER)
+    assert isinstance(running_stage.inputs, RiskReviewerStageInput)
+    recorded_inputs = running_stage.inputs
+    previous_analyst = reviewer_running.stage(StageIdentity.ANALYST)
+    previous_architect = reviewer_running.stage(StageIdentity.SOLUTION_ARCHITECT)
+    previous_critic = reviewer_running.stage(StageIdentity.CRITIC)
+    previous_coordinator = reviewer_running.stage(StageIdentity.COORDINATOR)
+
+    completed = reviewer_running.complete_risk_reviewer(assessment)
+
+    reviewer = completed.stage(StageIdentity.RISK_REVIEWER)
+    assert completed.status is ReviewStatus.RUNNING
+    assert reviewer.status is StageStatus.COMPLETED
+    assert reviewer.inputs is recorded_inputs
+    assert reviewer.output is assessment
+    assert reviewer.error is None
+    assert completed.stage(StageIdentity.ANALYST) is previous_analyst
+    assert completed.stage(StageIdentity.SOLUTION_ARCHITECT) is previous_architect
+    assert completed.stage(StageIdentity.CRITIC) is previous_critic
+    assert completed.stage(StageIdentity.COORDINATOR) is previous_coordinator
+    assert completed.stage(StageIdentity.CRITIC).status is StageStatus.PENDING
+    assert completed.stage(StageIdentity.COORDINATOR).status is StageStatus.PENDING
+
+
+def test_complete_risk_reviewer_requires_running_stage() -> None:
+    original_input = review_input()
+    analysis = problem_analysis()
+    alternatives = solution_alternatives()
+    completed = architect_completed_review(original_input, analysis, alternatives)
+
+    with pytest.raises(ValueError):
+        completed.complete_risk_reviewer(risk_assessment())
+
+    reviewer_completed = completed.start_risk_reviewer().complete_risk_reviewer(risk_assessment())
+    with pytest.raises(ValueError):
+        reviewer_completed.complete_risk_reviewer(risk_assessment())
+
+
+def test_fail_risk_reviewer_atomically_preserves_upstream_work_and_inputs() -> None:
+    original_input = review_input()
+    analysis = problem_analysis()
+    alternatives = solution_alternatives()
+    reviewer_running = architect_completed_review(
+        original_input,
+        analysis,
+        alternatives,
+    ).start_risk_reviewer()
+    running_stage = reviewer_running.stage(StageIdentity.RISK_REVIEWER)
+    assert isinstance(running_stage.inputs, RiskReviewerStageInput)
+    recorded_inputs = running_stage.inputs
+    previous_analyst = reviewer_running.stage(StageIdentity.ANALYST)
+    previous_architect = reviewer_running.stage(StageIdentity.SOLUTION_ARCHITECT)
+    previous_critic = reviewer_running.stage(StageIdentity.CRITIC)
+    previous_coordinator = reviewer_running.stage(StageIdentity.COORDINATOR)
+    error = risk_error()
+
+    failed = reviewer_running.fail_risk_reviewer(error)
+
+    reviewer = failed.stage(StageIdentity.RISK_REVIEWER)
+    assert failed.status is ReviewStatus.INCOMPLETE
+    assert reviewer.status is StageStatus.FAILED
+    assert reviewer.inputs is recorded_inputs
+    assert reviewer.output is None
+    assert reviewer.error is error
+    assert failed.stage(StageIdentity.ANALYST) is previous_analyst
+    assert failed.stage(StageIdentity.SOLUTION_ARCHITECT) is previous_architect
+    assert failed.stage(StageIdentity.CRITIC) is previous_critic
+    assert failed.stage(StageIdentity.COORDINATOR) is previous_coordinator
+    assert failed.stage(StageIdentity.CRITIC).status is StageStatus.PENDING
+    assert failed.stage(StageIdentity.COORDINATOR).status is StageStatus.PENDING
+
+
+def test_fail_risk_reviewer_requires_running_stage_and_nonterminal_review() -> None:
+    original_input = review_input()
+    analysis = problem_analysis()
+    alternatives = solution_alternatives()
+    completed = architect_completed_review(original_input, analysis, alternatives)
+
+    with pytest.raises(ValueError):
+        completed.fail_risk_reviewer(risk_error())
+
+    reviewer_completed = completed.start_risk_reviewer().complete_risk_reviewer(risk_assessment())
+    with pytest.raises(ValueError):
+        reviewer_completed.fail_risk_reviewer(risk_error())
+
+    reviewer_failed = completed.start_risk_reviewer().fail_risk_reviewer(risk_error())
+    with pytest.raises(ValueError):
+        reviewer_failed.fail_risk_reviewer(risk_error())
+
+
+def test_risk_reviewer_transitions_use_identity_and_preserve_noncanonical_order() -> None:
+    original_input = review_input()
+    analysis = problem_analysis()
+    alternatives = solution_alternatives()
+    canonical = architect_completed_review(original_input, analysis, alternatives)
+    reordered_stages = (
+        canonical.stage(StageIdentity.COORDINATOR),
+        canonical.stage(StageIdentity.RISK_REVIEWER),
+        canonical.stage(StageIdentity.ANALYST),
+        canonical.stage(StageIdentity.CRITIC),
+        canonical.stage(StageIdentity.SOLUTION_ARCHITECT),
+    )
+    reordered = Review(
+        review_input=original_input,
+        status=ReviewStatus.RUNNING,
+        stages=reordered_stages,
+    )
+    expected_order = tuple(stage.identity for stage in reordered.stages)
+
+    started = reordered.start_risk_reviewer()
+    assert tuple(stage.identity for stage in started.stages) == expected_order
+    assert started.stage(StageIdentity.RISK_REVIEWER).status is StageStatus.RUNNING
+
+    completed = started.complete_risk_reviewer(risk_assessment())
+    assert tuple(stage.identity for stage in completed.stages) == expected_order
+    assert completed.stage(StageIdentity.RISK_REVIEWER).status is StageStatus.COMPLETED
+
+    failed = reordered.start_risk_reviewer().fail_risk_reviewer(risk_error())
+    assert tuple(stage.identity for stage in failed.stages) == expected_order
+    assert failed.stage(StageIdentity.RISK_REVIEWER).status is StageStatus.FAILED
