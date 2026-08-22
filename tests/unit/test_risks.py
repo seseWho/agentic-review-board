@@ -470,3 +470,48 @@ def test_zero_risk_and_fully_empty_assessments_are_valid() -> None:
     assert zero_risk.risks == ()
     assert fully_empty.risks == ()
     assert fully_empty.overall_observations == ()
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("ranking", ["ALT-001", "ALT-002"]),
+        ("preferred_alternative", "ALT-001"),
+        ("recommendation", "Choose ALT-001"),
+        ("winner", "ALT-001"),
+        ("alternatives", [{"id": "ALT-003"}]),
+        ("replacement_alternative", {"id": "ALT-003"}),
+        ("replacement_alternatives", [{"id": "ALT-003"}]),
+    ],
+)
+def test_risk_assessment_rejects_ranking_recommendation_and_alternative_redefinition(
+    field: str,
+    value: object,
+) -> None:
+    with pytest.raises(ValidationError):
+        RiskAssessment.model_validate(
+            {
+                "risks": [],
+                "overall_observations": [],
+                field: value,
+            }
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("probability", 0.7),
+        ("likelihood", 0.7),
+        ("risk_score", 7),
+    ],
+)
+def test_risk_rejects_unsupported_numeric_probability_and_scoring_fields(
+    field: str,
+    value: object,
+) -> None:
+    payload = risk_payload()
+    payload[field] = value
+
+    with pytest.raises(ValidationError):
+        Risk.model_validate(payload)
