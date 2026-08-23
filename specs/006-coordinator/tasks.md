@@ -97,16 +97,16 @@
 
 ### Tests first
 
-- [ ] T049 [US5] Extend orchestrator helpers/tests with Coordinator and exact five-role order, five-artifact handoff, trusted FinalReview reuse, Coordinator COMPLETED, Review COMPLETED.
-- [ ] T050 [US5] Extend every earlier-stage failure regression to prove Coordinator remains PENDING and is never invoked.
-- [ ] T051 [US6] Test real-participant Coordinator output failure maps to FAILED/INCOMPLETE, retains exact inputs, stores no output, preserves upstream, and uses exact OUTPUT_VALIDATION message.
-- [ ] T052 [US6] Test ordinary Coordinator Exception maps to exact EXECUTION message without raw detail; invariant misuse propagates and BaseException is not swallowed.
-- [ ] T053 [US6] Test sequential success→success and Coordinator-failure→fresh-review isolation across all five inputs and FinalReview outputs.
+- [X] T049 [US5] Extend orchestrator helpers/tests with Coordinator and exact five-role order, five-artifact handoff, trusted FinalReview reuse, Coordinator COMPLETED, Review COMPLETED.
+- [X] T050 [US5] Extend every earlier-stage failure regression to prove Coordinator remains PENDING and is never invoked.
+- [X] T051 [US6] Test real-participant Coordinator output failure maps to FAILED/INCOMPLETE, retains exact inputs, stores no output, preserves upstream, and uses exact OUTPUT_VALIDATION message.
+- [X] T052 [US6] Test ordinary Coordinator Exception maps to exact EXECUTION message without raw detail; invariant misuse propagates and BaseException is not swallowed.
+- [X] T053 [US6] Test sequential success→success and Coordinator-failure→fresh-review isolation across all five inputs and FinalReview outputs.
 
 ### Implementation
 
-- [ ] T054 [US5] Extend orchestrator constructor and append explicit fifth-stage start/retrieve/narrow/coordinate/complete sequence without loop, registry, graph, or framework.
-- [ ] T055 [US6] Add narrow Coordinator call boundary: CoordinatorOutputError → output validation; ordinary Exception → execution; exact safe messages; fail and return; preserve internal errors.
+- [X] T054 [US5] Extend orchestrator constructor and append explicit fifth-stage start/retrieve/narrow/coordinate/complete sequence without loop, registry, graph, or framework.
+- [X] T055 [US6] Add narrow Coordinator call boundary: CoordinatorOutputError → output validation; ordinary Exception → execution; exact safe messages; fail and return; preserve internal errors.
 
 ## Phase 6: Cross-Cutting Verification
 
