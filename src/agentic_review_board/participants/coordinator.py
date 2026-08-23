@@ -42,7 +42,13 @@ class Coordinator:
                 "critical_review": critical_review.model_dump(mode="json"),
             },
         )
-        return self._validate_structure(raw)
+        final_review = self._validate_structure(raw)
+        self._validate_ranking_and_risks(
+            final_review,
+            solution_alternatives,
+            risk_assessment,
+        )
+        return final_review
 
     @staticmethod
     def _validate_structure(raw: Mapping[str, object]) -> FinalReview:
@@ -52,3 +58,34 @@ class Coordinator:
             return FinalReview.model_validate(candidate)
         except ValidationError as exc:
             raise CoordinatorOutputError("invalid Coordinator output") from exc
+
+
+    @staticmethod
+    def _validate_ranking_and_risks(
+        final_review: FinalReview,
+        solution_alternatives: SolutionAlternatives,
+        risk_assessment: RiskAssessment,
+    ) -> None:
+        current_alternative_ids = {
+            alternative.id for alternative in solution_alternatives.alternatives
+        }
+        ranked_alternative_ids = {
+            alternative.alternative_id
+            for alternative in final_review.ranked_alternatives
+        }
+        if ranked_alternative_ids != current_alternative_ids:
+            raise CoordinatorOutputError("invalid Coordinator output")
+
+        if not current_alternative_ids:
+            if final_review.recommendation_outcome.value != "INSUFFICIENT_EVIDENCE":
+                raise CoordinatorOutputError("invalid Coordinator output")
+        elif final_review.preferred_alternative_id is not None:
+            if final_review.preferred_alternative_id not in current_alternative_ids:
+                raise CoordinatorOutputError("invalid Coordinator output")
+
+        current_risk_ids = {risk.id for risk in risk_assessment.risks}
+        if any(
+            principal.risk_id not in current_risk_ids
+            for principal in final_review.principal_risks
+        ):
+            raise CoordinatorOutputError("invalid Coordinator output")
