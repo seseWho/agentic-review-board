@@ -114,14 +114,14 @@ Every implementation task follows:
 
 ### Tests first
 
-- [ ] T036 [US5] Extend `tests/unit/test_review_transitions.py` with `start_critic()` happy path and preconditions: Review RUNNING, first three stages COMPLETED, Critic PENDING, Coordinator PENDING, exact four upstream objects captured, premature/repeated start rejected.
-- [ ] T037 [US5] Extend `tests/unit/test_review_transitions.py` with `complete_critic(...)`: Critic must be RUNNING; exact previous `CriticStageInput` preserved; exact supplied `CriticalReview` reused; Review remains RUNNING; prior stages and Coordinator remain unchanged.
-- [ ] T038 [US6] Extend `tests/unit/test_review_transitions.py` with `fail_critic(...)`: atomically produce Review INCOMPLETE + Critic FAILED; preserve exact input and upstream stages; store no output; keep Coordinator PENDING; reject failure before start or after a terminal state.
-- [ ] T039 [US5] Extend `tests/unit/test_review_transitions.py` with valid noncanonical stage tuple order proving Critic transitions locate/replace by `StageIdentity` and preserve tuple order.
+- [X] T036 [US5] Extend `tests/unit/test_review_transitions.py` with `start_critic()` happy path and preconditions: Review RUNNING, first three stages COMPLETED, Critic PENDING, Coordinator PENDING, exact four upstream objects captured, premature/repeated start rejected.
+- [X] T037 [US5] Extend `tests/unit/test_review_transitions.py` with `complete_critic(...)`: Critic must be RUNNING; exact previous `CriticStageInput` preserved; exact supplied `CriticalReview` reused; Review remains RUNNING; prior stages and Coordinator remain unchanged.
+- [X] T038 [US6] Extend `tests/unit/test_review_transitions.py` with `fail_critic(...)`: atomically produce Review INCOMPLETE + Critic FAILED; preserve exact input and upstream stages; store no output; keep Coordinator PENDING; reject failure before start or after a terminal state.
+- [X] T039 [US5] Extend `tests/unit/test_review_transitions.py` with valid noncanonical stage tuple order proving Critic transitions locate/replace by `StageIdentity` and preserve tuple order.
 
 ### Implementation
 
-- [ ] T040 [US5] Implement `start_critic()`, `complete_critic(critical_review)`, and `fail_critic(error)` in `src/agentic_review_board/domain/execution.py` using complete validated immutable Review reconstruction and no generic transition engine.
+- [X] T040 [US5] Implement `start_critic()`, `complete_critic(critical_review)`, and `fail_critic(error)` in `src/agentic_review_board/domain/execution.py` using complete validated immutable Review reconstruction and no generic transition engine.
 
 **Checkpoint**: All Critic lifecycle transitions are explicit, immutable, identity-based, and atomically valid before orchestration is extended.
 
