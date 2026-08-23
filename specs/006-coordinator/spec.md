@@ -129,18 +129,16 @@ As a user, I want the Coordinator to distinguish an evidence-supported preferenc
 6. Material unresolved information capable of changing the ranking remains visible.
 7. Qualitative confidence does not imply statistical certainty.
 
-### US4 — Handle zero or one alternative honestly
+### US4 — Handle zero alternatives honestly
 
-As a user, I want the final result to remain valid when upstream work contains fewer than two alternatives so that Coordinator does not fabricate comparison.
+As a user, I want the final result to remain valid when upstream work contains no alternatives so that Coordinator preserves insufficient evidence rather than fabricating comparison.
 
 #### Acceptance criteria
 
 1. With zero alternatives, ranking is empty and no preferred alternative is allowed.
 2. With zero alternatives, the result explains why no recommendation can be justified.
-3. With one alternative, the result may evaluate that alternative but SHALL NOT present a fabricated multi-option comparison.
-4. A sole alternative is not automatically preferred merely because it is the only candidate.
-5. If the sole alternative is recommended, the visible evidence must justify its suitability.
-6. No replacement alternatives are generated.
+3. Coordinator preserves the accepted upstream invariant that `SolutionAlternatives` contains exactly 0, 2, or 3 alternatives; a one-alternative input is not a valid trusted state.
+4. No replacement alternatives are generated.
 
 ### US5 — Complete the five-stage lifecycle
 
@@ -269,17 +267,11 @@ When `SolutionAlternatives.alternatives` is empty:
 - recommendation SHALL be withheld;
 - the final result SHALL preserve the upstream explanation and identify the next validation need.
 
-### COORD-FR-010 — One Alternative
+### COORD-FR-010 — Preserve Upstream Alternative Cardinality
 
-When exactly one alternative exists:
+Coordinator SHALL preserve the accepted `SolutionAlternatives` invariant that trusted upstream state contains exactly 0, 2, or 3 alternatives.
 
-- ranking SHALL contain exactly that alternative once at position 1;
-- its ranking entry SHALL still contain justification and final considerations;
-- the one-item ranking SHALL be treated as an explicit evaluation, not as a fabricated comparison;
-- no comparative claim against nonexistent alternatives is allowed;
-- position 1 SHALL NOT imply automatic preference;
-- preference remains evidence-dependent;
-- absence of competitors alone is not sufficient recommendation evidence.
+Slice 6 SHALL NOT expand that contract to admit one alternative. A directly constructed one-alternative value is invalid before Coordinator and is not a Coordinator edge case.
 
 ### COORD-FR-011 — Principal Risks
 
@@ -449,27 +441,26 @@ Only exceptions raised by the participant call belong inside this mapping bounda
 The implementation SHALL define and test at least:
 
 1. zero alternatives with explicit insufficient evidence;
-2. one alternative recommended with adequate support;
-3. one alternative not recommended because evidence is insufficient;
-4. multiple alternatives ranked exactly once each;
-5. empty `CriticalReview`;
-6. validation-only `CriticalReview`;
-7. a material criticism visibly reflected in the final result or explicitly dismissed as not decision-relevant with justification;
-8. a missing-alternative finding preserved as decision-relevant uncertainty without requiring a predetermined recommendation outcome;
-9. a contradiction or unresolved issue remaining visible without requiring a predetermined effect on ranking or confidence;
-10. zero risks without forced risk language;
-11. unknown ranked alternative ID;
-12. duplicate ranked alternative;
-13. omitted existing alternative in a required multi-alternative ranking;
-14. duplicated, tied, or non-contiguous positions;
-15. preferred alternative not ranked first;
-16. preferred alternative present in an insufficient-evidence result;
-17. recommendation marked sufficient without a preferred alternative;
-18. numeric confidence or unsupported extra fields;
-19. malformed output and ordinary provider failure;
-20. upstream failure preventing Coordinator invocation;
-21. equal-but-independent upstream objects rejected by same-execution provenance;
-22. sequential reviews remaining isolated.
+2. two alternatives ranked exactly once each;
+3. three alternatives ranked exactly once each;
+4. empty `CriticalReview`;
+5. validation-only `CriticalReview`;
+6. a material criticism visibly reflected in the final result or explicitly dismissed as not decision-relevant with justification;
+7. a missing-alternative finding preserved as decision-relevant uncertainty without requiring a predetermined recommendation outcome;
+8. a contradiction or unresolved issue remaining visible without requiring a predetermined effect on ranking or confidence;
+9. zero risks without forced risk language;
+10. unknown ranked alternative ID;
+11. duplicate ranked alternative;
+12. omitted existing alternative in a required multi-alternative ranking;
+13. duplicated, tied, or non-contiguous positions;
+14. preferred alternative not ranked first;
+15. preferred alternative present in an insufficient-evidence result;
+16. recommendation marked sufficient without a preferred alternative;
+17. numeric confidence or unsupported extra fields;
+18. malformed output and ordinary provider failure;
+19. upstream failure preventing Coordinator invocation;
+20. equal-but-independent upstream objects rejected by same-execution provenance;
+21. sequential reviews remaining isolated.
 
 Subjective LLM quality SHALL not be asserted as deterministic truth. Tests SHALL focus on contracts, exact references, lifecycle, and observable behavior.
 
@@ -483,7 +474,7 @@ Slice 6 is complete when:
 2. every existing alternative is ranked exactly once when multi-alternative ranking applies;
 3. every ranking position contains justification and final considerations;
 4. supported preference and insufficient-evidence outcomes are both representable and validated;
-5. zero- and one-alternative cases do not fabricate comparison or recommendation;
+5. zero-alternative cases do not fabricate comparison or recommendation, and the accepted 0/2/3 upstream cardinality remains unchanged;
 6. Review reaches `COMPLETED` only through successful Coordinator completion;
 7. Coordinator failure produces `INCOMPLETE` while preserving all upstream work;
 8. exact five-artifact same-execution provenance is enforced using identity;
@@ -497,7 +488,7 @@ Slice 6 is complete when:
 
 Specification review resolved the following decisions:
 
-1. one alternative uses the same ranking structure as a one-item explicit evaluation at position 1, without implying comparison or automatic preference;
+1. Coordinator preserves the accepted `SolutionAlternatives` cardinality of exactly 0, 2, or 3 alternatives; one alternative remains invalid upstream;
 2. recommendation outcome uses exactly `RECOMMENDED` or `INSUFFICIENT_EVIDENCE`;
 3. conclusion rationale is always required;
 4. principal risks use exact existing `Risk.id` references; unresolved questions use exact IDs where available and bounded visible text otherwise;
