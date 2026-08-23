@@ -98,7 +98,7 @@ As a user, I want the Coordinator to consolidate all validated review artifacts 
 1. Coordinator receives all five exact current-execution upstream artifacts.
 2. Coordinator returns a validated `FinalReview`.
 3. The final result includes a concise situation summary, principal risks, unresolved questions, a next validation step, and qualitative confidence.
-4. The final result remains advisory and preserves human decision authority.
+4. The final result contains an explicit decision-support notice stating that the result supports but does not replace human decision authority.
 5. Coordinator does not silently alter any upstream artifact.
 
 ### US2 — Rank alternatives transparently
@@ -113,7 +113,7 @@ As a user, I want every proposed alternative ordered and individually justified 
 4. Each position includes a concise justification grounded in visible review artifacts.
 5. Each position includes final considerations such as trade-offs, conditions, or material uncertainties.
 6. Coordinator does not introduce a new alternative.
-7. Ranking order is not inferred from input tuple order alone.
+7. Ranking order is represented by explicit validated positions and is not derived implicitly from the tuple position of upstream alternatives.
 
 ### US3 — Recommend only when justified
 
@@ -192,12 +192,13 @@ Coordinator SHALL produce a structured `FinalReview` containing conceptually:
 - situation summary;
 - ranked alternatives;
 - preferred alternative when justified;
-- recommendation status or equivalent explicit sufficient/insufficient-evidence state;
-- recommendation rationale;
+- recommendation outcome;
+- conclusion rationale;
 - principal risks;
 - unresolved questions;
 - suggested next validation step;
-- qualitative confidence.
+- qualitative confidence;
+- decision-support notice.
 
 Exact field structure is deferred to data-model review.
 
@@ -224,16 +225,30 @@ The data-model phase SHALL prefer the smallest Coordinator-specific traceability
 
 Coordinator SHALL consider `CriticalReview`, including criticisms, validated points, missing alternatives, contradictions, and unresolved issues, but SHALL make the final ranking decision itself.
 
-Critic findings SHALL NOT be treated as unquestionable facts or automatic ranking commands.
+Every material criticism SHALL either:
 
-### COORD-FR-007 — Preferred Alternative Consistency
+- be visibly reflected in ranking justification, conclusion rationale, principal risks, unresolved questions, confidence, or the next validation step; or
+- be explicitly identified as not decision-relevant, with a concise justification.
 
-When a preferred alternative exists:
+Critic findings SHALL NOT be treated as unquestionable facts or automatic ranking commands. Slice 6 SHALL NOT require a generic disposition matrix or a mechanical response to every validated point.
 
+### COORD-FR-007 — Recommendation Outcome and Preferred Alternative Consistency
+
+The recommendation outcome SHALL use exactly:
+
+- `RECOMMENDED`;
+- `INSUFFICIENT_EVIDENCE`.
+
+The conclusion rationale SHALL always be required and non-empty.
+
+When the outcome is `RECOMMENDED`:
+
+- a preferred alternative SHALL be present;
 - it SHALL identify an existing alternative;
 - it SHALL be consistent with the top-ranked alternative;
-- the result SHALL indicate that evidence is sufficient for recommendation;
-- rationale SHALL be non-empty and inspectable.
+- the conclusion rationale SHALL explain why the visible evidence supports preference.
+
+When the outcome is `INSUFFICIENT_EVIDENCE`, preferred alternative SHALL be absent.
 
 ### COORD-FR-008 — Insufficient Evidence
 
@@ -258,24 +273,29 @@ When `SolutionAlternatives.alternatives` is empty:
 
 When exactly one alternative exists:
 
-- any ranking representation SHALL contain that alternative at most once;
+- ranking SHALL contain exactly that alternative once at position 1;
+- its ranking entry SHALL still contain justification and final considerations;
+- the one-item ranking SHALL be treated as an explicit evaluation, not as a fabricated comparison;
 - no comparative claim against nonexistent alternatives is allowed;
-- preference remains optional and evidence-dependent;
+- position 1 SHALL NOT imply automatic preference;
+- preference remains evidence-dependent;
 - absence of competitors alone is not sufficient recommendation evidence.
 
 ### COORD-FR-011 — Principal Risks
 
 The final result SHALL expose material risks relevant to the conclusion without inventing risks absent from the visible review.
 
-The data model SHALL determine whether these are exact references, concise selections, or another bounded inspectable representation.
+Principal risks SHALL reference exact existing `Risk.id` values and SHALL NOT duplicate or invent risks. The data-model phase SHALL define the smallest Coordinator-specific representation needed for this selection.
 
 ### COORD-FR-012 — Unresolved Questions
 
 The final result SHALL preserve material missing information, uncertainty, contradictions, and unresolved issues that remain relevant to the human decision.
 
+Where an upstream item has a stable explicit ID, the unresolved question SHALL reference it exactly. Bounded concise text MAY be used only for visible upstream values that have no stable ID. The data-model phase SHALL define Coordinator-specific reference shapes without introducing a generic artifact-reference framework.
+
 ### COORD-FR-013 — Suggested Next Validation Step
 
-The final result SHALL contain a concrete advisory next validation step. It SHALL NOT execute the step or authorize an external action.
+The final result SHALL always contain one concrete advisory next validation step, including when a recommendation is justified and confidence is high. It SHALL NOT execute the step or authorize an external action.
 
 ### COORD-FR-014 — Qualitative Confidence
 
@@ -331,7 +351,12 @@ Coordinator SHALL remain `PENDING` unless all four upstream stages completed suc
 
 ### COORD-FR-022 — Safe Failure Mapping
 
-Coordinator output-validation failure and ordinary execution failure SHALL map to distinct provider-neutral error kinds with stable safe messages defined before implementation.
+Coordinator output-validation failure and ordinary execution failure SHALL map to distinct provider-neutral error kinds with these exact safe messages:
+
+```text
+Coordinator output validation failed
+Coordinator execution failed
+```
 
 Raw provider or validation details SHALL not be stored in trusted Review state.
 
@@ -344,6 +369,12 @@ Reusing Coordinator, other participants, or `ReviewOrchestrator` across reviews 
 ## 6. Lifecycle Expectations
 
 Slice 6 extends the existing lifecycle without changing the valid Analyst, Solution Architect, Risk Reviewer, or Critic prefixes.
+
+Across all five stages, Slice 6 SHALL accept exactly:
+
+- 10 `RUNNING` combinations: the nine accepted Slice-5 prefixes plus Coordinator `RUNNING` after the first four stages complete;
+- 5 `INCOMPLETE` combinations: exactly one failed stage with every previous stage completed and every later stage pending;
+- 1 `COMPLETED` combination: all five stages completed.
 
 ### Successful terminal state
 
@@ -423,9 +454,9 @@ The implementation SHALL define and test at least:
 4. multiple alternatives ranked exactly once each;
 5. empty `CriticalReview`;
 6. validation-only `CriticalReview`;
-7. criticisms that materially affect ranking;
-8. a missing-alternative finding that prevents justified recommendation;
-9. a contradiction or unresolved issue that lowers confidence or blocks recommendation;
+7. a material criticism visibly reflected in the final result or explicitly dismissed as not decision-relevant with justification;
+8. a missing-alternative finding preserved as decision-relevant uncertainty without requiring a predetermined recommendation outcome;
+9. a contradiction or unresolved issue remaining visible without requiring a predetermined effect on ranking or confidence;
 10. zero risks without forced risk language;
 11. unknown ranked alternative ID;
 12. duplicate ranked alternative;
@@ -462,15 +493,17 @@ Slice 6 is complete when:
 
 ---
 
-## 10. Assumptions and Clarifications Required During Review
+## 10. Resolved Specification Decisions
 
-The following decisions SHALL be resolved during specification review before approval:
+Specification review resolved the following decisions:
 
-1. whether one alternative should be represented as a one-item ranking or by a distinct non-comparative evaluation structure;
-2. the minimum explicit recommendation-state vocabulary needed to distinguish recommended from insufficient evidence;
-3. whether recommendation rationale is always required or only when a preference is emitted;
-4. whether principal risks and unresolved questions should reference exact upstream items or may use bounded concise text;
-5. the exact safe Coordinator boundary messages;
-6. whether a concrete next validation step is mandatory even when confidence is high and recommendation is justified.
+1. one alternative uses the same ranking structure as a one-item explicit evaluation at position 1, without implying comparison or automatic preference;
+2. recommendation outcome uses exactly `RECOMMENDED` or `INSUFFICIENT_EVIDENCE`;
+3. conclusion rationale is always required;
+4. principal risks use exact existing `Risk.id` references; unresolved questions use exact IDs where available and bounded visible text otherwise;
+5. exact safe boundary messages are `Coordinator output validation failed` and `Coordinator execution failed`;
+6. one concrete advisory next validation step is always required;
+7. `decision_support_notice` is mandatory;
+8. material criticisms must be visibly reflected or explicitly dismissed with justification.
 
-No plan or data model SHALL be created until these points and the rest of this specification are reviewed and approved.
+No plan or data model SHALL be created until this corrected specification is reviewed and explicitly approved.
