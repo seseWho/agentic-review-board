@@ -69,16 +69,16 @@
 
 ### Tests first
 
-- [ ] T037 [US5] Extend tests/unit/test_review_execution.py for CoordinatorStageInput, explicit unions, and Coordinator PENDING/RUNNING/COMPLETED/FAILED local shapes; completion requires FinalReview.
-- [ ] T038 [US5] Test exactly ten RUNNING, five INCOMPLETE, and one COMPLETED lifecycle shapes; reject skips, later execution after failure, multiple failures, and false completion.
-- [ ] T039 [US5] Test exact five-object identity provenance for Coordinator RUNNING/COMPLETED/FAILED and reject equal independent copies one artifact at a time.
-- [ ] T040 [US5] Test lifecycle/provenance lookup by StageIdentity, valid noncanonical tuples, canonical Review.create(), and order-preserving replacement.
+- [X] T037 [US5] Extend tests/unit/test_review_execution.py for CoordinatorStageInput, explicit unions, and Coordinator PENDING/RUNNING/COMPLETED/FAILED local shapes; completion requires FinalReview.
+- [X] T038 [US5] Test exactly ten RUNNING, five INCOMPLETE, and one COMPLETED lifecycle shapes; reject skips, later execution after failure, multiple failures, and false completion.
+- [X] T039 [US5] Test exact five-object identity provenance for Coordinator RUNNING/COMPLETED/FAILED and reject equal independent copies one artifact at a time.
+- [X] T040 [US5] Test lifecycle/provenance lookup by StageIdentity, valid noncanonical tuples, canonical Review.create(), and order-preserving replacement.
 
 ### Implementation
 
-- [ ] T041 [US5] Extend src/agentic_review_board/domain/execution.py with CoordinatorStageInput, FinalReview StageOutput, and Coordinator identity/type validation using explicit unions.
-- [ ] T042 [US5] Extend Review lifecycle validation to exactly 10 RUNNING, 5 INCOMPLETE, and 1 COMPLETED identity-based shapes.
-- [ ] T043 [US5] Extend same-execution provenance for exact five current Coordinator inputs, separate from generated-reference validation.
+- [X] T041 [US5] Extend src/agentic_review_board/domain/execution.py with CoordinatorStageInput, FinalReview StageOutput, and Coordinator identity/type validation using explicit unions.
+- [X] T042 [US5] Extend Review lifecycle validation to exactly 10 RUNNING, 5 INCOMPLETE, and 1 COMPLETED identity-based shapes.
+- [X] T043 [US5] Extend same-execution provenance for exact five current Coordinator inputs, separate from generated-reference validation.
 
 ## Phase 4: Coordinator Review Transitions
 
