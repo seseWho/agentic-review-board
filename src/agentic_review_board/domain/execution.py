@@ -614,6 +614,74 @@ class Review(BaseModel):
             review_status=ReviewStatus.INCOMPLETE,
         )
 
+    def start_critic(self) -> "Review":
+        self._require_running_review()
+        analyst = self.stage(StageIdentity.ANALYST)
+        architect = self.stage(StageIdentity.SOLUTION_ARCHITECT)
+        reviewer = self.stage(StageIdentity.RISK_REVIEWER)
+        critic = self.stage(StageIdentity.CRITIC)
+
+        if analyst.status is not StageStatus.COMPLETED or not isinstance(
+            analyst.output, ProblemAnalysis
+        ):
+            raise ValueError("Analyst must be completed before Critic starts")
+        if architect.status is not StageStatus.COMPLETED or not isinstance(
+            architect.output, SolutionAlternatives
+        ):
+            raise ValueError("Solution Architect must be completed before Critic starts")
+        if reviewer.status is not StageStatus.COMPLETED or not isinstance(
+            reviewer.output, RiskAssessment
+        ):
+            raise ValueError("Risk Reviewer must be completed before Critic starts")
+        if critic.status is not StageStatus.PENDING:
+            raise ValueError("Critic stage must be pending before start")
+
+        return self._replace_stage(
+            StageExecution(
+                identity=StageIdentity.CRITIC,
+                status=StageStatus.RUNNING,
+                inputs=CriticStageInput(
+                    review_input=self.review_input,
+                    problem_analysis=analyst.output,
+                    solution_alternatives=architect.output,
+                    risk_assessment=reviewer.output,
+                ),
+            )
+        )
+
+    def complete_critic(self, critical_review: CriticalReview) -> "Review":
+        self._require_running_review()
+        critic = self.stage(StageIdentity.CRITIC)
+        if critic.status is not StageStatus.RUNNING or not isinstance(
+            critic.inputs, CriticStageInput
+        ):
+            raise ValueError("Critic stage must be running before completion")
+        return self._replace_stage(
+            StageExecution(
+                identity=StageIdentity.CRITIC,
+                status=StageStatus.COMPLETED,
+                inputs=critic.inputs,
+                output=critical_review,
+            )
+        )
+
+    def fail_critic(self, error: ReviewError) -> "Review":
+        self._require_running_review()
+        critic = self.stage(StageIdentity.CRITIC)
+        if critic.status is not StageStatus.RUNNING or not isinstance(
+            critic.inputs, CriticStageInput
+        ):
+            raise ValueError("Critic stage must be running before failure")
+        return self._replace_stage(
+            StageExecution(
+                identity=StageIdentity.CRITIC,
+                status=StageStatus.FAILED,
+                inputs=critic.inputs,
+                error=error,
+            ),
+            review_status=ReviewStatus.INCOMPLETE,
+        )
+
     def _require_running_review(self) -> None:
         if self.status is not ReviewStatus.RUNNING:
             raise ValueError("review must be running for this transition")
