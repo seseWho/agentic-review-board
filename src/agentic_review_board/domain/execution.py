@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, StrictStr, field_validator, model_va
 
 from agentic_review_board.domain.analysis import ProblemAnalysis
 from agentic_review_board.domain.critics import CriticalReview
+from agentic_review_board.domain.final_reviews import FinalReview
 from agentic_review_board.domain.review import ReviewInput
 from agentic_review_board.domain.risks import RiskAssessment
 from agentic_review_board.domain.solutions import SolutionAlternatives
@@ -99,13 +100,32 @@ class CriticStageInput(BaseModel):
     risk_assessment: RiskAssessment
 
 
+class CoordinatorStageInput(BaseModel):
+    """Trusted in-memory input provenance for Coordinator execution."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    review_input: ReviewInput
+    problem_analysis: ProblemAnalysis
+    solution_alternatives: SolutionAlternatives
+    risk_assessment: RiskAssessment
+    critical_review: CriticalReview
+
+
 StageInput = (
     AnalystStageInput
     | SolutionArchitectStageInput
     | RiskReviewerStageInput
     | CriticStageInput
+    | CoordinatorStageInput
 )
-StageOutput = ProblemAnalysis | SolutionAlternatives | RiskAssessment | CriticalReview
+StageOutput = (
+    ProblemAnalysis
+    | SolutionAlternatives
+    | RiskAssessment
+    | CriticalReview
+    | FinalReview
+)
 
 
 class StageExecution(BaseModel):
@@ -187,8 +207,17 @@ class StageExecution(BaseModel):
             ):
                 raise ValueError("completed Critic stage requires CriticalReview output")
             return
-        if self.status is not StageStatus.PENDING:
-            raise ValueError("Coordinator must remain pending in Slice 5")
+        if self.identity is StageIdentity.COORDINATOR:
+            if self.status is not StageStatus.PENDING and not isinstance(
+                self.inputs, CoordinatorStageInput
+            ):
+                raise ValueError("Coordinator stage requires CoordinatorStageInput")
+            if self.status is StageStatus.COMPLETED and not isinstance(
+                self.output, FinalReview
+            ):
+                raise ValueError("completed Coordinator stage requires FinalReview output")
+            return
+        raise ValueError("unsupported stage identity")
 
 
 CANONICAL_STAGE_ORDER: tuple[StageIdentity, ...] = (
@@ -311,27 +340,53 @@ class Review(BaseModel):
                     "Critic must reference the exact current Risk Reviewer output instance"
                 )
 
-    def _validate_lifecycle_consistency(self) -> None:
-        analyst = self.stage(StageIdentity.ANALYST)
-        architect = self.stage(StageIdentity.SOLUTION_ARCHITECT)
-        reviewer = self.stage(StageIdentity.RISK_REVIEWER)
-        critic = self.stage(StageIdentity.CRITIC)
         coordinator = self.stage(StageIdentity.COORDINATOR)
-
         if coordinator.status is not StageStatus.PENDING:
-            raise ValueError("Coordinator must remain pending in Slice 5")
+            if not isinstance(coordinator.inputs, CoordinatorStageInput):
+                raise ValueError(
+                    "executed Coordinator stage must expose CoordinatorStageInput"
+                )
+            if coordinator.inputs.review_input is not self.review_input:
+                raise ValueError(
+                    "Coordinator input must reference the current ReviewInput instance"
+                )
+            if analyst.status is not StageStatus.COMPLETED:
+                raise ValueError("Coordinator requires a completed Analyst stage")
+            if coordinator.inputs.problem_analysis is not analyst.output:
+                raise ValueError(
+                    "Coordinator must reference the exact current Analyst output instance"
+                )
+            if architect.status is not StageStatus.COMPLETED:
+                raise ValueError(
+                    "Coordinator requires a completed Solution Architect stage"
+                )
+            if coordinator.inputs.solution_alternatives is not architect.output:
+                raise ValueError(
+                    "Coordinator must reference the exact current Solution Architect output"
+                )
+            if reviewer.status is not StageStatus.COMPLETED:
+                raise ValueError("Coordinator requires a completed Risk Reviewer stage")
+            if coordinator.inputs.risk_assessment is not reviewer.output:
+                raise ValueError(
+                    "Coordinator must reference the exact current Risk Reviewer output"
+                )
+            if critic.status is not StageStatus.COMPLETED:
+                raise ValueError("Coordinator requires a completed Critic stage")
+            if coordinator.inputs.critical_review is not critic.output:
+                raise ValueError(
+                    "Coordinator must reference the exact current Critic output instance"
+                )
+
+    def _validate_lifecycle_consistency(self) -> None:
+        statuses = tuple(
+            self.stage(identity).status for identity in CANONICAL_STAGE_ORDER
+        )
 
         if self.status is ReviewStatus.CREATED:
-            if any(stage.status is not StageStatus.PENDING for stage in self.stages):
+            if any(status is not StageStatus.PENDING for status in statuses):
                 raise ValueError("created review requires all stages pending")
             return
 
-        current_prefix = (
-            analyst.status,
-            architect.status,
-            reviewer.status,
-            critic.status,
-        )
         if self.status is ReviewStatus.RUNNING:
             valid_prefixes = {
                 (
@@ -339,8 +394,24 @@ class Review(BaseModel):
                     StageStatus.PENDING,
                     StageStatus.PENDING,
                     StageStatus.PENDING,
+                    StageStatus.PENDING,
                 ),
                 (
+                    StageStatus.RUNNING,
+                    StageStatus.PENDING,
+                    StageStatus.PENDING,
+                    StageStatus.PENDING,
+                    StageStatus.PENDING,
+                ),
+                (
+                    StageStatus.COMPLETED,
+                    StageStatus.PENDING,
+                    StageStatus.PENDING,
+                    StageStatus.PENDING,
+                    StageStatus.PENDING,
+                ),
+                (
+                    StageStatus.COMPLETED,
                     StageStatus.RUNNING,
                     StageStatus.PENDING,
                     StageStatus.PENDING,
@@ -348,19 +419,8 @@ class Review(BaseModel):
                 ),
                 (
                     StageStatus.COMPLETED,
-                    StageStatus.PENDING,
-                    StageStatus.PENDING,
-                    StageStatus.PENDING,
-                ),
-                (
                     StageStatus.COMPLETED,
-                    StageStatus.RUNNING,
                     StageStatus.PENDING,
-                    StageStatus.PENDING,
-                ),
-                (
-                    StageStatus.COMPLETED,
-                    StageStatus.COMPLETED,
                     StageStatus.PENDING,
                     StageStatus.PENDING,
                 ),
@@ -369,8 +429,24 @@ class Review(BaseModel):
                     StageStatus.COMPLETED,
                     StageStatus.RUNNING,
                     StageStatus.PENDING,
+                    StageStatus.PENDING,
                 ),
                 (
+                    StageStatus.COMPLETED,
+                    StageStatus.COMPLETED,
+                    StageStatus.COMPLETED,
+                    StageStatus.PENDING,
+                    StageStatus.PENDING,
+                ),
+                (
+                    StageStatus.COMPLETED,
+                    StageStatus.COMPLETED,
+                    StageStatus.COMPLETED,
+                    StageStatus.RUNNING,
+                    StageStatus.PENDING,
+                ),
+                (
+                    StageStatus.COMPLETED,
                     StageStatus.COMPLETED,
                     StageStatus.COMPLETED,
                     StageStatus.COMPLETED,
@@ -380,17 +456,12 @@ class Review(BaseModel):
                     StageStatus.COMPLETED,
                     StageStatus.COMPLETED,
                     StageStatus.COMPLETED,
+                    StageStatus.COMPLETED,
                     StageStatus.RUNNING,
-                ),
-                (
-                    StageStatus.COMPLETED,
-                    StageStatus.COMPLETED,
-                    StageStatus.COMPLETED,
-                    StageStatus.COMPLETED,
                 ),
             }
-            if current_prefix not in valid_prefixes:
-                raise ValueError("running review has an invalid Slice 5 stage prefix")
+            if statuses not in valid_prefixes:
+                raise ValueError("running review has an invalid Slice 6 stage prefix")
             return
 
         if self.status is ReviewStatus.INCOMPLETE:
@@ -400,8 +471,17 @@ class Review(BaseModel):
                     StageStatus.PENDING,
                     StageStatus.PENDING,
                     StageStatus.PENDING,
+                    StageStatus.PENDING,
                 ),
                 (
+                    StageStatus.COMPLETED,
+                    StageStatus.FAILED,
+                    StageStatus.PENDING,
+                    StageStatus.PENDING,
+                    StageStatus.PENDING,
+                ),
+                (
+                    StageStatus.COMPLETED,
                     StageStatus.COMPLETED,
                     StageStatus.FAILED,
                     StageStatus.PENDING,
@@ -410,22 +490,24 @@ class Review(BaseModel):
                 (
                     StageStatus.COMPLETED,
                     StageStatus.COMPLETED,
+                    StageStatus.COMPLETED,
                     StageStatus.FAILED,
                     StageStatus.PENDING,
                 ),
                 (
+                    StageStatus.COMPLETED,
                     StageStatus.COMPLETED,
                     StageStatus.COMPLETED,
                     StageStatus.COMPLETED,
                     StageStatus.FAILED,
                 ),
             }
-            if current_prefix not in valid_failures:
-                raise ValueError("incomplete review must contain one failed implemented stage")
+            if statuses not in valid_failures:
+                raise ValueError("incomplete review must contain one failed stage")
             return
 
         if self.status is ReviewStatus.COMPLETED:
-            if any(stage.status is not StageStatus.COMPLETED for stage in self.stages):
+            if any(status is not StageStatus.COMPLETED for status in statuses):
                 raise ValueError("completed review requires all five stages completed")
             return
         raise ValueError("unsupported review status")
