@@ -570,6 +570,7 @@ def test_risk_reviewer_output_validation_failure_is_mapped_fail_closed() -> None
         "solution_architect",
         "risk_reviewer",
     ]
+    assert_critic_pending(result)
     assert_coordinator_pending(result)
 
 
@@ -598,6 +599,12 @@ def test_risk_reviewer_execution_failure_is_mapped_without_raw_exception_text() 
     assert reviewer_stage.error.kind is ReviewErrorKind.EXECUTION
     assert reviewer_stage.error.message == "Risk Reviewer execution failed"
     assert "provider secret risk detail" not in reviewer_stage.error.message
+    assert [role for role, _ in llm.calls] == [
+        "analyst",
+        "solution_architect",
+        "risk_reviewer",
+    ]
+    assert_critic_pending(result)
     assert_coordinator_pending(result)
 
 
@@ -669,6 +676,8 @@ def test_reused_orchestrator_keeps_sequential_successful_reviews_isolated() -> N
     second_architect = second_result.stage(StageIdentity.SOLUTION_ARCHITECT)
     first_reviewer = first_result.stage(StageIdentity.RISK_REVIEWER)
     second_reviewer = second_result.stage(StageIdentity.RISK_REVIEWER)
+    first_critic = first_result.stage(StageIdentity.CRITIC)
+    second_critic = second_result.stage(StageIdentity.CRITIC)
 
     assert first_result.review_input is first_created.review_input
     assert second_result.review_input is second_created.review_input
@@ -693,6 +702,22 @@ def test_reused_orchestrator_keeps_sequential_successful_reviews_isolated() -> N
     assert first_reviewer.output is not None
     assert second_reviewer.output is not None
     assert first_reviewer.output is not second_reviewer.output
+    assert isinstance(first_critic.inputs, CriticStageInput)
+    assert isinstance(second_critic.inputs, CriticStageInput)
+    assert first_critic.inputs.review_input is first_result.review_input
+    assert second_critic.inputs.review_input is second_result.review_input
+    assert first_critic.inputs.problem_analysis is first_analyst.output
+    assert second_critic.inputs.problem_analysis is second_analyst.output
+    assert first_critic.inputs.solution_alternatives is first_architect.output
+    assert second_critic.inputs.solution_alternatives is second_architect.output
+    assert first_critic.inputs.risk_assessment is first_reviewer.output
+    assert second_critic.inputs.risk_assessment is second_reviewer.output
+    assert second_critic.inputs.problem_analysis is not first_analyst.output
+    assert second_critic.inputs.solution_alternatives is not first_architect.output
+    assert second_critic.inputs.risk_assessment is not first_reviewer.output
+    assert first_critic.output is not None
+    assert second_critic.output is not None
+    assert first_critic.output is not second_critic.output
     assert first_result.status is ReviewStatus.RUNNING
     assert second_result.status is ReviewStatus.RUNNING
     assert_coordinator_pending(first_result)
@@ -944,9 +969,17 @@ def test_critic_failure_does_not_contaminate_next_fresh_review() -> None:
     first_result = orchestrator.execute(
         create_named_review("Review expected to fail at Critic.")
     )
+    first_analyst = first_result.stage(StageIdentity.ANALYST)
+    first_architect = first_result.stage(StageIdentity.SOLUTION_ARCHITECT)
+    first_reviewer = first_result.stage(StageIdentity.RISK_REVIEWER)
     first_critic = first_result.stage(StageIdentity.CRITIC)
     assert first_result.status is ReviewStatus.INCOMPLETE
     assert first_critic.status is StageStatus.FAILED
+    assert isinstance(first_critic.inputs, CriticStageInput)
+    assert first_critic.inputs.review_input is first_result.review_input
+    assert first_critic.inputs.problem_analysis is first_analyst.output
+    assert first_critic.inputs.solution_alternatives is first_architect.output
+    assert first_critic.inputs.risk_assessment is first_reviewer.output
     assert first_critic.output is None
 
     llm._failures = {}
@@ -954,11 +987,24 @@ def test_critic_failure_does_not_contaminate_next_fresh_review() -> None:
     assert_fresh_created_review(second_created)
 
     second_result = orchestrator.execute(second_created)
+    second_analyst = second_result.stage(StageIdentity.ANALYST)
+    second_architect = second_result.stage(StageIdentity.SOLUTION_ARCHITECT)
+    second_reviewer = second_result.stage(StageIdentity.RISK_REVIEWER)
     second_critic = second_result.stage(StageIdentity.CRITIC)
     assert second_result.status is ReviewStatus.RUNNING
     assert second_critic.status is StageStatus.COMPLETED
     assert isinstance(second_critic.inputs, CriticStageInput)
     assert second_critic.inputs.review_input is second_result.review_input
+    assert second_critic.inputs.problem_analysis is second_analyst.output
+    assert second_critic.inputs.solution_alternatives is second_architect.output
+    assert second_critic.inputs.risk_assessment is second_reviewer.output
+    assert second_critic.inputs.review_input is not first_critic.inputs.review_input
+    assert second_critic.inputs.problem_analysis is not first_critic.inputs.problem_analysis
+    assert (
+        second_critic.inputs.solution_alternatives
+        is not first_critic.inputs.solution_alternatives
+    )
+    assert second_critic.inputs.risk_assessment is not first_critic.inputs.risk_assessment
     assert second_critic.output is not None
     assert second_critic.output is not first_critic.output
     assert_coordinator_pending(second_result)
