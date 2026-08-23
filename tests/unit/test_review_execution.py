@@ -1618,19 +1618,21 @@ def test_critic_same_execution_provenance_uses_exact_instances_for_all_executed_
         alternatives,
         assessment,
     )
-    kwargs: dict[str, object] = {}
-    if status is StageStatus.COMPLETED:
-        kwargs["output"] = CriticalReview()
-    if status is StageStatus.FAILED:
-        kwargs["error"] = ReviewError(
+    output = CriticalReview() if status is StageStatus.COMPLETED else None
+    error = (
+        ReviewError(
             kind=ReviewErrorKind.EXECUTION,
             message="Critic execution failed",
         )
+        if status is StageStatus.FAILED
+        else None
+    )
     critic = StageExecution(
         identity=StageIdentity.CRITIC,
         status=status,
         inputs=critic_inputs(review_input, analysis, alternatives, assessment),
-        **kwargs,
+        output=output,
+        error=error,
     )
 
     review = Review(
@@ -1695,19 +1697,21 @@ def test_critic_rejects_equal_but_independent_provenance_for_every_executed_shap
     exact_values[field] = equal_values[field]
     current_inputs = CriticStageInput.model_validate(exact_values)
 
-    kwargs: dict[str, object] = {}
-    if status is StageStatus.COMPLETED:
-        kwargs["output"] = CriticalReview()
-    if status is StageStatus.FAILED:
-        kwargs["error"] = ReviewError(
+    output = CriticalReview() if status is StageStatus.COMPLETED else None
+    error = (
+        ReviewError(
             kind=ReviewErrorKind.EXECUTION,
             message="Critic execution failed",
         )
+        if status is StageStatus.FAILED
+        else None
+    )
     critic = StageExecution(
         identity=StageIdentity.CRITIC,
         status=status,
         inputs=current_inputs,
-        **kwargs,
+        output=output,
+        error=error,
     )
 
     with pytest.raises(ValidationError):
