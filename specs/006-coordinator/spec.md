@@ -2,7 +2,7 @@
 
 **Branch**: `006-coordinator`  
 **Date**: 2026-08-23  
-**Status**: Draft — pending review
+**Status**: Approved — reviewed against canonical documents; ready for planning
 
 ## 1. Purpose
 
