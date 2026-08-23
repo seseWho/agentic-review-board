@@ -7,9 +7,9 @@ from agentic_review_board.domain.final_reviews import (
     CriticUnresolvedKind,
     CriticUnresolvedReference,
     FinalReviewSection,
+    PrincipalRisk,
     ProblemUnresolvedKind,
     ProblemUnresolvedReference,
-    PrincipalRisk,
     RankedAlternative,
     RecommendationOutcome,
     RiskUnresolvedReference,
@@ -178,7 +178,6 @@ def test_principal_risk_rejects_copied_risk_fields(field: str) -> None:
                 field: "forbidden",
             }
         )
-
 
 
 def test_problem_unresolved_reference_accepts_all_exact_kinds() -> None:
