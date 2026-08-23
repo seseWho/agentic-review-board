@@ -7,6 +7,7 @@ from agentic_review_board.domain.analysis import ProblemAnalysis
 from agentic_review_board.domain.critics import CriticalReview
 from agentic_review_board.domain.execution import (
     AnalystStageInput,
+    CoordinatorStageInput,
     CriticStageInput,
     Review,
     ReviewErrorKind,
@@ -16,10 +17,15 @@ from agentic_review_board.domain.execution import (
     StageIdentity,
     StageStatus,
 )
+from agentic_review_board.domain.final_reviews import FinalReview
 from agentic_review_board.domain.review import ReviewInput
 from agentic_review_board.domain.risks import RiskAssessment
 from agentic_review_board.domain.solutions import SolutionAlternatives
 from agentic_review_board.participants.analyst import Analyst
+from agentic_review_board.participants.coordinator import (
+    Coordinator,
+    CoordinatorOutputError,
+)
 from agentic_review_board.participants.critic import Critic, CriticOutputError
 from agentic_review_board.participants.risk_reviewer import (
     RiskReviewer,
@@ -51,6 +57,8 @@ class RecordingLLM:
         failure = self._failures.get(role)
         if failure is not None:
             raise failure
+        if role == "coordinator" and role not in self._responses:
+            return coordinator_response_for_payload(payload)
         return self._responses[role]
 
 
@@ -217,6 +225,42 @@ def invalid_critic_response() -> dict[str, object]:
     }
 
 
+def coordinator_response_for_payload(
+    payload: Mapping[str, object],
+) -> dict[str, object]:
+    raw_alternatives = payload["solution_alternatives"]
+    assert isinstance(raw_alternatives, dict)
+    alternatives = raw_alternatives["alternatives"]
+    assert isinstance(alternatives, list)
+    ranking = [
+        {
+            "alternative_id": alternative["id"],
+            "position": index,
+            "justification": "Current evidence supports this relative position.",
+            "considerations": ["Validate the remaining operational assumptions."],
+        }
+        for index, alternative in enumerate(alternatives, start=1)
+        if isinstance(alternative, dict)
+    ]
+    has_alternatives = bool(ranking)
+    return {
+        "situation_summary": "The current artifacts support a bounded conclusion.",
+        "ranked_alternatives": ranking,
+        "recommendation_outcome": (
+            "RECOMMENDED" if has_alternatives else "INSUFFICIENT_EVIDENCE"
+        ),
+        "preferred_alternative_id": (
+            ranking[0]["alternative_id"] if has_alternatives else None
+        ),
+        "conclusion_rationale": "The conclusion follows the current evidence.",
+        "principal_risks": [],
+        "unresolved_questions": [],
+        "criticism_dispositions": [],
+        "next_validation_step": "Validate the remaining operational assumptions.",
+        "confidence": "MEDIUM",
+    }
+
+
 def successful_responses() -> dict[str, Mapping[str, object]]:
     return {
         "analyst": analyst_response(),
@@ -245,6 +289,7 @@ def orchestrator_with(llm: RecordingLLM) -> ReviewOrchestrator:
         SolutionArchitect(llm),
         RiskReviewer(llm),
         Critic(llm),
+        Coordinator(llm),
     )
 
 
@@ -1008,3 +1053,128 @@ def test_critic_failure_does_not_contaminate_next_fresh_review() -> None:
     assert second_critic.output is not None
     assert second_critic.output is not first_critic.output
     assert_coordinator_pending(second_result)
+
+
+
+def test_coordinator_output_validation_failure_is_mapped_fail_closed() -> None:
+    responses = successful_responses()
+    responses["coordinator"] = {"unexpected": "invalid"}
+    llm = RecordingLLM(responses)
+
+    result = orchestrator_with(llm).execute(create_review())
+    coordinator = result.stage(StageIdentity.COORDINATOR)
+
+    assert result.status is ReviewStatus.INCOMPLETE
+    assert coordinator.status is StageStatus.FAILED
+    assert isinstance(coordinator.inputs, CoordinatorStageInput)
+    assert coordinator.output is None
+    assert coordinator.error is not None
+    assert coordinator.error.kind is ReviewErrorKind.OUTPUT_VALIDATION
+    assert coordinator.error.message == "Coordinator output validation failed"
+
+
+def test_coordinator_execution_failure_hides_raw_detail() -> None:
+    llm = RecordingLLM(
+        successful_responses(),
+        failures={"coordinator": RuntimeError("provider secret coordinator detail")},
+    )
+
+    result = orchestrator_with(llm).execute(create_review())
+    coordinator = result.stage(StageIdentity.COORDINATOR)
+
+    assert result.status is ReviewStatus.INCOMPLETE
+    assert coordinator.status is StageStatus.FAILED
+    assert coordinator.output is None
+    assert coordinator.error is not None
+    assert coordinator.error.kind is ReviewErrorKind.EXECUTION
+    assert coordinator.error.message == "Coordinator execution failed"
+    assert "provider secret coordinator detail" not in coordinator.error.message
+
+
+def test_coordinator_invariant_failure_outside_call_boundary_propagates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    llm = RecordingLLM(successful_responses())
+
+    def invalid_start_coordinator(self: Review) -> Review:
+        raise ValueError("Coordinator stage invariant failed")
+
+    monkeypatch.setattr(Review, "start_coordinator", invalid_start_coordinator)
+
+    with pytest.raises(ValueError, match="Coordinator stage invariant failed"):
+        orchestrator_with(llm).execute(create_review())
+
+    assert [role for role, _ in llm.calls] == [
+        "analyst",
+        "solution_architect",
+        "risk_reviewer",
+        "critic",
+    ]
+
+
+@pytest.mark.parametrize("control_signal", [KeyboardInterrupt(), SystemExit()])
+def test_orchestrator_does_not_swallow_coordinator_control_signals(
+    control_signal: BaseException,
+) -> None:
+    llm = RecordingLLM(
+        successful_responses(),
+        failures={"coordinator": control_signal},
+    )
+
+    with pytest.raises(type(control_signal)):
+        orchestrator_with(llm).execute(create_review())
+
+
+def test_orchestrator_reuses_exact_trusted_final_review(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    trusted = FinalReview.model_validate(
+        coordinator_response_for_payload(
+            {
+                "solution_alternatives": two_alternative_response(),
+            }
+        )
+    )
+    received: list[tuple[object, object, object, object, object]] = []
+
+    def exact_coordinate(
+        self: Coordinator,
+        review_input: ReviewInput,
+        analysis: ProblemAnalysis,
+        alternatives: SolutionAlternatives,
+        assessment: RiskAssessment,
+        critique: CriticalReview,
+    ) -> FinalReview:
+        received.append(
+            (review_input, analysis, alternatives, assessment, critique)
+        )
+        return trusted
+
+    monkeypatch.setattr(Coordinator, "coordinate", exact_coordinate)
+    result = orchestrator_with(RecordingLLM(successful_responses())).execute(
+        create_review()
+    )
+
+    analyst = result.stage(StageIdentity.ANALYST)
+    architect = result.stage(StageIdentity.SOLUTION_ARCHITECT)
+    reviewer = result.stage(StageIdentity.RISK_REVIEWER)
+    critic = result.stage(StageIdentity.CRITIC)
+    coordinator = result.stage(StageIdentity.COORDINATOR)
+    assert received == [
+        (
+            result.review_input,
+            analyst.output,
+            architect.output,
+            reviewer.output,
+            critic.output,
+        )
+    ]
+    assert result.status is ReviewStatus.COMPLETED
+    assert coordinator.status is StageStatus.COMPLETED
+    assert isinstance(coordinator.inputs, CoordinatorStageInput)
+    assert coordinator.inputs.review_input is result.review_input
+    assert coordinator.inputs.problem_analysis is analyst.output
+    assert coordinator.inputs.solution_alternatives is architect.output
+    assert coordinator.inputs.risk_assessment is reviewer.output
+    assert coordinator.inputs.critical_review is critic.output
+    assert coordinator.output is trusted
