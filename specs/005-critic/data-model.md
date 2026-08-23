@@ -836,7 +836,7 @@ Rejected: would encourage fabricated disagreement/activity.
 - nested alternative parent-ID + value resolution;
 - exact risk ID resolution;
 - risk ID + incompatible optional value rejected;
-- mitigation/residual concern parent-ID + value resolution;
+- mitigation/residual uncertainty parent-ID + value resolution;
 - cross-artifact Criticism requires sufficient distinct basis;
 - omission Criticism grounded by basis;
 - every ValidatedPoint resolves;
