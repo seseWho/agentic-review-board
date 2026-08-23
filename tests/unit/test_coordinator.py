@@ -3,7 +3,11 @@ from copy import deepcopy
 
 import pytest
 
-from agentic_review_board.domain.analysis import ProblemAnalysis, ReviewInputSource
+from agentic_review_board.domain.analysis import (
+    AnalysisFinding,
+    ProblemAnalysis,
+    ReviewInputSource,
+)
 from agentic_review_board.domain.critics import CriticalReview
 from agentic_review_board.domain.final_reviews import FinalReview
 from agentic_review_board.domain.review import ReviewInput
@@ -459,3 +463,321 @@ def test_context_rejects_unknown_principal_risk_id(risk_id: str) -> None:
 
     with pytest.raises(CoordinatorOutputError):
         run_coordinator(response, risks=populated_risk_assessment())
+
+
+
+def unresolved_response(*references: dict[str, object]) -> dict[str, object]:
+    response = recommended_response()
+    response["unresolved_questions"] = [
+        {
+            "id": f"QUESTION-{index:03d}",
+            "reference": reference,
+            "question": "What must be validated?",
+            "rationale": "This remains material to the decision.",
+        }
+        for index, reference in enumerate(references, start=1)
+    ]
+    return response
+
+
+def populated_problem_analysis() -> ProblemAnalysis:
+    return ProblemAnalysis(
+        objective="Choose a suitable deployment approach.",
+        facts=(),
+        constraints=(),
+        assumptions=(AnalysisFinding(id="ASM-001", text="Local capacity is sufficient."),),
+        missing_information=(
+            AnalysisFinding(id="MISS-001", text="Peak load is unknown."),
+        ),
+        uncertainties=(
+            AnalysisFinding(id=None, text="Operational ownership is unclear."),
+        ),
+    )
+
+
+def solution_alternatives_with_blockers() -> SolutionAlternatives:
+    current = solution_alternatives()
+    return SolutionAlternatives(
+        alternatives=current.alternatives,
+        generation_notes=GenerationNotes(
+            explanation="Alternatives exist but blockers remain visible.",
+            blocking_missing_information=(
+                FindingReference(id="BLOCK-001", text="Benchmark data is missing."),
+            ),
+            blocking_uncertainties=(
+                FindingReference(id=None, text="Support effort is uncertain."),
+            ),
+        ),
+    )
+
+
+def unresolved_critical_review() -> CriticalReview:
+    basis = {
+        "source": "REVIEW_INPUT",
+        "kind": "DESCRIPTION",
+        "value": "Review a proposed deployment change.",
+    }
+    return CriticalReview.model_validate(
+        {
+            "missing_alternatives": [
+                {
+                    "id": "MISSING-001",
+                    "category": "Incremental rollout",
+                    "rationale": "The portfolio omits a staged approach.",
+                    "weakens_later_recommendation": True,
+                    "basis_references": [basis],
+                }
+            ],
+            "contradictions": [
+                {
+                    "id": "CONTRA-001",
+                    "side_a": {
+                        "reference": basis,
+                        "statement": "Review a proposed deployment change.",
+                    },
+                    "side_b": {
+                        "reference": {
+                            "source": "PROBLEM_ANALYSIS",
+                            "kind": "PROBLEM_OBJECTIVE",
+                            "value": "Choose a suitable deployment approach.",
+                        },
+                        "statement": "Choose a suitable deployment approach.",
+                    },
+                    "rationale": "The scopes are not aligned.",
+                }
+            ],
+            "unresolved_issues": [
+                {
+                    "id": "ISSUE-001",
+                    "issue": "Operational ownership remains undefined.",
+                    "rationale": "Ownership affects feasibility.",
+                    "basis_references": [basis],
+                }
+            ],
+        }
+    )
+
+
+def run_coordinator_with_context(
+    response: Mapping[str, object],
+    *,
+    analysis: ProblemAnalysis | None = None,
+    alternatives: SolutionAlternatives | None = None,
+    risks: RiskAssessment | None = None,
+    critique: CriticalReview | None = None,
+) -> FinalReview:
+    return Coordinator(RecordingLLM(response)).coordinate(
+        review_input(),
+        analysis or problem_analysis(),
+        alternatives or solution_alternatives(),
+        risks or risk_assessment(),
+        critique or critical_review(),
+    )
+
+
+@pytest.mark.parametrize(
+    "reference",
+    [
+        {
+            "source": "PROBLEM_ANALYSIS",
+            "kind": "PROBLEM_ASSUMPTION",
+            "item_id": "ASM-001",
+            "value": "Local capacity is sufficient.",
+        },
+        {
+            "source": "PROBLEM_ANALYSIS",
+            "kind": "MISSING_INFORMATION",
+            "item_id": "MISS-001",
+            "value": "Peak load is unknown.",
+        },
+        {
+            "source": "PROBLEM_ANALYSIS",
+            "kind": "UNCERTAINTY",
+            "value": "Operational ownership is unclear.",
+        },
+    ],
+)
+def test_problem_unresolved_references_resolve_exact_current_findings(
+    reference: dict[str, object],
+) -> None:
+    result = run_coordinator_with_context(
+        unresolved_response(reference),
+        analysis=populated_problem_analysis(),
+    )
+    assert result.unresolved_questions[0].reference.source.value == "PROBLEM_ANALYSIS"
+
+
+@pytest.mark.parametrize(
+    "reference",
+    [
+        {
+            "source": "PROBLEM_ANALYSIS",
+            "kind": "PROBLEM_ASSUMPTION",
+            "item_id": "UNKNOWN",
+            "value": "Local capacity is sufficient.",
+        },
+        {
+            "source": "PROBLEM_ANALYSIS",
+            "kind": "MISSING_INFORMATION",
+            "item_id": "MISS-001",
+            "value": "peak load is unknown.",
+        },
+        {
+            "source": "PROBLEM_ANALYSIS",
+            "kind": "UNCERTAINTY",
+            "value": "Unknown uncertainty.",
+        },
+    ],
+)
+def test_problem_unresolved_references_fail_closed(
+    reference: dict[str, object],
+) -> None:
+    with pytest.raises(CoordinatorOutputError):
+        run_coordinator_with_context(
+            unresolved_response(reference),
+            analysis=populated_problem_analysis(),
+        )
+
+
+@pytest.mark.parametrize(
+    "reference",
+    [
+        {
+            "source": "SOLUTION_ALTERNATIVES",
+            "kind": "ALTERNATIVE_ASSUMPTION",
+            "alternative_id": "ALT-001",
+            "value": "Local compute remains available.",
+        },
+        {
+            "source": "SOLUTION_ALTERNATIVES",
+            "kind": "BLOCKING_MISSING_INFORMATION",
+            "item_id": "BLOCK-001",
+            "value": "Benchmark data is missing.",
+        },
+        {
+            "source": "SOLUTION_ALTERNATIVES",
+            "kind": "BLOCKING_UNCERTAINTY",
+            "value": "Support effort is uncertain.",
+        },
+    ],
+)
+def test_solution_unresolved_references_resolve_only_local_exact_targets(
+    reference: dict[str, object],
+) -> None:
+    result = run_coordinator_with_context(
+        unresolved_response(reference),
+        alternatives=solution_alternatives_with_blockers(),
+    )
+    assert result.unresolved_questions[0].reference.source.value == (
+        "SOLUTION_ALTERNATIVES"
+    )
+
+
+@pytest.mark.parametrize(
+    "reference",
+    [
+        {
+            "source": "SOLUTION_ALTERNATIVES",
+            "kind": "ALTERNATIVE_ASSUMPTION",
+            "alternative_id": "UNKNOWN",
+            "value": "Local compute remains available.",
+        },
+        {
+            "source": "SOLUTION_ALTERNATIVES",
+            "kind": "ALTERNATIVE_ASSUMPTION",
+            "alternative_id": "ALT-001",
+            "value": "local compute remains available.",
+        },
+        {
+            "source": "SOLUTION_ALTERNATIVES",
+            "kind": "BLOCKING_MISSING_INFORMATION",
+            "item_id": "BLOCK-001",
+            "value": "Wrong blocker.",
+        },
+    ],
+)
+def test_solution_unresolved_references_reject_fallback_or_repair(
+    reference: dict[str, object],
+) -> None:
+    with pytest.raises(CoordinatorOutputError):
+        run_coordinator_with_context(
+            unresolved_response(reference),
+            alternatives=solution_alternatives_with_blockers(),
+        )
+
+
+def test_risk_unresolved_reference_targets_only_exact_residual_uncertainty() -> None:
+    valid = {
+        "source": "RISK_ASSESSMENT",
+        "risk_id": "RISK-001",
+        "value": "The final owner is unknown.",
+    }
+    result = run_coordinator_with_context(
+        unresolved_response(valid),
+        risks=populated_risk_assessment(),
+    )
+    assert result.unresolved_questions[0].reference.source.value == "RISK_ASSESSMENT"
+
+    for invalid in (
+        {**valid, "risk_id": "UNKNOWN"},
+        {**valid, "value": "Operational ownership may remain unclear."},
+        {**valid, "value": "the final owner is unknown."},
+    ):
+        with pytest.raises(CoordinatorOutputError):
+            run_coordinator_with_context(
+                unresolved_response(invalid),
+                risks=populated_risk_assessment(),
+            )
+
+
+@pytest.mark.parametrize(
+    "reference",
+    [
+        {
+            "source": "CRITICAL_REVIEW",
+            "kind": "MISSING_ALTERNATIVE",
+            "item_id": "MISSING-001",
+            "value": "Incremental rollout",
+        },
+        {
+            "source": "CRITICAL_REVIEW",
+            "kind": "CONTRADICTION",
+            "item_id": "CONTRA-001",
+            "value": "The scopes are not aligned.",
+        },
+        {
+            "source": "CRITICAL_REVIEW",
+            "kind": "UNRESOLVED_ISSUE",
+            "item_id": "ISSUE-001",
+            "value": "Operational ownership remains undefined.",
+        },
+    ],
+)
+def test_critic_unresolved_references_use_exact_kind_id_and_visible_value(
+    reference: dict[str, object],
+) -> None:
+    result = run_coordinator_with_context(
+        unresolved_response(reference),
+        critique=unresolved_critical_review(),
+    )
+    assert result.unresolved_questions[0].reference.source.value == "CRITICAL_REVIEW"
+
+
+def test_context_rejects_distinct_references_to_same_resolved_target() -> None:
+    with pytest.raises(CoordinatorOutputError):
+        run_coordinator_with_context(
+            unresolved_response(
+                {
+                    "source": "PROBLEM_ANALYSIS",
+                    "kind": "MISSING_INFORMATION",
+                    "item_id": "MISS-001",
+                    "value": "Peak load is unknown.",
+                },
+                {
+                    "source": "PROBLEM_ANALYSIS",
+                    "kind": "MISSING_INFORMATION",
+                    "value": "Peak load is unknown.",
+                },
+            ),
+            analysis=populated_problem_analysis(),
+        )
