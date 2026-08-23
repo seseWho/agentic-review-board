@@ -888,3 +888,605 @@ def test_overall_observation_reference_rejects_ambiguous_value() -> None:
             ),
             risks=populated_risk_assessment(duplicate_observation=True),
         )
+
+
+def criticism_response(
+    *,
+    criticism_id: str = "CRIT-001",
+    target_type: str = "ALTERNATIVE",
+    target_reference: dict[str, object] | None = None,
+    basis_references: list[dict[str, object]] | None = None,
+    issue: str = "The proposed argument is weak.",
+) -> dict[str, object]:
+    return {
+        "criticisms": [
+            {
+                "id": criticism_id,
+                "target_type": target_type,
+                "target_reference": target_reference,
+                "basis_references": basis_references or [],
+                "issue": issue,
+                "importance": "HIGH",
+                "rationale": "The current artifacts do not provide sufficient visible support.",
+                "correction_or_question": "What current evidence supports this point?",
+            }
+        ]
+    }
+
+
+def missing_alternative_response() -> dict[str, object]:
+    return {
+        "missing_alternatives": [
+            {
+                "id": "MISSING-001",
+                "category": "Incremental adoption",
+                "rationale": "The portfolio contains no incremental deployment approach.",
+                "weakens_later_recommendation": True,
+                "basis_references": [
+                    critic_reference(
+                        "REVIEW_INPUT",
+                        "REVIEW_CONSTRAINT",
+                        value="Keep deployment simple",
+                    )
+                ],
+            }
+        ]
+    }
+
+
+def contradiction_response(
+    *,
+    alternative_statement: str = "Local deployment",
+) -> dict[str, object]:
+    return {
+        "contradictions": [
+            {
+                "id": "CONTRA-001",
+                "side_a": {
+                    "reference": critic_reference(
+                        "SOLUTION_ALTERNATIVES",
+                        "ALTERNATIVE",
+                        item_id="ALT-001",
+                    ),
+                    "statement": alternative_statement,
+                },
+                "side_b": {
+                    "reference": critic_reference(
+                        "RISK_ASSESSMENT",
+                        "RISK",
+                        item_id="RISK-001",
+                    ),
+                    "statement": "Operational ownership is not established.",
+                },
+                "rationale": (
+                    "The proposed local deployment depends on operational ownership "
+                    "that the current risk assessment says is not established."
+                ),
+            }
+        ]
+    }
+
+
+def unresolved_issue_response(
+    reference: dict[str, object] | None = None,
+) -> dict[str, object]:
+    return {
+        "unresolved_issues": [
+            {
+                "id": "UNRESOLVED-001",
+                "issue": "Operational ownership remains unresolved.",
+                "rationale": "No current artifact identifies a confirmed owner.",
+                "basis_references": [
+                    reference
+                    or critic_reference(
+                        "RISK_ASSESSMENT",
+                        "RISK",
+                        item_id="RISK-001",
+                    )
+                ],
+            }
+        ]
+    }
+
+
+@pytest.mark.parametrize(
+    ("source", "kind", "item_id", "value"),
+    [
+        (
+            "SOLUTION_ALTERNATIVES",
+            "RELEVANT_CONSTRAINT",
+            "ALT-001",
+            "Must run offline",
+        ),
+        (
+            "RISK_ASSESSMENT",
+            "AFFECTED_SCOPE",
+            "RISK-001",
+            "OVERALL",
+        ),
+        (
+            "RISK_ASSESSMENT",
+            "RISK_BASIS",
+            "RISK-001",
+            "ReviewInput.description",
+        ),
+    ],
+)
+def test_structured_upstream_values_cannot_use_invented_string_reference_kinds(
+    source: str,
+    kind: str,
+    item_id: str,
+    value: str,
+) -> None:
+    with pytest.raises(CriticOutputError):
+        run_critic(
+            validated_point_response(
+                critic_reference(
+                    source,
+                    kind,
+                    item_id=item_id,
+                    value=value,
+                )
+            ),
+            alternatives=populated_solution_alternatives(),
+            risks=populated_risk_assessment(),
+        )
+
+
+@pytest.mark.parametrize(
+    ("target", "basis", "alternatives", "risks"),
+    [
+        (
+            critic_reference(
+                "SOLUTION_ALTERNATIVES",
+                "ALTERNATIVE",
+                item_id="ALT-001",
+            ),
+            critic_reference(
+                "REVIEW_INPUT",
+                "REVIEW_CONSTRAINT",
+                value="Must run offline",
+            ),
+            populated_solution_alternatives(),
+            risk_assessment(),
+        ),
+        (
+            critic_reference(
+                "RISK_ASSESSMENT",
+                "RISK",
+                item_id="RISK-001",
+            ),
+            critic_reference(
+                "REVIEW_INPUT",
+                "DESCRIPTION",
+                value="Review a proposed technical deployment change.",
+            ),
+            solution_alternatives(),
+            populated_risk_assessment(),
+        ),
+    ],
+)
+def test_structured_concern_targets_owner_and_uses_direct_original_basis(
+    target: dict[str, object],
+    basis: dict[str, object],
+    alternatives: SolutionAlternatives,
+    risks: RiskAssessment,
+) -> None:
+    result = run_critic(
+        criticism_response(
+            target_reference=target,
+            basis_references=[basis],
+        ),
+        alternatives=alternatives,
+        risks=risks,
+    )
+
+    assert result.criticisms[0].target_reference is not None
+    assert result.criticisms[0].basis_references
+
+
+@pytest.mark.parametrize(
+    "target_type",
+    [
+        "ASSUMPTION",
+        "CONSTRAINT",
+        "ANALYSIS",
+        "ALTERNATIVE",
+        "ALTERNATIVE_CHARACTERISTIC",
+        "RISK",
+        "MITIGATION",
+    ],
+)
+def test_single_target_criticism_requires_explicit_target_reference(
+    target_type: str,
+) -> None:
+    with pytest.raises(CriticOutputError):
+        run_critic(
+            criticism_response(
+                target_type=target_type,
+                target_reference=None,
+                basis_references=[
+                    critic_reference(
+                        "REVIEW_INPUT",
+                        "DESCRIPTION",
+                        value="Review a proposed technical deployment change.",
+                    )
+                ],
+            )
+        )
+
+
+def test_cross_artifact_conclusion_requires_two_distinct_resolved_targets() -> None:
+    with pytest.raises(CriticOutputError):
+        run_critic(
+            criticism_response(
+                target_type="CROSS_ARTIFACT_CONCLUSION",
+                target_reference=critic_reference(
+                    "REVIEW_INPUT",
+                    "DESCRIPTION",
+                    value="Review a proposed technical deployment change.",
+                ),
+            )
+        )
+
+    result = run_critic(
+        criticism_response(
+            target_type="CROSS_ARTIFACT_CONCLUSION",
+            target_reference=critic_reference(
+                "REVIEW_INPUT",
+                "DESCRIPTION",
+                value="Review a proposed technical deployment change.",
+            ),
+            basis_references=[
+                critic_reference(
+                    "PROBLEM_ANALYSIS",
+                    "PROBLEM_ASSUMPTION",
+                    item_id="ASM-001",
+                    value="Local compute is available.",
+                )
+            ],
+        )
+    )
+
+    assert len(result.criticisms[0].basis_references) == 1
+
+
+def test_structurally_different_references_to_same_target_are_not_distinct_basis() -> None:
+    with pytest.raises(CriticOutputError):
+        run_critic(
+            criticism_response(
+                target_type="CROSS_ARTIFACT_CONCLUSION",
+                target_reference=critic_reference(
+                    "SOLUTION_ALTERNATIVES",
+                    "ALTERNATIVE",
+                    item_id="ALT-001",
+                ),
+                basis_references=[
+                    critic_reference(
+                        "SOLUTION_ALTERNATIVES",
+                        "ALTERNATIVE",
+                        item_id="ALT-001",
+                        value="Local deployment",
+                    )
+                ],
+            ),
+            alternatives=populated_solution_alternatives(),
+        )
+
+
+def test_omission_may_have_no_single_target_but_requires_visible_basis() -> None:
+    result = run_critic(
+        criticism_response(
+            target_type="OMISSION",
+            target_reference=None,
+            basis_references=[
+                critic_reference(
+                    "REVIEW_INPUT",
+                    "REVIEW_CONSTRAINT",
+                    value="Keep deployment simple",
+                )
+            ],
+        )
+    )
+
+    assert result.criticisms[0].target_reference is None
+    assert result.criticisms[0].basis_references
+
+
+def test_contradiction_statements_match_resolved_id_primary_visible_values() -> None:
+    result = run_critic(
+        contradiction_response(),
+        alternatives=populated_solution_alternatives(),
+        risks=populated_risk_assessment(),
+    )
+
+    contradiction = result.contradictions[0]
+    assert contradiction.side_a.statement == "Local deployment"
+    assert contradiction.side_b.statement == "Operational ownership is not established."
+
+
+def test_contradiction_statement_rejects_incompatible_visible_value() -> None:
+    with pytest.raises(CriticOutputError):
+        run_critic(
+            contradiction_response(alternative_statement="Different alternative"),
+            alternatives=populated_solution_alternatives(),
+            risks=populated_risk_assessment(),
+        )
+
+
+def test_review_containing_only_traceable_validated_points_is_trusted() -> None:
+    result = run_critic(
+        validated_point_response(
+            critic_reference(
+                "PROBLEM_ANALYSIS",
+                "PROBLEM_ASSUMPTION",
+                item_id="ASM-001",
+                value="Local compute is available.",
+            )
+        )
+    )
+
+    assert result.criticisms == ()
+    assert result.validated_points[0].target_reference.kind is (
+        CriticReferenceKind.PROBLEM_ASSUMPTION
+    )
+
+
+def test_missing_alternative_and_unresolved_issue_are_grounded_without_replacement() -> None:
+    response = missing_alternative_response()
+    response.update(
+        unresolved_issue_response(
+            critic_reference(
+                "REVIEW_INPUT",
+                "CONTEXT",
+                value="The current environment is locally managed.",
+            )
+        )
+    )
+
+    result = run_critic(response)
+
+    assert result.missing_alternatives[0].category == "Incremental adoption"
+    assert result.unresolved_issues[0].basis_references
+    assert not hasattr(result.missing_alternatives[0], "replacement_alternative")
+
+
+@pytest.mark.parametrize(
+    ("criticism_id", "target_type", "target_reference", "issue"),
+    [
+        (
+            "CRIT-WEAK",
+            "ANALYSIS",
+            critic_reference(
+                "PROBLEM_ANALYSIS",
+                "PROBLEM_OBJECTIVE",
+                value="Assess the deployment approaches and their constraints.",
+            ),
+            "The argument does not connect the objective to a supported conclusion.",
+        ),
+        (
+            "CRIT-RISK",
+            "RISK",
+            critic_reference(
+                "RISK_ASSESSMENT",
+                "RISK_SEVERITY",
+                item_id="RISK-001",
+                value="HIGH",
+            ),
+            "The operational risk may be underestimated.",
+        ),
+        (
+            "CRIT-OPTIMISM",
+            "ALTERNATIVE_CHARACTERISTIC",
+            critic_reference(
+                "SOLUTION_ALTERNATIVES",
+                "ADVANTAGE",
+                item_id="ALT-001",
+                value="Keeps operation local.",
+            ),
+            "The stated advantage expresses unjustified optimism.",
+        ),
+        (
+            "CRIT-CONCLUSION",
+            "CROSS_ARTIFACT_CONCLUSION",
+            critic_reference(
+                "SOLUTION_ALTERNATIVES",
+                "ALTERNATIVE",
+                item_id="ALT-001",
+            ),
+            "The alternative conclusion is unsupported by the visible risk evidence.",
+        ),
+    ],
+)
+def test_critic_supports_traceable_material_criticism_examples(
+    criticism_id: str,
+    target_type: str,
+    target_reference: dict[str, object],
+    issue: str,
+) -> None:
+    basis = [
+        critic_reference(
+            "REVIEW_INPUT",
+            "DESCRIPTION",
+            value="Review a proposed technical deployment change.",
+        )
+    ]
+    result = run_critic(
+        criticism_response(
+            criticism_id=criticism_id,
+            target_type=target_type,
+            target_reference=target_reference,
+            basis_references=basis,
+            issue=issue,
+        ),
+        alternatives=populated_solution_alternatives(),
+        risks=populated_risk_assessment(),
+    )
+
+    assert result.criticisms[0].id == criticism_id
+
+
+def test_zero_alternative_and_zero_risk_inputs_do_not_force_artificial_findings() -> None:
+    result = run_critic(
+        {},
+        alternatives=solution_alternatives(),
+        risks=risk_assessment(),
+    )
+
+    assert result == CriticalReview()
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        {"criticisms": [{"id": "CRIT-001"}]},
+        {"unexpected": "not allowed"},
+        validated_point_response(
+            critic_reference(
+                "REVIEW_INPUT",
+                "QUESTION",
+                value="Unsupported reference kind",
+            )
+        ),
+        validated_point_response(
+            critic_reference(
+                "REVIEW_INPUT",
+                "DESCRIPTION",
+                value="Unknown description",
+            )
+        ),
+    ],
+)
+def test_malformed_or_unsupported_output_fails_with_dedicated_error(
+    response: Mapping[str, object],
+) -> None:
+    with pytest.raises(CriticOutputError):
+        run_critic(response)
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        criticism_response(
+            target_reference=critic_reference(
+                "REVIEW_INPUT",
+                "DESCRIPTION",
+                value="Unknown description",
+            )
+        ),
+        validated_point_response(
+            critic_reference(
+                "REVIEW_INPUT",
+                "DESCRIPTION",
+                value="Unknown description",
+            )
+        ),
+        {
+            "missing_alternatives": [
+                {
+                    "id": "MISSING-001",
+                    "category": "Incremental adoption",
+                    "rationale": "The current portfolio omits an incremental approach.",
+                    "weakens_later_recommendation": True,
+                    "basis_references": [
+                        critic_reference(
+                            "REVIEW_INPUT",
+                            "DESCRIPTION",
+                            value="Unknown description",
+                        )
+                    ],
+                }
+            ]
+        },
+        {
+            "contradictions": [
+                {
+                    "id": "CONTRA-001",
+                    "side_a": {
+                        "reference": critic_reference(
+                            "REVIEW_INPUT",
+                            "DESCRIPTION",
+                            value="Unknown description",
+                        ),
+                        "statement": "Unknown description",
+                    },
+                    "side_b": {
+                        "reference": critic_reference(
+                            "PROBLEM_ANALYSIS",
+                            "PROBLEM_OBJECTIVE",
+                            value="Assess the deployment approaches and their constraints.",
+                        ),
+                        "statement": (
+                            "Assess the deployment approaches and their constraints."
+                        ),
+                    },
+                    "rationale": "The two visible statements conflict.",
+                }
+            ]
+        },
+        unresolved_issue_response(
+            critic_reference(
+                "REVIEW_INPUT",
+                "DESCRIPTION",
+                value="Unknown description",
+            )
+        ),
+    ],
+)
+def test_invalid_nested_reference_in_each_collection_rejects_whole_review(
+    response: Mapping[str, object],
+) -> None:
+    with pytest.raises(CriticOutputError):
+        run_critic(response)
+
+
+def test_one_invalid_finding_prevents_partial_trust_of_valid_findings() -> None:
+    response = validated_point_response(
+        critic_reference(
+            "REVIEW_INPUT",
+            "DESCRIPTION",
+            value="Review a proposed technical deployment change.",
+        )
+    )
+    points = response["validated_points"]
+    assert isinstance(points, list)
+    points.append(
+        {
+            "id": "VALID-002",
+            "target_reference": critic_reference(
+                "REVIEW_INPUT",
+                "DESCRIPTION",
+                value="Unknown description",
+            ),
+            "rationale": "This generated point is not actually grounded.",
+        }
+    )
+
+    with pytest.raises(CriticOutputError):
+        run_critic(response)
+
+
+def test_contextual_resolution_allows_only_approved_whitespace_stripping() -> None:
+    stripped = run_critic(
+        validated_point_response(
+            critic_reference(
+                "REVIEW_INPUT",
+                "DESCRIPTION",
+                value="  Review a proposed technical deployment change.  ",
+            )
+        )
+    )
+    assert stripped.validated_points[0].target_reference.value == (
+        "Review a proposed technical deployment change."
+    )
+
+    with pytest.raises(CriticOutputError):
+        run_critic(
+            validated_point_response(
+                critic_reference(
+                    "REVIEW_INPUT",
+                    "DESCRIPTION",
+                    value="review a proposed technical deployment change.",
+                )
+            )
+        )
