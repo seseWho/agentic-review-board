@@ -24,7 +24,7 @@
 - [ ] T011 [US3] Test recommendation consistency: RECOMMENDED requires non-empty ranking and preferred position-1 ID; INSUFFICIENT_EVIDENCE forbids preferred ID but permits ranking; rationale always required.
 - [ ] T012 [US4] Test zero-ranking + INSUFFICIENT_EVIDENCE valid and RECOMMENDED invalid; do not widen the accepted 0/2/3 SolutionAlternatives cardinality.
 - [ ] T013 [US1] Test required summary/next step, existing QualitativeLevel confidence, fixed exact decision-support notice, tuple normalization, immutability, unknown fields, and forbidden scoring/probability fields.
-- [ ] T014 [US6] Test aggregate rejection for gaps/ties/duplicate positions or identities, duplicate unresolved targets, wrong notice, blanks, and one invalid nested item.
+- [ ] T014 [US6] Test intrinsic aggregate rejection for gaps/ties/duplicate positions or identities, structurally identical unresolved references, wrong notice, blanks, and one invalid nested item; do not attempt current-target resolution in domain-only tests.
 
 ### Implementation
 
@@ -40,7 +40,7 @@
 
 ### Tests first
 
-- [ ] T018 [US1] Create tests/unit/test_coordinator.py with recording LLMPort and valid two-alternative RECOMMENDED result proving role coordinator, exact five-artifact JSON payload, parsing, and trusted return.
+- [ ] T018 [US1] Create tests/unit/test_coordinator.py with recording LLMPort and valid two-alternative RECOMMENDED result proving role coordinator, exact five-artifact JSON payload, parsing, trusted return, all five upstream object identities/content unchanged, and FinalReview returned as a separate artifact.
 - [ ] T019 [US2] Test two/three-alternative complete ID-set equality, contiguous positions, tuple-order independence, per-position justification/considerations, and ranking-change conditions.
 - [ ] T020 [US2] Test ranking rejection for unknown, duplicate, omitted, extra, blank, mismatched-count, tied, or non-contiguous entries.
 - [ ] T021 [US3] Test preferred position 1 and reject preferred unknown/not-first/missing for RECOMMENDED or present for INSUFFICIENT_EVIDENCE.
@@ -50,7 +50,7 @@
 - [ ] T025 [US1] Test alternative-local assumptions by exact alternative_id+value with no global fallback; test both generation blockers with optional IDs and all missing/mismatch/ambiguity failures.
 - [ ] T026 [US1] Test Risk unresolved reference resolves only exact risk_id + residual_uncertainty; reject absent uncertainty, unknown ID, mismatch, and other Risk fields.
 - [ ] T027 [US1] Test Critic unresolved exact ID/value mappings for missing alternative category, contradiction rationale, and unresolved issue text; reject wrong kinds and IDs.
-- [ ] T028 [US1] Test unique resolved unresolved targets, recursive atomic validation, no fuzzy/case-folded repair, and no generic paths/string serialization.
+- [ ] T028 [US1] Test that structurally different unresolved references resolving to the same current upstream target are rejected contextually; also test recursive atomic validation, no fuzzy/case-folded repair, and no generic paths/string serialization.
 - [ ] T029 [US1] Test exact Criticism-ID disposition set equality, no importance threshold, REFLECTED/DISMISSED rules, and unknown/duplicate/omitted ID rejection.
 - [ ] T030 [US3] Test insufficient evidence with 2/3 alternatives requires a valid unresolved question; zero alternatives may omit it when generation notes and required rationale/next step exist.
 - [ ] T031 [US1] Test empty-Critic and validation-only-Critic require empty dispositions; mixed CriticalReview shows validated points need no disposition.
