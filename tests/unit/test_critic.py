@@ -14,7 +14,7 @@ from agentic_review_board.domain.critics import (
 )
 from agentic_review_board.domain.review import ReviewInput
 from agentic_review_board.domain.risks import RiskAssessment
-from agentic_review_board.domain.solutions import SolutionAlternatives
+from agentic_review_board.domain.solutions import GenerationNotes, SolutionAlternatives
 from agentic_review_board.participants.critic import Critic, CriticOutputError
 
 
@@ -90,11 +90,11 @@ def problem_analysis(*, duplicate_constraint_text: bool = False) -> ProblemAnaly
 def solution_alternatives() -> SolutionAlternatives:
     return SolutionAlternatives(
         alternatives=(),
-        generation_notes={
-            "explanation": "Current evidence is insufficient for meaningful alternatives.",
-            "blocking_missing_information": [],
-            "blocking_uncertainties": [],
-        },
+        generation_notes=GenerationNotes(
+            explanation="Current evidence is insufficient for meaningful alternatives.",
+            blocking_missing_information=(),
+            blocking_uncertainties=(),
+        ),
     )
 
 
