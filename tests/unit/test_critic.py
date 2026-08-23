@@ -13,8 +13,14 @@ from agentic_review_board.domain.critics import (
     CriticReferenceKind,
 )
 from agentic_review_board.domain.review import ReviewInput
-from agentic_review_board.domain.risks import RiskAssessment
-from agentic_review_board.domain.solutions import GenerationNotes, SolutionAlternatives
+from agentic_review_board.domain.risks import Risk, RiskAssessment, RiskScope, RiskScopeKind
+from agentic_review_board.domain.shared import QualitativeLevel
+from agentic_review_board.domain.solutions import (
+    FindingReference,
+    GenerationNotes,
+    SolutionAlternative,
+    SolutionAlternatives,
+)
 from agentic_review_board.participants.critic import Critic, CriticOutputError
 
 
@@ -137,12 +143,14 @@ def run_critic(
     *,
     current_input: ReviewInput | None = None,
     analysis: ProblemAnalysis | None = None,
+    alternatives: SolutionAlternatives | None = None,
+    risks: RiskAssessment | None = None,
 ) -> CriticalReview:
     return Critic(RecordingLLM(response)).review(
         current_input or review_input(),
         analysis or problem_analysis(),
-        solution_alternatives(),
-        risk_assessment(),
+        alternatives or solution_alternatives(),
+        risks or risk_assessment(),
     )
 
 
@@ -401,4 +409,477 @@ def test_problem_analysis_text_only_reference_fails_when_value_is_ambiguous() ->
                 )
             ),
             analysis=problem_analysis(duplicate_constraint_text=True),
+        )
+
+
+def populated_solution_alternatives(
+    *,
+    duplicate_advantage: bool = False,
+) -> SolutionAlternatives:
+    advantages = (
+        ("Keeps operation local.", "Keeps operation local.")
+        if duplicate_advantage
+        else ("Keeps operation local.", "Avoids a network dependency.")
+    )
+    return SolutionAlternatives(
+        alternatives=(
+            SolutionAlternative(
+                id="ALT-001",
+                name="Local deployment",
+                description="Run the capability in the existing local environment.",
+                advantages=advantages,
+                disadvantages=("Requires local lifecycle management.",),
+                assumptions=("Local compute is available.",),
+                implementation_complexity=QualitativeLevel.MEDIUM,
+                relevant_constraints=(),
+            ),
+            SolutionAlternative(
+                id="ALT-002",
+                name="Managed edge deployment",
+                description="Run the capability in a managed edge environment.",
+                advantages=("Reduces local lifecycle work.",),
+                disadvantages=("Introduces an external operational dependency.",),
+                assumptions=("A suitable managed environment is available.",),
+                implementation_complexity=QualitativeLevel.HIGH,
+                relevant_constraints=(),
+            ),
+        )
+    )
+
+
+def generation_notes_alternatives(
+    *,
+    include_notes: bool = True,
+    duplicate_missing_text: bool = False,
+) -> SolutionAlternatives:
+    if not include_notes:
+        return populated_solution_alternatives()
+
+    missing_references = (
+        (
+            FindingReference(id="MISS-001", text="Peak load is unknown."),
+            FindingReference(id="MISS-002", text="Peak load is unknown."),
+        )
+        if duplicate_missing_text
+        else (FindingReference(id="MISS-001", text="Peak load is unknown."),)
+    )
+    return SolutionAlternatives(
+        alternatives=(),
+        generation_notes=GenerationNotes(
+            explanation="Current evidence is insufficient for meaningful alternatives.",
+            blocking_missing_information=missing_references,
+            blocking_uncertainties=(
+                FindingReference(
+                    id="UNC-001",
+                    text="Operational ownership is unclear.",
+                ),
+            ),
+        ),
+    )
+
+
+def populated_risk_assessment(
+    *,
+    include_optional_fields: bool = True,
+    duplicate_observation: bool = False,
+) -> RiskAssessment:
+    risk = Risk(
+        id="RISK-001",
+        category="operational" if include_optional_fields else None,
+        description="Operational ownership is not established.",
+        affected_scope=RiskScope(kind=RiskScopeKind.OVERALL),
+        severity=QualitativeLevel.HIGH,
+        basis=(
+            {
+                "source": "REVIEW_INPUT",
+                "field": "description",
+                "value": "Review a proposed technical deployment change.",
+            },
+        ),
+        mitigation=(
+            "Assign an explicit operational owner."
+            if include_optional_fields
+            else None
+        ),
+        residual_uncertainty=(
+            "The required support effort remains unknown."
+            if include_optional_fields
+            else None
+        ),
+    )
+    observations = (
+        (
+            "The current risk assessment is qualitative.",
+            "The current risk assessment is qualitative.",
+        )
+        if duplicate_observation
+        else ("The current risk assessment is qualitative.",)
+    )
+    return RiskAssessment(risks=(risk,), overall_observations=observations)
+
+
+@pytest.mark.parametrize(
+    ("kind", "value"),
+    [
+        ("ALTERNATIVE_NAME", "Local deployment"),
+        (
+            "ALTERNATIVE_DESCRIPTION",
+            "Run the capability in the existing local environment.",
+        ),
+        ("ADVANTAGE", "Keeps operation local."),
+        ("DISADVANTAGE", "Requires local lifecycle management."),
+        ("ALTERNATIVE_ASSUMPTION", "Local compute is available."),
+        ("IMPLEMENTATION_COMPLEXITY", "MEDIUM"),
+    ],
+)
+def test_solution_alternative_nested_reference_resolves_every_supported_kind(
+    kind: str,
+    value: str,
+) -> None:
+    result = run_critic(
+        validated_point_response(
+            critic_reference(
+                "SOLUTION_ALTERNATIVES",
+                kind,
+                item_id="ALT-001",
+                value=value,
+            )
+        ),
+        alternatives=populated_solution_alternatives(),
+    )
+
+    assert result.validated_points[0].target_reference.value == value
+
+
+@pytest.mark.parametrize("value", [None, "Local deployment"])
+def test_alternative_id_primary_reference_resolves_with_optional_exact_name(
+    value: str | None,
+) -> None:
+    result = run_critic(
+        validated_point_response(
+            critic_reference(
+                "SOLUTION_ALTERNATIVES",
+                "ALTERNATIVE",
+                item_id="ALT-001",
+                value=value,
+            )
+        ),
+        alternatives=populated_solution_alternatives(),
+    )
+
+    assert result.validated_points[0].target_reference.item_id == "ALT-001"
+
+
+@pytest.mark.parametrize(
+    "reference",
+    [
+        critic_reference(
+            "SOLUTION_ALTERNATIVES",
+            "ALTERNATIVE",
+            item_id="ALT-999",
+        ),
+        critic_reference(
+            "SOLUTION_ALTERNATIVES",
+            "ALTERNATIVE",
+            item_id="ALT-001",
+            value="Different name",
+        ),
+        critic_reference(
+            "SOLUTION_ALTERNATIVES",
+            "ALTERNATIVE_DESCRIPTION",
+            item_id="ALT-001",
+            value="Different description",
+        ),
+        critic_reference(
+            "SOLUTION_ALTERNATIVES",
+            "IMPLEMENTATION_COMPLEXITY",
+            item_id="ALT-001",
+            value="HIGH",
+        ),
+    ],
+)
+def test_solution_alternative_reference_rejects_unknown_or_mismatched_target(
+    reference: dict[str, object],
+) -> None:
+    with pytest.raises(CriticOutputError):
+        run_critic(
+            validated_point_response(reference),
+            alternatives=populated_solution_alternatives(),
+        )
+
+
+def test_nested_alternative_collection_reference_rejects_ambiguous_value() -> None:
+    with pytest.raises(CriticOutputError):
+        run_critic(
+            validated_point_response(
+                critic_reference(
+                    "SOLUTION_ALTERNATIVES",
+                    "ADVANTAGE",
+                    item_id="ALT-001",
+                    value="Keeps operation local.",
+                )
+            ),
+            alternatives=populated_solution_alternatives(duplicate_advantage=True),
+        )
+
+
+@pytest.mark.parametrize(
+    ("kind", "item_id", "value"),
+    [
+        (
+            "GENERATION_EXPLANATION",
+            None,
+            "Current evidence is insufficient for meaningful alternatives.",
+        ),
+        (
+            "BLOCKING_MISSING_INFORMATION",
+            "MISS-001",
+            "Peak load is unknown.",
+        ),
+        (
+            "BLOCKING_UNCERTAINTY",
+            "UNC-001",
+            "Operational ownership is unclear.",
+        ),
+    ],
+)
+def test_generation_notes_reference_resolves_every_supported_kind(
+    kind: str,
+    item_id: str | None,
+    value: str,
+) -> None:
+    result = run_critic(
+        validated_point_response(
+            critic_reference(
+                "SOLUTION_ALTERNATIVES",
+                kind,
+                item_id=item_id,
+                value=value,
+            )
+        ),
+        alternatives=generation_notes_alternatives(),
+    )
+
+    assert result.validated_points[0].target_reference.value == value
+
+
+@pytest.mark.parametrize(
+    ("kind", "value"),
+    [
+        ("BLOCKING_MISSING_INFORMATION", "Peak load is unknown."),
+        ("BLOCKING_UNCERTAINTY", "Operational ownership is unclear."),
+    ],
+)
+def test_generation_note_blocker_resolves_by_unique_text_without_id(
+    kind: str,
+    value: str,
+) -> None:
+    result = run_critic(
+        validated_point_response(
+            critic_reference("SOLUTION_ALTERNATIVES", kind, value=value)
+        ),
+        alternatives=generation_notes_alternatives(),
+    )
+
+    assert result.validated_points
+
+
+@pytest.mark.parametrize(
+    "reference",
+    [
+        critic_reference(
+            "SOLUTION_ALTERNATIVES",
+            "GENERATION_EXPLANATION",
+            value="Different explanation",
+        ),
+        critic_reference(
+            "SOLUTION_ALTERNATIVES",
+            "BLOCKING_MISSING_INFORMATION",
+            item_id="MISS-999",
+            value="Peak load is unknown.",
+        ),
+        critic_reference(
+            "SOLUTION_ALTERNATIVES",
+            "BLOCKING_UNCERTAINTY",
+            item_id="UNC-001",
+            value="Different uncertainty",
+        ),
+    ],
+)
+def test_generation_notes_reference_rejects_unknown_or_mismatched_target(
+    reference: dict[str, object],
+) -> None:
+    with pytest.raises(CriticOutputError):
+        run_critic(
+            validated_point_response(reference),
+            alternatives=generation_notes_alternatives(),
+        )
+
+
+def test_generation_notes_reference_fails_when_notes_are_absent() -> None:
+    with pytest.raises(CriticOutputError):
+        run_critic(
+            validated_point_response(
+                critic_reference(
+                    "SOLUTION_ALTERNATIVES",
+                    "GENERATION_EXPLANATION",
+                    value="Current evidence is insufficient for meaningful alternatives.",
+                )
+            ),
+            alternatives=generation_notes_alternatives(include_notes=False),
+        )
+
+
+def test_generation_note_text_only_blocker_rejects_ambiguous_value() -> None:
+    with pytest.raises(CriticOutputError):
+        run_critic(
+            validated_point_response(
+                critic_reference(
+                    "SOLUTION_ALTERNATIVES",
+                    "BLOCKING_MISSING_INFORMATION",
+                    value="Peak load is unknown.",
+                )
+            ),
+            alternatives=generation_notes_alternatives(
+                duplicate_missing_text=True,
+            ),
+        )
+
+
+@pytest.mark.parametrize("value", [None, "Operational ownership is not established."])
+def test_risk_id_primary_reference_resolves_with_optional_exact_description(
+    value: str | None,
+) -> None:
+    result = run_critic(
+        validated_point_response(
+            critic_reference(
+                "RISK_ASSESSMENT",
+                "RISK",
+                item_id="RISK-001",
+                value=value,
+            )
+        ),
+        risks=populated_risk_assessment(),
+    )
+
+    assert result.validated_points[0].target_reference.item_id == "RISK-001"
+
+
+@pytest.mark.parametrize(
+    ("kind", "value"),
+    [
+        ("RISK_CATEGORY", "operational"),
+        ("RISK_DESCRIPTION", "Operational ownership is not established."),
+        ("RISK_SEVERITY", "HIGH"),
+        ("MITIGATION", "Assign an explicit operational owner."),
+        (
+            "RESIDUAL_UNCERTAINTY",
+            "The required support effort remains unknown.",
+        ),
+    ],
+)
+def test_risk_nested_reference_resolves_every_supported_kind(
+    kind: str,
+    value: str,
+) -> None:
+    result = run_critic(
+        validated_point_response(
+            critic_reference(
+                "RISK_ASSESSMENT",
+                kind,
+                item_id="RISK-001",
+                value=value,
+            )
+        ),
+        risks=populated_risk_assessment(),
+    )
+
+    assert result.validated_points[0].target_reference.value == value
+
+
+def test_overall_observation_reference_resolves_unique_value() -> None:
+    result = run_critic(
+        validated_point_response(
+            critic_reference(
+                "RISK_ASSESSMENT",
+                "OVERALL_OBSERVATION",
+                value="The current risk assessment is qualitative.",
+            )
+        ),
+        risks=populated_risk_assessment(),
+    )
+
+    assert result.validated_points
+
+
+@pytest.mark.parametrize(
+    "reference",
+    [
+        critic_reference(
+            "RISK_ASSESSMENT",
+            "RISK",
+            item_id="RISK-999",
+        ),
+        critic_reference(
+            "RISK_ASSESSMENT",
+            "RISK",
+            item_id="RISK-001",
+            value="Different risk description",
+        ),
+        critic_reference(
+            "RISK_ASSESSMENT",
+            "RISK_SEVERITY",
+            item_id="RISK-001",
+            value="LOW",
+        ),
+        critic_reference(
+            "RISK_ASSESSMENT",
+            "OVERALL_OBSERVATION",
+            value="Unknown observation",
+        ),
+    ],
+)
+def test_risk_reference_rejects_unknown_or_mismatched_target(
+    reference: dict[str, object],
+) -> None:
+    with pytest.raises(CriticOutputError):
+        run_critic(
+            validated_point_response(reference),
+            risks=populated_risk_assessment(),
+        )
+
+
+@pytest.mark.parametrize("kind", ["RISK_CATEGORY", "MITIGATION", "RESIDUAL_UNCERTAINTY"])
+def test_optional_risk_field_reference_fails_when_field_is_absent(kind: str) -> None:
+    values = {
+        "RISK_CATEGORY": "operational",
+        "MITIGATION": "Assign an explicit operational owner.",
+        "RESIDUAL_UNCERTAINTY": "The required support effort remains unknown.",
+    }
+
+    with pytest.raises(CriticOutputError):
+        run_critic(
+            validated_point_response(
+                critic_reference(
+                    "RISK_ASSESSMENT",
+                    kind,
+                    item_id="RISK-001",
+                    value=values[kind],
+                )
+            ),
+            risks=populated_risk_assessment(include_optional_fields=False),
+        )
+
+
+def test_overall_observation_reference_rejects_ambiguous_value() -> None:
+    with pytest.raises(CriticOutputError):
+        run_critic(
+            validated_point_response(
+                critic_reference(
+                    "RISK_ASSESSMENT",
+                    "OVERALL_OBSERVATION",
+                    value="The current risk assessment is qualitative.",
+                )
+            ),
+            risks=populated_risk_assessment(duplicate_observation=True),
         )
