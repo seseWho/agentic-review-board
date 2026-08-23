@@ -2174,3 +2174,154 @@ def test_slice6_review_semantics_use_identity_in_noncanonical_order() -> None:
     assert review.stage(StageIdentity.COORDINATOR) is coordinator_running
     assert review.stage(StageIdentity.ANALYST) is analyst
     assert review.stages == reordered
+
+
+
+def ready_for_coordinator(*, reordered: bool = False) -> Review:
+    review_input = valid_review_input()
+    analysis = valid_problem_analysis()
+    alternatives = valid_solution_alternatives()
+    assessment = valid_risk_assessment()
+    critique = CriticalReview()
+    upstream = completed_slice5_stages(
+        review_input,
+        analysis,
+        alternatives,
+        assessment,
+        critique,
+    )
+    coordinator = StageExecution(
+        identity=StageIdentity.COORDINATOR,
+        status=StageStatus.PENDING,
+    )
+    stages = (
+        (coordinator, upstream[3], upstream[0], upstream[2], upstream[1])
+        if reordered
+        else (*upstream, coordinator)
+    )
+    return Review(
+        review_input=review_input,
+        status=ReviewStatus.RUNNING,
+        stages=stages,
+    )
+
+
+def test_start_coordinator_captures_exact_five_current_inputs() -> None:
+    review = ready_for_coordinator()
+
+    started = review.start_coordinator()
+    coordinator = started.stage(StageIdentity.COORDINATOR)
+    analyst = started.stage(StageIdentity.ANALYST)
+    architect = started.stage(StageIdentity.SOLUTION_ARCHITECT)
+    reviewer = started.stage(StageIdentity.RISK_REVIEWER)
+    critic = started.stage(StageIdentity.CRITIC)
+
+    assert coordinator.status is StageStatus.RUNNING
+    assert isinstance(coordinator.inputs, CoordinatorStageInput)
+    assert coordinator.inputs.review_input is started.review_input
+    assert coordinator.inputs.problem_analysis is analyst.output
+    assert coordinator.inputs.solution_alternatives is architect.output
+    assert coordinator.inputs.risk_assessment is reviewer.output
+    assert coordinator.inputs.critical_review is critic.output
+    assert review.stage(StageIdentity.COORDINATOR).status is StageStatus.PENDING
+
+    with pytest.raises(ValueError):
+        started.start_coordinator()
+
+
+def test_start_coordinator_rejects_premature_or_non_running_review() -> None:
+    created = Review.create(valid_review_input())
+    with pytest.raises(ValueError):
+        created.start_coordinator()
+
+    running = created.start()
+    with pytest.raises(ValueError):
+        running.start_coordinator()
+
+
+def test_complete_coordinator_reuses_inputs_and_supplied_final_review() -> None:
+    started = ready_for_coordinator().start_coordinator()
+    running = started.stage(StageIdentity.COORDINATOR)
+    assert isinstance(running.inputs, CoordinatorStageInput)
+    output = valid_final_review()
+
+    completed = started.complete_coordinator(output)
+    coordinator = completed.stage(StageIdentity.COORDINATOR)
+
+    assert completed.status is ReviewStatus.COMPLETED
+    assert coordinator.status is StageStatus.COMPLETED
+    assert coordinator.inputs is running.inputs
+    assert coordinator.output is output
+    assert started.stage(StageIdentity.COORDINATOR) is running
+
+    with pytest.raises(ValueError):
+        completed.complete_coordinator(output)
+
+
+def test_fail_coordinator_is_atomic_and_preserves_exact_inputs() -> None:
+    started = ready_for_coordinator().start_coordinator()
+    running = started.stage(StageIdentity.COORDINATOR)
+    assert isinstance(running.inputs, CoordinatorStageInput)
+    upstream_before = tuple(
+        stage.output
+        for stage in (
+            started.stage(StageIdentity.ANALYST),
+            started.stage(StageIdentity.SOLUTION_ARCHITECT),
+            started.stage(StageIdentity.RISK_REVIEWER),
+            started.stage(StageIdentity.CRITIC),
+        )
+    )
+    error = ReviewError(
+        kind=ReviewErrorKind.EXECUTION,
+        message="Coordinator execution failed",
+    )
+
+    failed = started.fail_coordinator(error)
+    coordinator = failed.stage(StageIdentity.COORDINATOR)
+
+    assert failed.status is ReviewStatus.INCOMPLETE
+    assert coordinator.status is StageStatus.FAILED
+    assert coordinator.inputs is running.inputs
+    assert coordinator.output is None
+    assert coordinator.error is error
+    assert tuple(
+        stage.output
+        for stage in (
+            failed.stage(StageIdentity.ANALYST),
+            failed.stage(StageIdentity.SOLUTION_ARCHITECT),
+            failed.stage(StageIdentity.RISK_REVIEWER),
+            failed.stage(StageIdentity.CRITIC),
+        )
+    ) == upstream_before
+
+    with pytest.raises(ValueError):
+        failed.fail_coordinator(error)
+
+
+@pytest.mark.parametrize("transition", ["complete", "fail"])
+def test_coordinator_completion_and_failure_require_running_stage(
+    transition: str,
+) -> None:
+    review = ready_for_coordinator()
+    with pytest.raises(ValueError):
+        if transition == "complete":
+            review.complete_coordinator(valid_final_review())
+        else:
+            review.fail_coordinator(
+                ReviewError(
+                    kind=ReviewErrorKind.EXECUTION,
+                    message="Coordinator execution failed",
+                )
+            )
+
+
+def test_coordinator_transitions_preserve_noncanonical_tuple_order() -> None:
+    review = ready_for_coordinator(reordered=True)
+    identities = tuple(stage.identity for stage in review.stages)
+
+    started = review.start_coordinator()
+    completed = started.complete_coordinator(valid_final_review())
+
+    assert tuple(stage.identity for stage in started.stages) == identities
+    assert tuple(stage.identity for stage in completed.stages) == identities
+    assert completed.stage(StageIdentity.COORDINATOR).status is StageStatus.COMPLETED
