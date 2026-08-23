@@ -4,6 +4,7 @@ from typing import Self
 from pydantic import BaseModel, ConfigDict, StrictStr, field_validator, model_validator
 
 from agentic_review_board.domain.analysis import ProblemAnalysis
+from agentic_review_board.domain.critics import CriticalReview
 from agentic_review_board.domain.review import ReviewInput
 from agentic_review_board.domain.risks import RiskAssessment
 from agentic_review_board.domain.solutions import SolutionAlternatives
@@ -87,8 +88,24 @@ class RiskReviewerStageInput(BaseModel):
     solution_alternatives: SolutionAlternatives
 
 
-StageInput = AnalystStageInput | SolutionArchitectStageInput | RiskReviewerStageInput
-StageOutput = ProblemAnalysis | SolutionAlternatives | RiskAssessment
+class CriticStageInput(BaseModel):
+    """Trusted in-memory input provenance for Critic execution."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    review_input: ReviewInput
+    problem_analysis: ProblemAnalysis
+    solution_alternatives: SolutionAlternatives
+    risk_assessment: RiskAssessment
+
+
+StageInput = (
+    AnalystStageInput
+    | SolutionArchitectStageInput
+    | RiskReviewerStageInput
+    | CriticStageInput
+)
+StageOutput = ProblemAnalysis | SolutionAlternatives | RiskAssessment | CriticalReview
 
 
 class StageExecution(BaseModel):
@@ -160,8 +177,18 @@ class StageExecution(BaseModel):
             ):
                 raise ValueError("completed Risk Reviewer stage requires RiskAssessment output")
             return
+        if self.identity is StageIdentity.CRITIC:
+            if self.status is not StageStatus.PENDING and not isinstance(
+                self.inputs, CriticStageInput
+            ):
+                raise ValueError("Critic stage requires CriticStageInput")
+            if self.status is StageStatus.COMPLETED and not isinstance(
+                self.output, CriticalReview
+            ):
+                raise ValueError("completed Critic stage requires CriticalReview output")
+            return
         if self.status is not StageStatus.PENDING:
-            raise ValueError("Critic and Coordinator must remain pending in Slice 4")
+            raise ValueError("Coordinator must remain pending in Slice 5")
 
 
 CANONICAL_STAGE_ORDER: tuple[StageIdentity, ...] = (
@@ -251,6 +278,39 @@ class Review(BaseModel):
                     "Risk Reviewer must reference the exact current Solution Architect output instance"
                 )
 
+        critic = self.stage(StageIdentity.CRITIC)
+        if critic.status is not StageStatus.PENDING:
+            if not isinstance(critic.inputs, CriticStageInput):
+                raise ValueError("executed Critic stage must expose CriticStageInput")
+            if critic.inputs.review_input is not self.review_input:
+                raise ValueError("Critic input must reference the current ReviewInput instance")
+            if analyst.status is not StageStatus.COMPLETED:
+                raise ValueError("Critic requires a completed Analyst stage")
+            if not isinstance(analyst.output, ProblemAnalysis):
+                raise ValueError("completed Analyst stage must expose ProblemAnalysis")
+            if critic.inputs.problem_analysis is not analyst.output:
+                raise ValueError(
+                    "Critic must reference the exact current Analyst output instance"
+                )
+            if architect.status is not StageStatus.COMPLETED:
+                raise ValueError("Critic requires a completed Solution Architect stage")
+            if not isinstance(architect.output, SolutionAlternatives):
+                raise ValueError(
+                    "completed Solution Architect stage must expose SolutionAlternatives"
+                )
+            if critic.inputs.solution_alternatives is not architect.output:
+                raise ValueError(
+                    "Critic must reference the exact current Solution Architect output instance"
+                )
+            if reviewer.status is not StageStatus.COMPLETED:
+                raise ValueError("Critic requires a completed Risk Reviewer stage")
+            if not isinstance(reviewer.output, RiskAssessment):
+                raise ValueError("completed Risk Reviewer stage must expose RiskAssessment")
+            if critic.inputs.risk_assessment is not reviewer.output:
+                raise ValueError(
+                    "Critic must reference the exact current Risk Reviewer output instance"
+                )
+
     def _validate_lifecycle_consistency(self) -> None:
         analyst = self.stage(StageIdentity.ANALYST)
         architect = self.stage(StageIdentity.SOLUTION_ARCHITECT)
@@ -258,34 +318,107 @@ class Review(BaseModel):
         critic = self.stage(StageIdentity.CRITIC)
         coordinator = self.stage(StageIdentity.COORDINATOR)
 
-        if critic.status is not StageStatus.PENDING or coordinator.status is not StageStatus.PENDING:
-            raise ValueError("Critic and Coordinator must remain pending in Slice 4")
+        if coordinator.status is not StageStatus.PENDING:
+            raise ValueError("Coordinator must remain pending in Slice 5")
 
         if self.status is ReviewStatus.CREATED:
             if any(stage.status is not StageStatus.PENDING for stage in self.stages):
                 raise ValueError("created review requires all stages pending")
             return
 
-        current_prefix = (analyst.status, architect.status, reviewer.status)
+        current_prefix = (
+            analyst.status,
+            architect.status,
+            reviewer.status,
+            critic.status,
+        )
         if self.status is ReviewStatus.RUNNING:
             valid_prefixes = {
-                (StageStatus.PENDING, StageStatus.PENDING, StageStatus.PENDING),
-                (StageStatus.RUNNING, StageStatus.PENDING, StageStatus.PENDING),
-                (StageStatus.COMPLETED, StageStatus.PENDING, StageStatus.PENDING),
-                (StageStatus.COMPLETED, StageStatus.RUNNING, StageStatus.PENDING),
-                (StageStatus.COMPLETED, StageStatus.COMPLETED, StageStatus.PENDING),
-                (StageStatus.COMPLETED, StageStatus.COMPLETED, StageStatus.RUNNING),
-                (StageStatus.COMPLETED, StageStatus.COMPLETED, StageStatus.COMPLETED),
+                (
+                    StageStatus.PENDING,
+                    StageStatus.PENDING,
+                    StageStatus.PENDING,
+                    StageStatus.PENDING,
+                ),
+                (
+                    StageStatus.RUNNING,
+                    StageStatus.PENDING,
+                    StageStatus.PENDING,
+                    StageStatus.PENDING,
+                ),
+                (
+                    StageStatus.COMPLETED,
+                    StageStatus.PENDING,
+                    StageStatus.PENDING,
+                    StageStatus.PENDING,
+                ),
+                (
+                    StageStatus.COMPLETED,
+                    StageStatus.RUNNING,
+                    StageStatus.PENDING,
+                    StageStatus.PENDING,
+                ),
+                (
+                    StageStatus.COMPLETED,
+                    StageStatus.COMPLETED,
+                    StageStatus.PENDING,
+                    StageStatus.PENDING,
+                ),
+                (
+                    StageStatus.COMPLETED,
+                    StageStatus.COMPLETED,
+                    StageStatus.RUNNING,
+                    StageStatus.PENDING,
+                ),
+                (
+                    StageStatus.COMPLETED,
+                    StageStatus.COMPLETED,
+                    StageStatus.COMPLETED,
+                    StageStatus.PENDING,
+                ),
+                (
+                    StageStatus.COMPLETED,
+                    StageStatus.COMPLETED,
+                    StageStatus.COMPLETED,
+                    StageStatus.RUNNING,
+                ),
+                (
+                    StageStatus.COMPLETED,
+                    StageStatus.COMPLETED,
+                    StageStatus.COMPLETED,
+                    StageStatus.COMPLETED,
+                ),
             }
             if current_prefix not in valid_prefixes:
-                raise ValueError("running review has an invalid Slice 4 stage prefix")
+                raise ValueError("running review has an invalid Slice 5 stage prefix")
             return
 
         if self.status is ReviewStatus.INCOMPLETE:
             valid_failures = {
-                (StageStatus.FAILED, StageStatus.PENDING, StageStatus.PENDING),
-                (StageStatus.COMPLETED, StageStatus.FAILED, StageStatus.PENDING),
-                (StageStatus.COMPLETED, StageStatus.COMPLETED, StageStatus.FAILED),
+                (
+                    StageStatus.FAILED,
+                    StageStatus.PENDING,
+                    StageStatus.PENDING,
+                    StageStatus.PENDING,
+                ),
+                (
+                    StageStatus.COMPLETED,
+                    StageStatus.FAILED,
+                    StageStatus.PENDING,
+                    StageStatus.PENDING,
+                ),
+                (
+                    StageStatus.COMPLETED,
+                    StageStatus.COMPLETED,
+                    StageStatus.FAILED,
+                    StageStatus.PENDING,
+                ),
+                (
+                    StageStatus.COMPLETED,
+                    StageStatus.COMPLETED,
+                    StageStatus.COMPLETED,
+                    StageStatus.FAILED,
+                ),
             }
             if current_prefix not in valid_failures:
                 raise ValueError("incomplete review must contain one failed implemented stage")
@@ -476,6 +609,74 @@ class Review(BaseModel):
                 identity=StageIdentity.RISK_REVIEWER,
                 status=StageStatus.FAILED,
                 inputs=reviewer.inputs,
+                error=error,
+            ),
+            review_status=ReviewStatus.INCOMPLETE,
+        )
+
+    def start_critic(self) -> "Review":
+        self._require_running_review()
+        analyst = self.stage(StageIdentity.ANALYST)
+        architect = self.stage(StageIdentity.SOLUTION_ARCHITECT)
+        reviewer = self.stage(StageIdentity.RISK_REVIEWER)
+        critic = self.stage(StageIdentity.CRITIC)
+
+        if analyst.status is not StageStatus.COMPLETED or not isinstance(
+            analyst.output, ProblemAnalysis
+        ):
+            raise ValueError("Analyst must be completed before Critic starts")
+        if architect.status is not StageStatus.COMPLETED or not isinstance(
+            architect.output, SolutionAlternatives
+        ):
+            raise ValueError("Solution Architect must be completed before Critic starts")
+        if reviewer.status is not StageStatus.COMPLETED or not isinstance(
+            reviewer.output, RiskAssessment
+        ):
+            raise ValueError("Risk Reviewer must be completed before Critic starts")
+        if critic.status is not StageStatus.PENDING:
+            raise ValueError("Critic stage must be pending before start")
+
+        return self._replace_stage(
+            StageExecution(
+                identity=StageIdentity.CRITIC,
+                status=StageStatus.RUNNING,
+                inputs=CriticStageInput(
+                    review_input=self.review_input,
+                    problem_analysis=analyst.output,
+                    solution_alternatives=architect.output,
+                    risk_assessment=reviewer.output,
+                ),
+            )
+        )
+
+    def complete_critic(self, critical_review: CriticalReview) -> "Review":
+        self._require_running_review()
+        critic = self.stage(StageIdentity.CRITIC)
+        if critic.status is not StageStatus.RUNNING or not isinstance(
+            critic.inputs, CriticStageInput
+        ):
+            raise ValueError("Critic stage must be running before completion")
+        return self._replace_stage(
+            StageExecution(
+                identity=StageIdentity.CRITIC,
+                status=StageStatus.COMPLETED,
+                inputs=critic.inputs,
+                output=critical_review,
+            )
+        )
+
+    def fail_critic(self, error: ReviewError) -> "Review":
+        self._require_running_review()
+        critic = self.stage(StageIdentity.CRITIC)
+        if critic.status is not StageStatus.RUNNING or not isinstance(
+            critic.inputs, CriticStageInput
+        ):
+            raise ValueError("Critic stage must be running before failure")
+        return self._replace_stage(
+            StageExecution(
+                identity=StageIdentity.CRITIC,
+                status=StageStatus.FAILED,
+                inputs=critic.inputs,
                 error=error,
             ),
             review_status=ReviewStatus.INCOMPLETE,

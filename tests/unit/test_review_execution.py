@@ -2,8 +2,10 @@ import pytest
 from pydantic import ValidationError
 
 from agentic_review_board.domain.analysis import ProblemAnalysis
+from agentic_review_board.domain.critics import CriticalReview
 from agentic_review_board.domain.execution import (
     AnalystStageInput,
+    CriticStageInput,
     Review,
     ReviewError,
     ReviewErrorKind,
@@ -1146,3 +1148,621 @@ def test_review_create_remains_canonical_and_existing_replacements_preserve_vali
 
     assert tuple(stage.identity for stage in started.stages) == before
     assert started.stage(StageIdentity.ANALYST).status is StageStatus.RUNNING
+
+
+def completed_slice4_stages(
+    review_input: ReviewInput,
+    analysis: ProblemAnalysis,
+    alternatives: SolutionAlternatives,
+    assessment: RiskAssessment,
+) -> tuple[StageExecution, StageExecution, StageExecution]:
+    analyst, architect = completed_upstream_stages(
+        review_input,
+        analysis,
+        alternatives,
+    )
+    reviewer = StageExecution(
+        identity=StageIdentity.RISK_REVIEWER,
+        status=StageStatus.COMPLETED,
+        inputs=risk_inputs(review_input, analysis, alternatives),
+        output=assessment,
+    )
+    return analyst, architect, reviewer
+
+
+def critic_inputs(
+    review_input: ReviewInput,
+    analysis: ProblemAnalysis,
+    alternatives: SolutionAlternatives,
+    assessment: RiskAssessment,
+) -> CriticStageInput:
+    return CriticStageInput(
+        review_input=review_input,
+        problem_analysis=analysis,
+        solution_alternatives=alternatives,
+        risk_assessment=assessment,
+    )
+
+
+def test_critic_stage_input_is_closed_frozen_and_preserves_four_artifacts() -> None:
+    review_input = valid_review_input()
+    analysis = valid_problem_analysis()
+    alternatives = valid_solution_alternatives()
+    assessment = valid_risk_assessment()
+    inputs = critic_inputs(review_input, analysis, alternatives, assessment)
+
+    assert inputs.review_input is review_input
+    assert inputs.problem_analysis is analysis
+    assert inputs.solution_alternatives is alternatives
+    assert inputs.risk_assessment is assessment
+    assert CriticStageInput.model_config.get("extra") == "forbid"
+    assert CriticStageInput.model_config.get("frozen") is True
+
+    with pytest.raises(ValidationError):
+        inputs.risk_assessment = valid_risk_assessment()
+
+    with pytest.raises(ValidationError):
+        CriticStageInput.model_validate(
+            {
+                **inputs.model_dump(),
+                "unexpected": "not allowed",
+            }
+        )
+
+
+def test_critic_stage_accepts_exact_four_local_lifecycle_shapes() -> None:
+    review_input = valid_review_input()
+    analysis = valid_problem_analysis()
+    alternatives = valid_solution_alternatives()
+    assessment = valid_risk_assessment()
+    inputs = critic_inputs(review_input, analysis, alternatives, assessment)
+    critical_review = CriticalReview()
+
+    pending = StageExecution(identity=StageIdentity.CRITIC, status=StageStatus.PENDING)
+    running = StageExecution(
+        identity=StageIdentity.CRITIC,
+        status=StageStatus.RUNNING,
+        inputs=inputs,
+    )
+    completed = StageExecution(
+        identity=StageIdentity.CRITIC,
+        status=StageStatus.COMPLETED,
+        inputs=inputs,
+        output=critical_review,
+    )
+    failed = StageExecution(
+        identity=StageIdentity.CRITIC,
+        status=StageStatus.FAILED,
+        inputs=inputs,
+        error=ReviewError(
+            kind=ReviewErrorKind.EXECUTION,
+            message="Critic execution failed",
+        ),
+    )
+
+    assert pending.inputs is None
+    assert running.inputs is inputs
+    assert completed.output is critical_review
+    assert failed.error is not None
+
+
+def test_critic_stage_rejects_wrong_input_and_completed_output_types() -> None:
+    review_input = valid_review_input()
+
+    with pytest.raises(ValidationError):
+        StageExecution(
+            identity=StageIdentity.CRITIC,
+            status=StageStatus.RUNNING,
+            inputs=AnalystStageInput(review_input=review_input),
+        )
+
+    with pytest.raises(ValidationError):
+        StageExecution(
+            identity=StageIdentity.CRITIC,
+            status=StageStatus.COMPLETED,
+            inputs=critic_inputs(
+                review_input,
+                valid_problem_analysis(),
+                valid_solution_alternatives(),
+                valid_risk_assessment(),
+            ),
+            output=valid_risk_assessment(),
+        )
+
+
+def test_coordinator_remains_pending_only_as_a_local_stage() -> None:
+    pending = StageExecution(
+        identity=StageIdentity.COORDINATOR,
+        status=StageStatus.PENDING,
+    )
+    assert pending.status is StageStatus.PENDING
+
+    invalid = StageExecution.model_construct(
+        identity=StageIdentity.COORDINATOR,
+        status=StageStatus.RUNNING,
+        inputs=AnalystStageInput(review_input=valid_review_input()),
+        output=None,
+        error=None,
+    )
+    with pytest.raises(ValidationError):
+        StageExecution.model_validate(invalid.model_dump())
+
+
+def test_review_accepts_exact_nine_slice5_running_prefixes() -> None:
+    review_input = valid_review_input()
+    analysis = valid_problem_analysis()
+    alternatives = valid_solution_alternatives()
+    assessment = valid_risk_assessment()
+    critical_review = CriticalReview()
+
+    analyst_inputs = AnalystStageInput(review_input=review_input)
+    architect_inputs = SolutionArchitectStageInput(
+        review_input=review_input,
+        problem_analysis=analysis,
+    )
+    reviewer_inputs = risk_inputs(review_input, analysis, alternatives)
+    current_critic_inputs = critic_inputs(
+        review_input,
+        analysis,
+        alternatives,
+        assessment,
+    )
+
+    analyst_pending = StageExecution(
+        identity=StageIdentity.ANALYST,
+        status=StageStatus.PENDING,
+    )
+    analyst_running = StageExecution(
+        identity=StageIdentity.ANALYST,
+        status=StageStatus.RUNNING,
+        inputs=analyst_inputs,
+    )
+    analyst_completed = StageExecution(
+        identity=StageIdentity.ANALYST,
+        status=StageStatus.COMPLETED,
+        inputs=analyst_inputs,
+        output=analysis,
+    )
+    architect_pending = StageExecution(
+        identity=StageIdentity.SOLUTION_ARCHITECT,
+        status=StageStatus.PENDING,
+    )
+    architect_running = StageExecution(
+        identity=StageIdentity.SOLUTION_ARCHITECT,
+        status=StageStatus.RUNNING,
+        inputs=architect_inputs,
+    )
+    architect_completed = StageExecution(
+        identity=StageIdentity.SOLUTION_ARCHITECT,
+        status=StageStatus.COMPLETED,
+        inputs=architect_inputs,
+        output=alternatives,
+    )
+    reviewer_pending = StageExecution(
+        identity=StageIdentity.RISK_REVIEWER,
+        status=StageStatus.PENDING,
+    )
+    reviewer_running = StageExecution(
+        identity=StageIdentity.RISK_REVIEWER,
+        status=StageStatus.RUNNING,
+        inputs=reviewer_inputs,
+    )
+    reviewer_completed = StageExecution(
+        identity=StageIdentity.RISK_REVIEWER,
+        status=StageStatus.COMPLETED,
+        inputs=reviewer_inputs,
+        output=assessment,
+    )
+    critic_pending = StageExecution(
+        identity=StageIdentity.CRITIC,
+        status=StageStatus.PENDING,
+    )
+    critic_running = StageExecution(
+        identity=StageIdentity.CRITIC,
+        status=StageStatus.RUNNING,
+        inputs=current_critic_inputs,
+    )
+    critic_completed = StageExecution(
+        identity=StageIdentity.CRITIC,
+        status=StageStatus.COMPLETED,
+        inputs=current_critic_inputs,
+        output=critical_review,
+    )
+    coordinator_pending = StageExecution(
+        identity=StageIdentity.COORDINATOR,
+        status=StageStatus.PENDING,
+    )
+
+    prefixes = (
+        (analyst_pending, architect_pending, reviewer_pending, critic_pending),
+        (analyst_running, architect_pending, reviewer_pending, critic_pending),
+        (analyst_completed, architect_pending, reviewer_pending, critic_pending),
+        (analyst_completed, architect_running, reviewer_pending, critic_pending),
+        (analyst_completed, architect_completed, reviewer_pending, critic_pending),
+        (analyst_completed, architect_completed, reviewer_running, critic_pending),
+        (analyst_completed, architect_completed, reviewer_completed, critic_pending),
+        (analyst_completed, architect_completed, reviewer_completed, critic_running),
+        (analyst_completed, architect_completed, reviewer_completed, critic_completed),
+    )
+
+    for stages in prefixes:
+        review = Review(
+            review_input=review_input,
+            status=ReviewStatus.RUNNING,
+            stages=(*stages, coordinator_pending),
+        )
+        assert review.status is ReviewStatus.RUNNING
+        assert review.stage(StageIdentity.COORDINATOR).status is StageStatus.PENDING
+
+
+def test_review_accepts_exact_four_slice5_incomplete_shapes() -> None:
+    review_input = valid_review_input()
+    analysis = valid_problem_analysis()
+    alternatives = valid_solution_alternatives()
+    assessment = valid_risk_assessment()
+
+    analyst_inputs = AnalystStageInput(review_input=review_input)
+    architect_inputs = SolutionArchitectStageInput(
+        review_input=review_input,
+        problem_analysis=analysis,
+    )
+    reviewer_inputs = risk_inputs(review_input, analysis, alternatives)
+    current_critic_inputs = critic_inputs(
+        review_input,
+        analysis,
+        alternatives,
+        assessment,
+    )
+    analyst_completed, architect_completed, reviewer_completed = completed_slice4_stages(
+        review_input,
+        analysis,
+        alternatives,
+        assessment,
+    )
+
+    analyst_failed = StageExecution(
+        identity=StageIdentity.ANALYST,
+        status=StageStatus.FAILED,
+        inputs=analyst_inputs,
+        error=execution_error(),
+    )
+    architect_failed = StageExecution(
+        identity=StageIdentity.SOLUTION_ARCHITECT,
+        status=StageStatus.FAILED,
+        inputs=architect_inputs,
+        error=ReviewError(
+            kind=ReviewErrorKind.EXECUTION,
+            message="Solution Architect execution failed",
+        ),
+    )
+    reviewer_failed = StageExecution(
+        identity=StageIdentity.RISK_REVIEWER,
+        status=StageStatus.FAILED,
+        inputs=reviewer_inputs,
+        error=ReviewError(
+            kind=ReviewErrorKind.EXECUTION,
+            message="Risk Reviewer execution failed",
+        ),
+    )
+    critic_failed = StageExecution(
+        identity=StageIdentity.CRITIC,
+        status=StageStatus.FAILED,
+        inputs=current_critic_inputs,
+        error=ReviewError(
+            kind=ReviewErrorKind.EXECUTION,
+            message="Critic execution failed",
+        ),
+    )
+    architect_pending = StageExecution(
+        identity=StageIdentity.SOLUTION_ARCHITECT,
+        status=StageStatus.PENDING,
+    )
+    reviewer_pending = StageExecution(
+        identity=StageIdentity.RISK_REVIEWER,
+        status=StageStatus.PENDING,
+    )
+    critic_pending = StageExecution(
+        identity=StageIdentity.CRITIC,
+        status=StageStatus.PENDING,
+    )
+    coordinator_pending = StageExecution(
+        identity=StageIdentity.COORDINATOR,
+        status=StageStatus.PENDING,
+    )
+
+    shapes = (
+        (analyst_failed, architect_pending, reviewer_pending, critic_pending),
+        (analyst_completed, architect_failed, reviewer_pending, critic_pending),
+        (analyst_completed, architect_completed, reviewer_failed, critic_pending),
+        (analyst_completed, architect_completed, reviewer_completed, critic_failed),
+    )
+
+    for stages in shapes:
+        review = Review(
+            review_input=review_input,
+            status=ReviewStatus.INCOMPLETE,
+            stages=(*stages, coordinator_pending),
+        )
+        assert review.status is ReviewStatus.INCOMPLETE
+        assert review.stage(StageIdentity.COORDINATOR).status is StageStatus.PENDING
+
+
+def test_review_rejects_slice5_skips_multiple_failures_and_later_execution() -> None:
+    review_input = valid_review_input()
+    analysis = valid_problem_analysis()
+    alternatives = valid_solution_alternatives()
+    assessment = valid_risk_assessment()
+    analyst, architect, reviewer = completed_slice4_stages(
+        review_input,
+        analysis,
+        alternatives,
+        assessment,
+    )
+    current_critic_inputs = critic_inputs(
+        review_input,
+        analysis,
+        alternatives,
+        assessment,
+    )
+    critic_running = StageExecution(
+        identity=StageIdentity.CRITIC,
+        status=StageStatus.RUNNING,
+        inputs=current_critic_inputs,
+    )
+    critic_failed = StageExecution(
+        identity=StageIdentity.CRITIC,
+        status=StageStatus.FAILED,
+        inputs=current_critic_inputs,
+        error=ReviewError(
+            kind=ReviewErrorKind.EXECUTION,
+            message="Critic execution failed",
+        ),
+    )
+    coordinator_pending = StageExecution(
+        identity=StageIdentity.COORDINATOR,
+        status=StageStatus.PENDING,
+    )
+    coordinator_running = StageExecution.model_construct(
+        identity=StageIdentity.COORDINATOR,
+        status=StageStatus.RUNNING,
+        inputs=AnalystStageInput(review_input=review_input),
+        output=None,
+        error=None,
+    )
+
+    invalid_stage_sets = (
+        (
+            ReviewStatus.RUNNING,
+            analyst,
+            architect,
+            StageExecution(
+                identity=StageIdentity.RISK_REVIEWER,
+                status=StageStatus.PENDING,
+            ),
+            critic_running,
+            coordinator_pending,
+        ),
+        (
+            ReviewStatus.INCOMPLETE,
+            StageExecution(
+                identity=StageIdentity.ANALYST,
+                status=StageStatus.FAILED,
+                inputs=AnalystStageInput(review_input=review_input),
+                error=execution_error(),
+            ),
+            architect,
+            reviewer,
+            critic_failed,
+            coordinator_pending,
+        ),
+        (
+            ReviewStatus.INCOMPLETE,
+            analyst,
+            architect,
+            reviewer,
+            critic_failed,
+            coordinator_running,
+        ),
+    )
+
+    for status, *stages in invalid_stage_sets:
+        with pytest.raises(ValidationError):
+            Review(
+                review_input=review_input,
+                status=status,
+                stages=tuple(stages),
+            )
+
+
+def test_review_completed_remains_unreachable_after_critic_completion() -> None:
+    review_input = valid_review_input()
+    analysis = valid_problem_analysis()
+    alternatives = valid_solution_alternatives()
+    assessment = valid_risk_assessment()
+    analyst, architect, reviewer = completed_slice4_stages(
+        review_input,
+        analysis,
+        alternatives,
+        assessment,
+    )
+    critic = StageExecution(
+        identity=StageIdentity.CRITIC,
+        status=StageStatus.COMPLETED,
+        inputs=critic_inputs(review_input, analysis, alternatives, assessment),
+        output=CriticalReview(),
+    )
+    coordinator = StageExecution(
+        identity=StageIdentity.COORDINATOR,
+        status=StageStatus.PENDING,
+    )
+
+    with pytest.raises(ValidationError):
+        Review(
+            review_input=review_input,
+            status=ReviewStatus.COMPLETED,
+            stages=(analyst, architect, reviewer, critic, coordinator),
+        )
+
+
+@pytest.mark.parametrize("status", [StageStatus.RUNNING, StageStatus.COMPLETED, StageStatus.FAILED])
+def test_critic_same_execution_provenance_uses_exact_instances_for_all_executed_shapes(
+    status: StageStatus,
+) -> None:
+    review_input = valid_review_input()
+    analysis = valid_problem_analysis()
+    alternatives = valid_solution_alternatives()
+    assessment = valid_risk_assessment()
+    analyst, architect, reviewer = completed_slice4_stages(
+        review_input,
+        analysis,
+        alternatives,
+        assessment,
+    )
+    output = CriticalReview() if status is StageStatus.COMPLETED else None
+    error = (
+        ReviewError(
+            kind=ReviewErrorKind.EXECUTION,
+            message="Critic execution failed",
+        )
+        if status is StageStatus.FAILED
+        else None
+    )
+    critic = StageExecution(
+        identity=StageIdentity.CRITIC,
+        status=status,
+        inputs=critic_inputs(review_input, analysis, alternatives, assessment),
+        output=output,
+        error=error,
+    )
+
+    review = Review(
+        review_input=review_input,
+        status=(
+            ReviewStatus.INCOMPLETE
+            if status is StageStatus.FAILED
+            else ReviewStatus.RUNNING
+        ),
+        stages=(
+            analyst,
+            architect,
+            reviewer,
+            critic,
+            StageExecution(
+                identity=StageIdentity.COORDINATOR,
+                status=StageStatus.PENDING,
+            ),
+        ),
+    )
+
+    assert isinstance(critic.inputs, CriticStageInput)
+    assert critic.inputs.review_input is review.review_input
+    assert critic.inputs.problem_analysis is analyst.output
+    assert critic.inputs.solution_alternatives is architect.output
+    assert critic.inputs.risk_assessment is reviewer.output
+
+
+@pytest.mark.parametrize("status", [StageStatus.RUNNING, StageStatus.COMPLETED, StageStatus.FAILED])
+@pytest.mark.parametrize(
+    "field",
+    ["review_input", "problem_analysis", "solution_alternatives", "risk_assessment"],
+)
+def test_critic_rejects_equal_but_independent_provenance_for_every_executed_shape(
+    status: StageStatus,
+    field: str,
+) -> None:
+    review_input = valid_review_input()
+    analysis = valid_problem_analysis()
+    alternatives = valid_solution_alternatives()
+    assessment = valid_risk_assessment()
+    analyst, architect, reviewer = completed_slice4_stages(
+        review_input,
+        analysis,
+        alternatives,
+        assessment,
+    )
+    equal_values: dict[str, object] = {
+        "review_input": ReviewInput.model_validate(review_input.model_dump()),
+        "problem_analysis": ProblemAnalysis.model_validate(analysis.model_dump()),
+        "solution_alternatives": SolutionAlternatives.model_validate(
+            alternatives.model_dump()
+        ),
+        "risk_assessment": RiskAssessment.model_validate(assessment.model_dump()),
+    }
+    exact_values: dict[str, object] = {
+        "review_input": review_input,
+        "problem_analysis": analysis,
+        "solution_alternatives": alternatives,
+        "risk_assessment": assessment,
+    }
+    exact_values[field] = equal_values[field]
+    current_inputs = CriticStageInput.model_validate(exact_values)
+
+    output = CriticalReview() if status is StageStatus.COMPLETED else None
+    error = (
+        ReviewError(
+            kind=ReviewErrorKind.EXECUTION,
+            message="Critic execution failed",
+        )
+        if status is StageStatus.FAILED
+        else None
+    )
+    critic = StageExecution(
+        identity=StageIdentity.CRITIC,
+        status=status,
+        inputs=current_inputs,
+        output=output,
+        error=error,
+    )
+
+    with pytest.raises(ValidationError):
+        Review(
+            review_input=review_input,
+            status=(
+                ReviewStatus.INCOMPLETE
+                if status is StageStatus.FAILED
+                else ReviewStatus.RUNNING
+            ),
+            stages=(
+                analyst,
+                architect,
+                reviewer,
+                critic,
+                StageExecution(
+                    identity=StageIdentity.COORDINATOR,
+                    status=StageStatus.PENDING,
+                ),
+            ),
+        )
+
+
+def test_slice5_review_semantics_use_identity_in_noncanonical_tuple_order() -> None:
+    review_input = valid_review_input()
+    analysis = valid_problem_analysis()
+    alternatives = valid_solution_alternatives()
+    assessment = valid_risk_assessment()
+    analyst, architect, reviewer = completed_slice4_stages(
+        review_input,
+        analysis,
+        alternatives,
+        assessment,
+    )
+    critic = StageExecution(
+        identity=StageIdentity.CRITIC,
+        status=StageStatus.RUNNING,
+        inputs=critic_inputs(review_input, analysis, alternatives, assessment),
+    )
+    coordinator = StageExecution(
+        identity=StageIdentity.COORDINATOR,
+        status=StageStatus.PENDING,
+    )
+    reordered = (coordinator, critic, analyst, reviewer, architect)
+
+    review = Review(
+        review_input=review_input,
+        status=ReviewStatus.RUNNING,
+        stages=reordered,
+    )
+
+    assert review.stage(StageIdentity.CRITIC) is critic
+    assert review.stage(StageIdentity.RISK_REVIEWER) is reviewer
+    assert review.stages == reordered
