@@ -5,8 +5,10 @@ from agentic_review_board.domain.execution import (
     ReviewErrorKind,
     StageIdentity,
 )
+from agentic_review_board.domain.risks import RiskAssessment
 from agentic_review_board.domain.solutions import SolutionAlternatives
 from agentic_review_board.participants.analyst import Analyst, AnalystOutputError
+from agentic_review_board.participants.critic import Critic, CriticOutputError
 from agentic_review_board.participants.risk_reviewer import (
     RiskReviewer,
     RiskReviewerOutputError,
@@ -25,10 +27,12 @@ class ReviewOrchestrator:
         analyst: Analyst,
         solution_architect: SolutionArchitect,
         risk_reviewer: RiskReviewer,
+        critic: Critic,
     ) -> None:
         self._analyst = analyst
         self._solution_architect = solution_architect
         self._risk_reviewer = risk_reviewer
+        self._critic = critic
 
     def execute(self, created_review: Review) -> Review:
         review = created_review.start()
@@ -106,4 +110,41 @@ class ReviewOrchestrator:
                     message="Risk Reviewer execution failed",
                 )
             )
-        return review.complete_risk_reviewer(risk_assessment)
+        review = review.complete_risk_reviewer(risk_assessment)
+
+        review = review.start_critic()
+        analyst_stage = review.stage(StageIdentity.ANALYST)
+        architect_stage = review.stage(StageIdentity.SOLUTION_ARCHITECT)
+        reviewer_stage = review.stage(StageIdentity.RISK_REVIEWER)
+        if not isinstance(analyst_stage.output, ProblemAnalysis):
+            raise ValueError("completed Analyst stage must expose trusted ProblemAnalysis")
+        if not isinstance(architect_stage.output, SolutionAlternatives):
+            raise ValueError(
+                "completed Solution Architect stage must expose trusted SolutionAlternatives"
+            )
+        if not isinstance(reviewer_stage.output, RiskAssessment):
+            raise ValueError(
+                "completed Risk Reviewer stage must expose trusted RiskAssessment"
+            )
+        try:
+            critical_review = self._critic.review(
+                review.review_input,
+                analyst_stage.output,
+                architect_stage.output,
+                reviewer_stage.output,
+            )
+        except CriticOutputError:
+            return review.fail_critic(
+                ReviewError(
+                    kind=ReviewErrorKind.OUTPUT_VALIDATION,
+                    message="Critic output validation failed",
+                )
+            )
+        except Exception:
+            return review.fail_critic(
+                ReviewError(
+                    kind=ReviewErrorKind.EXECUTION,
+                    message="Critic execution failed",
+                )
+            )
+        return review.complete_critic(critical_review)
