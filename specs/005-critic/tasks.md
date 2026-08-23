@@ -155,12 +155,12 @@ Every implementation task follows:
 
 **Purpose**: Prove Slice 5 satisfies its approved scope without weakening Slices 1–4 or expanding architecture accidentally.
 
-- [ ] T049 Run the full deterministic `python -m pytest` suite with no live LLM/network dependency and confirm all Slice 1–5 tests pass.
-- [ ] T050 Run `python -m ruff check .` and resolve only Slice 5-introduced violations without weakening repository lint rules.
-- [ ] T051 Run `python -m mypy` under the repository strict configuration and resolve typing issues for Critic reference kinds, nested immutable models, `StageInput`/`StageOutput`, stage lookup, and Orchestrator narrowing without adding a new dependency/plugin unless separately justified and approved.
-- [ ] T052 Run `python -m pip check` and confirm no production dependency change is required.
-- [ ] T053 Inspect `src/agentic_review_board/` and `pyproject.toml` to confirm Slice 5 adds no provider SDK, direct Orchestrator→`LLMPort` dependency, Coordinator implementation, final ranking/recommendation, replacement portfolio, numeric scoring, persistence/RAG/UI/tools, retries/timeouts/concurrency, generic workflow/stage registry, or generic artifact/reference framework.
-- [ ] T054 Review final implementation against `specs/005-critic/spec.md`, `plan.md`, `data-model.md`, `docs/02-requirements.md`, `docs/03-architecture.md`, `docs/04-agent-model.md`, `docs/05-quality-security.md`, the Constitution, and ADR-0001; confirm Critic only criticizes/validates, assumptions remain assumptions, references resolve fail-closed, generated references remain separate from same-execution provenance, empty output remains valid, and only Coordinator may rank/recommend.
+- [X] T049 Run the full deterministic `python -m pytest` suite with no live LLM/network dependency and confirm all Slice 1–5 tests pass.
+- [X] T050 Run `python -m ruff check .` and resolve only Slice 5-introduced violations without weakening repository lint rules.
+- [X] T051 Run `python -m mypy` under the repository strict configuration and resolve typing issues for Critic reference kinds, nested immutable models, `StageInput`/`StageOutput`, stage lookup, and Orchestrator narrowing without adding a new dependency/plugin unless separately justified and approved.
+- [X] T052 Run `python -m pip check` and confirm no production dependency change is required.
+- [X] T053 Inspect `src/agentic_review_board/` and `pyproject.toml` to confirm Slice 5 adds no provider SDK, direct Orchestrator→`LLMPort` dependency, Coordinator implementation, final ranking/recommendation, replacement portfolio, numeric scoring, persistence/RAG/UI/tools, retries/timeouts/concurrency, generic workflow/stage registry, or generic artifact/reference framework.
+- [X] T054 Review final implementation against `specs/005-critic/spec.md`, `plan.md`, `data-model.md`, `docs/02-requirements.md`, `docs/03-architecture.md`, `docs/04-agent-model.md`, `docs/05-quality-security.md`, the Constitution, and ADR-0001; confirm Critic only criticizes/validates, assumptions remain assumptions, references resolve fail-closed, generated references remain separate from same-execution provenance, empty output remains valid, and only Coordinator may rank/recommend.
 
 **Final checkpoint**: T001–T054 complete, deterministic suite green, Ruff/mypy/pip checks green, architecture reviewed, and Slice 5 remains limited to Critic v0.1 plus the minimum fourth-stage execution/orchestration extension.
 
