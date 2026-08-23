@@ -51,17 +51,17 @@
 - [X] T026 [US1] Test Risk unresolved reference resolves only exact risk_id + residual_uncertainty; reject absent uncertainty, unknown ID, mismatch, and other Risk fields.
 - [X] T027 [US1] Test Critic unresolved exact ID/value mappings for missing alternative category, contradiction rationale, and unresolved issue text; reject wrong kinds and IDs.
 - [X] T028 [US1] Test that structurally different unresolved references resolving to the same current upstream target are rejected contextually; also test recursive atomic validation, no fuzzy/case-folded repair, and no generic paths/string serialization.
-- [ ] T029 [US1] Test exact Criticism-ID disposition set equality, no importance threshold, REFLECTED/DISMISSED rules, and unknown/duplicate/omitted ID rejection.
-- [ ] T030 [US3] Test insufficient evidence with 2/3 alternatives requires a valid unresolved question; zero alternatives may omit it when generation notes and required rationale/next step exist.
-- [ ] T031 [US1] Test empty-Critic and validation-only-Critic require empty dispositions; mixed CriticalReview shows validated points need no disposition.
-- [ ] T032 [US6] Test malformed/extra/wrong-type and one-invalid-nested-item failures raise CoordinatorOutputError atomically and leave all five inputs unchanged.
+- [X] T029 [US1] Test exact Criticism-ID disposition set equality, no importance threshold, REFLECTED/DISMISSED rules, and unknown/duplicate/omitted ID rejection.
+- [X] T030 [US3] Test insufficient evidence with 2/3 alternatives requires a valid unresolved question; zero alternatives may omit it when generation notes and required rationale/next step exist.
+- [X] T031 [US1] Test empty-Critic and validation-only-Critic require empty dispositions; mixed CriticalReview shows validated points need no disposition.
+- [X] T032 [US6] Test malformed/extra/wrong-type and one-invalid-nested-item failures raise CoordinatorOutputError atomically and leave all five inputs unchanged.
 
 ### Implementation
 
 - [X] T033 [US1] Create src/agentic_review_board/participants/coordinator.py with Coordinator.coordinate(...), CoordinatorOutputError, exact role/payload, and structural FinalReview parsing.
 - [X] T034 [US2] Implement explicit alternative ranking, recommendation, zero-alternative, and principal-risk contextual validation.
 - [X] T035 [US1] Implement explicit Coordinator-specific unresolved-question resolver dispatch for every approved source/kind/shape with exact comparisons only.
-- [ ] T036 [US1] Implement exact Criticism-ID disposition completeness and recursive atomic validation; return only the complete parsed FinalReview.
+- [X] T036 [US1] Implement exact Criticism-ID disposition completeness and recursive atomic validation; return only the complete parsed FinalReview.
 
 **Checkpoint**: Coordinator independently validates deterministic output; Review lifecycle unchanged.
 
