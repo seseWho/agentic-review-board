@@ -441,8 +441,10 @@ Reject:
 - duplicate ranking positions;
 - duplicate principal risk IDs;
 - duplicate unresolved-question IDs;
-- duplicate resolved unresolved-question targets;
+- structurally identical unresolved-question references;
 - duplicate criticism disposition IDs.
+
+References that are structurally different but resolve to the same current upstream target cannot be detected intrinsically. That semantic duplication is rejected later by participant contextual validation.
 
 ### Ranking shape
 
@@ -533,7 +535,7 @@ Require the exact current five inputs:
 - preferred alternative resolves and matches position 1;
 - principal risk IDs resolve exactly;
 - every unresolved-question reference resolves exactly;
-- unresolved-question resolved targets are unique;
+- structurally different unresolved-question references that resolve to the same current target are rejected;
 - every current criticism ID has exactly one disposition and no unknown disposition exists;
 - zero alternatives force `INSUFFICIENT_EVIDENCE`;
 - insufficient evidence with existing alternatives exposes at least one current unresolved item;
