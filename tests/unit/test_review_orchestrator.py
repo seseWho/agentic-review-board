@@ -925,7 +925,7 @@ def test_orchestrator_accepts_empty_validation_only_and_sparse_critic_reviews(
     assert result.status is ReviewStatus.COMPLETED
     assert critic.status is StageStatus.COMPLETED
     assert isinstance(critic.output, CriticalReview)
-    assert_coordinator_pending(result)
+    assert_coordinator_completed(result)
 
 
 def test_invalid_critic_generated_output_raises_dedicated_participant_error() -> None:
