@@ -3,7 +3,7 @@
 **Branch**: `005-critic`  
 **Specification**: `specs/005-critic/spec.md` — Approved  
 **Plan**: `specs/005-critic/plan.md` — Approved  
-**Status**: Draft — awaiting review and explicit approval before task decomposition
+**Status**: Approved — explicitly approved for task decomposition
 
 ## 1. Objective
 
