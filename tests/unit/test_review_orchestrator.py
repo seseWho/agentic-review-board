@@ -4,8 +4,10 @@ import pytest
 
 from agentic_review_board.application.orchestrator import ReviewOrchestrator
 from agentic_review_board.domain.analysis import ProblemAnalysis
+from agentic_review_board.domain.critics import CriticalReview
 from agentic_review_board.domain.execution import (
     AnalystStageInput,
+    CriticStageInput,
     Review,
     ReviewErrorKind,
     ReviewStatus,
@@ -18,6 +20,7 @@ from agentic_review_board.domain.review import ReviewInput
 from agentic_review_board.domain.risks import RiskAssessment
 from agentic_review_board.domain.solutions import SolutionAlternatives
 from agentic_review_board.participants.analyst import Analyst
+from agentic_review_board.participants.critic import Critic, CriticOutputError
 from agentic_review_board.participants.risk_reviewer import (
     RiskReviewer,
     RiskReviewerOutputError,
@@ -170,11 +173,56 @@ def invalid_risk_reviewer_response() -> dict[str, object]:
     }
 
 
+def empty_critic_response() -> dict[str, object]:
+    return {
+        "criticisms": [],
+        "validated_points": [],
+        "missing_alternatives": [],
+        "contradictions": [],
+        "unresolved_issues": [],
+    }
+
+
+def validation_only_critic_response() -> dict[str, object]:
+    return {
+        **empty_critic_response(),
+        "validated_points": [
+            {
+                "id": "VALID-001",
+                "target_reference": {
+                    "source": "REVIEW_INPUT",
+                    "kind": "TITLE",
+                    "value": "Technical change review",
+                },
+                "rationale": "The review title is explicit and internally consistent.",
+            }
+        ],
+    }
+
+
+def invalid_critic_response() -> dict[str, object]:
+    return {
+        **empty_critic_response(),
+        "validated_points": [
+            {
+                "id": "VALID-INVALID",
+                "target_reference": {
+                    "source": "SOLUTION_ALTERNATIVES",
+                    "kind": "ALTERNATIVE",
+                    "item_id": "ALT-999",
+                },
+                "rationale": "This nonexistent alternative cannot be validated.",
+            }
+        ],
+    }
+
+
 def successful_responses() -> dict[str, Mapping[str, object]]:
     return {
         "analyst": analyst_response(),
         "solution_architect": two_alternative_response(),
         "risk_reviewer": risk_response(),
+        "critic": empty_critic_response(),
     }
 
 
@@ -196,6 +244,7 @@ def orchestrator_with(llm: RecordingLLM) -> ReviewOrchestrator:
         Analyst(llm),
         SolutionArchitect(llm),
         RiskReviewer(llm),
+        Critic(llm),
     )
 
 
@@ -222,11 +271,12 @@ def assert_later_stages_pending(review: Review) -> None:
     )
 
 
-def assert_final_stages_pending(review: Review) -> None:
-    assert_downstream_stages_pending(
-        review,
-        (StageIdentity.CRITIC, StageIdentity.COORDINATOR),
-    )
+def assert_coordinator_pending(review: Review) -> None:
+    assert_downstream_stages_pending(review, (StageIdentity.COORDINATOR,))
+
+
+def assert_critic_pending(review: Review) -> None:
+    assert_downstream_stages_pending(review, (StageIdentity.CRITIC,))
 
 
 def assert_fresh_created_review(review: Review) -> None:
@@ -240,13 +290,14 @@ def assert_fresh_created_review(review: Review) -> None:
         assert stage.error is None
 
 
-def test_orchestrator_executes_three_roles_in_order_with_exact_trusted_handoffs(
+def test_orchestrator_executes_four_roles_in_order_with_exact_trusted_handoffs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     events: list[str] = []
     original_start_analyst = Review.start_analyst
     original_start_solution_architect = Review.start_solution_architect
     original_start_risk_reviewer = Review.start_risk_reviewer
+    original_start_critic = Review.start_critic
 
     def recording_start_analyst(self: Review) -> Review:
         events.append("record:analyst_inputs")
@@ -260,6 +311,10 @@ def test_orchestrator_executes_three_roles_in_order_with_exact_trusted_handoffs(
         events.append("record:risk_reviewer_inputs")
         return original_start_risk_reviewer(self)
 
+    def recording_start_critic(self: Review) -> Review:
+        events.append("record:critic_inputs")
+        return original_start_critic(self)
+
     monkeypatch.setattr(Review, "start_analyst", recording_start_analyst)
     monkeypatch.setattr(
         Review,
@@ -271,6 +326,7 @@ def test_orchestrator_executes_three_roles_in_order_with_exact_trusted_handoffs(
         "start_risk_reviewer",
         recording_start_risk_reviewer,
     )
+    monkeypatch.setattr(Review, "start_critic", recording_start_critic)
 
     llm = RecordingLLM(successful_responses(), events)
     created = create_review()
@@ -286,23 +342,29 @@ def test_orchestrator_executes_three_roles_in_order_with_exact_trusted_handoffs(
         "invoke:solution_architect",
         "record:risk_reviewer_inputs",
         "invoke:risk_reviewer",
+        "record:critic_inputs",
+        "invoke:critic",
     ]
     assert [role for role, _ in llm.calls] == [
         "analyst",
         "solution_architect",
         "risk_reviewer",
+        "critic",
     ]
 
     analyst_stage = result.stage(StageIdentity.ANALYST)
     architect_stage = result.stage(StageIdentity.SOLUTION_ARCHITECT)
     reviewer_stage = result.stage(StageIdentity.RISK_REVIEWER)
+    critic_stage = result.stage(StageIdentity.CRITIC)
 
     assert analyst_stage.status is StageStatus.COMPLETED
     assert architect_stage.status is StageStatus.COMPLETED
     assert reviewer_stage.status is StageStatus.COMPLETED
+    assert critic_stage.status is StageStatus.COMPLETED
     assert isinstance(analyst_stage.inputs, AnalystStageInput)
     assert isinstance(architect_stage.inputs, SolutionArchitectStageInput)
     assert isinstance(reviewer_stage.inputs, RiskReviewerStageInput)
+    assert isinstance(critic_stage.inputs, CriticStageInput)
     assert analyst_stage.inputs.review_input is result.review_input
     assert architect_stage.inputs.review_input is result.review_input
     assert architect_stage.inputs.problem_analysis is analyst_stage.output
@@ -310,6 +372,11 @@ def test_orchestrator_executes_three_roles_in_order_with_exact_trusted_handoffs(
     assert reviewer_stage.inputs.problem_analysis is analyst_stage.output
     assert reviewer_stage.inputs.solution_alternatives is architect_stage.output
     assert isinstance(reviewer_stage.output, RiskAssessment)
+    assert critic_stage.inputs.review_input is result.review_input
+    assert critic_stage.inputs.problem_analysis is analyst_stage.output
+    assert critic_stage.inputs.solution_alternatives is architect_stage.output
+    assert critic_stage.inputs.risk_assessment is reviewer_stage.output
+    assert isinstance(critic_stage.output, CriticalReview)
 
     risk_payload = llm.calls[2][1]
     assert risk_payload == {
@@ -317,7 +384,14 @@ def test_orchestrator_executes_three_roles_in_order_with_exact_trusted_handoffs(
         "problem_analysis": analyst_stage.output.model_dump(mode="json"),
         "solution_alternatives": architect_stage.output.model_dump(mode="json"),
     }
-    assert_final_stages_pending(result)
+    critic_payload = llm.calls[3][1]
+    assert critic_payload == {
+        "review_input": result.review_input.model_dump(mode="json"),
+        "problem_analysis": analyst_stage.output.model_dump(mode="json"),
+        "solution_alternatives": architect_stage.output.model_dump(mode="json"),
+        "risk_assessment": reviewer_stage.output.model_dump(mode="json"),
+    }
+    assert_coordinator_pending(result)
 
 
 @pytest.mark.parametrize(
@@ -349,7 +423,7 @@ def test_orchestrator_accepts_zero_risk_and_zero_alternative_results(
     assert isinstance(reviewer_stage.output, RiskAssessment)
     assert reviewer_stage.output.risks == ()
     assert result.status is ReviewStatus.RUNNING
-    assert_final_stages_pending(result)
+    assert_coordinator_pending(result)
 
 
 @pytest.mark.parametrize(
@@ -495,7 +569,7 @@ def test_risk_reviewer_output_validation_failure_is_mapped_fail_closed() -> None
         "solution_architect",
         "risk_reviewer",
     ]
-    assert_final_stages_pending(result)
+    assert_coordinator_pending(result)
 
 
 def test_risk_reviewer_execution_failure_is_mapped_without_raw_exception_text() -> None:
@@ -523,7 +597,7 @@ def test_risk_reviewer_execution_failure_is_mapped_without_raw_exception_text() 
     assert reviewer_stage.error.kind is ReviewErrorKind.EXECUTION
     assert reviewer_stage.error.message == "Risk Reviewer execution failed"
     assert "provider secret risk detail" not in reviewer_stage.error.message
-    assert_final_stages_pending(result)
+    assert_coordinator_pending(result)
 
 
 def test_orchestrator_does_not_convert_lifecycle_errors_outside_participant_boundary() -> None:
@@ -620,8 +694,8 @@ def test_reused_orchestrator_keeps_sequential_successful_reviews_isolated() -> N
     assert first_reviewer.output is not second_reviewer.output
     assert first_result.status is ReviewStatus.RUNNING
     assert second_result.status is ReviewStatus.RUNNING
-    assert_final_stages_pending(first_result)
-    assert_final_stages_pending(second_result)
+    assert_coordinator_pending(first_result)
+    assert_coordinator_pending(second_result)
 
 
 def test_risk_failure_does_not_contaminate_next_fresh_review() -> None:
@@ -668,4 +742,4 @@ def test_risk_failure_does_not_contaminate_next_fresh_review() -> None:
     assert second_reviewer.output is not None
     assert second_reviewer.error is None
     assert second_reviewer.output is not first_reviewer.output
-    assert_final_stages_pending(second_result)
+    assert_coordinator_pending(second_result)
