@@ -224,6 +224,7 @@ class Coordinator:
         reference: CriticUnresolvedReference,
         critical_review: CriticalReview,
     ) -> tuple[str, ...]:
+        matches: list[object]
         if reference.kind is CriticUnresolvedKind.MISSING_ALTERNATIVE:
             matches = [
                 finding
