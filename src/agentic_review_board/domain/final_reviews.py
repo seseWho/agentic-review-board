@@ -3,6 +3,8 @@ from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator, model_validator
 
+from agentic_review_board.domain.shared import QualitativeLevel
+
 
 class RecommendationOutcome(StrEnum):
     """Whether current evidence supports a preferred alternative."""
@@ -319,4 +321,99 @@ class CriticismDisposition(BaseModel):
                 raise ValueError("reflected criticism requires at least one final section")
         elif self.reflected_in:
             raise ValueError("dismissed criticism must not identify reflected sections")
+        return self
+
+
+DECISION_SUPPORT_NOTICE = (
+    "This review supports, but does not replace, human decision-making."
+)
+
+
+class FinalReview(BaseModel):
+    """Trusted Coordinator decision-support artifact."""
+
+    model_config = ConfigDict(
+        frozen=True,
+        extra="forbid",
+        str_strip_whitespace=True,
+    )
+
+    situation_summary: str
+    ranked_alternatives: tuple[RankedAlternative, ...]
+    recommendation_outcome: RecommendationOutcome
+    preferred_alternative_id: str | None
+    conclusion_rationale: str
+    principal_risks: tuple[PrincipalRisk, ...]
+    unresolved_questions: tuple[UnresolvedQuestion, ...]
+    criticism_dispositions: tuple[CriticismDisposition, ...]
+    next_validation_step: str
+    confidence: QualitativeLevel
+    decision_support_notice: Literal[
+        "This review supports, but does not replace, human decision-making."
+    ] = DECISION_SUPPORT_NOTICE
+
+    @field_validator(
+        "situation_summary",
+        "conclusion_rationale",
+        "next_validation_step",
+    )
+    @classmethod
+    def validate_required_text(cls, value: str) -> str:
+        if not value:
+            raise ValueError("required text must not be empty")
+        return value
+
+    @field_validator("preferred_alternative_id")
+    @classmethod
+    def validate_optional_preferred_id(cls, value: str | None) -> str | None:
+        if value is not None and not value:
+            raise ValueError("preferred alternative ID must not be empty")
+        return value
+
+    @model_validator(mode="after")
+    def validate_aggregate(self) -> Self:
+        alternative_ids = [
+            alternative.alternative_id for alternative in self.ranked_alternatives
+        ]
+        positions = [alternative.position for alternative in self.ranked_alternatives]
+        if len(alternative_ids) != len(set(alternative_ids)):
+            raise ValueError("ranked alternative IDs must be unique")
+        if len(positions) != len(set(positions)):
+            raise ValueError("ranking positions must be unique")
+        if set(positions) != set(range(1, len(positions) + 1)):
+            raise ValueError("ranking positions must be contiguous from one")
+
+        risk_ids = [risk.risk_id for risk in self.principal_risks]
+        if len(risk_ids) != len(set(risk_ids)):
+            raise ValueError("principal risk IDs must be unique")
+
+        question_ids = [question.id for question in self.unresolved_questions]
+        if len(question_ids) != len(set(question_ids)):
+            raise ValueError("unresolved question IDs must be unique")
+        reference_keys = [
+            question.reference.model_dump_json()
+            for question in self.unresolved_questions
+        ]
+        if len(reference_keys) != len(set(reference_keys)):
+            raise ValueError("unresolved question references must be unique")
+
+        criticism_ids = [
+            disposition.criticism_id for disposition in self.criticism_dispositions
+        ]
+        if len(criticism_ids) != len(set(criticism_ids)):
+            raise ValueError("criticism disposition IDs must be unique")
+
+        if self.recommendation_outcome is RecommendationOutcome.RECOMMENDED:
+            if not self.ranked_alternatives:
+                raise ValueError("recommendation requires a non-empty ranking")
+            first_id = next(
+                alternative.alternative_id
+                for alternative in self.ranked_alternatives
+                if alternative.position == 1
+            )
+            if self.preferred_alternative_id != first_id:
+                raise ValueError("preferred alternative must be ranked first")
+        elif self.preferred_alternative_id is not None:
+            raise ValueError("insufficient evidence forbids a preferred alternative")
+
         return self
