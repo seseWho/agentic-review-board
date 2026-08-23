@@ -22,10 +22,7 @@ from agentic_review_board.domain.review import ReviewInput
 from agentic_review_board.domain.risks import RiskAssessment
 from agentic_review_board.domain.solutions import SolutionAlternatives
 from agentic_review_board.participants.analyst import Analyst
-from agentic_review_board.participants.coordinator import (
-    Coordinator,
-    CoordinatorOutputError,
-)
+from agentic_review_board.participants.coordinator import Coordinator
 from agentic_review_board.participants.critic import Critic, CriticOutputError
 from agentic_review_board.participants.risk_reviewer import (
     RiskReviewer,
