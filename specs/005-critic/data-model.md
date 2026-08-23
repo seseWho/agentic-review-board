@@ -100,65 +100,101 @@ RISK_ASSESSMENT
 
 ### 3.4 `CriticReferenceKind`
 
-The bounded v0.1 vocabulary SHALL be:
+The bounded v0.1 vocabulary SHALL match the fields that actually exist in the four accepted upstream contracts:
 
 ```text
 # ReviewInput
-FACT
-ASSUMPTION
-CONSTRAINT
-OBJECTIVE
-QUESTION
+DESCRIPTION
+TITLE
+REVIEW_OBJECTIVE
+REVIEW_CONSTRAINT
+CONTEXT
+STATED_FACT
 
 # ProblemAnalysis
-INTERPRETATION
-KEY_CONSIDERATION
-ANALYSIS_UNCERTAINTY
+PROBLEM_OBJECTIVE
+PROBLEM_FACT
+PROBLEM_CONSTRAINT
+PROBLEM_ASSUMPTION
+MISSING_INFORMATION
+UNCERTAINTY
 
 # SolutionAlternatives
 ALTERNATIVE
+ALTERNATIVE_NAME
+ALTERNATIVE_DESCRIPTION
 ADVANTAGE
 DISADVANTAGE
-DEPENDENCY
 ALTERNATIVE_ASSUMPTION
+IMPLEMENTATION_COMPLEXITY
+GENERATION_EXPLANATION
+BLOCKING_MISSING_INFORMATION
+BLOCKING_UNCERTAINTY
 
 # RiskAssessment
 RISK
+RISK_CATEGORY
+RISK_DESCRIPTION
+RISK_SEVERITY
 MITIGATION
-RESIDUAL_CONCERN
+RESIDUAL_UNCERTAINTY
+OVERALL_OBSERVATION
 ```
 
 The implementation SHALL validate legal `source × kind` combinations rather than treating every enum value as valid for every source.
+
+The vocabulary deliberately excludes fields that do not exist in the accepted upstream models, including generic questions, interpretations, key considerations, dependencies, and residual concerns.
+
+Structured upstream values such as `SolutionAlternative.relevant_constraints`, `Risk.affected_scope`, and `Risk.basis` are not directly referenceable in v0.1. A criticism concerning one of those structures SHALL target its owning alternative or risk and use direct references to the original visible upstream artifacts as additional basis where applicable. This keeps `CriticReference.value` textual and avoids canonical serialization or references-to-references.
 
 No generic free-form kind is allowed.
 
 ### 3.5 Reference-shape rules
 
-The reference itself SHALL enforce only shape-level invariants that do not require upstream context:
+The reference itself SHALL enforce the following shape-level invariants without consulting upstream context:
 
-1. `item_id` and `value` cannot both be absent.
-2. blank `item_id`/`value` are invalid.
-3. source/kind combination must be legal.
-4. reference fields are immutable and closed.
+1. blank `item_id`/`value` are invalid when present;
+2. the `source × kind` combination must be legal;
+3. value-only kinds require `item_id=None` and a non-blank `value`;
+4. ID-primary kinds require a non-blank `item_id` and permit only their explicitly defined optional compatibility value;
+5. optional-finding-ID kinds require a non-blank `value` and permit an optional `item_id`;
+6. parent-ID + value kinds require both fields;
+7. reference fields are immutable and closed.
 
-Context-dependent rules belong in the Critic participant trust boundary, not in the intrinsic domain model.
+These rules are fully enumerated in Section 13. Context-dependent existence, uniqueness, and compatibility rules belong in the Critic participant trust boundary.
 
 ### 3.6 Contextual resolution rules
 
 The participant SHALL resolve a `CriticReference` against the exact four current inputs.
 
-For an upstream item with a stable ID:
+For an ID-primary item:
 
 ```text
 item_id required
-value optional but, when supplied, must exactly match the referenced item's canonical visible value
+value optional but, when supplied, must match the exact kind-specific compatibility field
 ```
 
-For an upstream item without a stable ID:
+For a finding with an optional upstream ID:
+
+```text
+value required
+item_id optional
+when item_id is supplied, both ID and value must match the same current finding
+when item_id is absent, value must identify exactly one current finding
+```
+
+For a value-only item:
 
 ```text
 value required
 exactly one current item must match
+```
+
+For a nested item owned by an alternative or risk:
+
+```text
+item_id identifies the exact parent
+value must exactly match the selected field or collection item within that parent
 ```
 
 Resolution policy:
@@ -169,7 +205,7 @@ Resolution policy:
 >1 matches → CriticOutputError
 ```
 
-No fuzzy matching, case folding, nearest match, semantic repair, or generated correction is permitted.
+An optional scalar field that is `None` has zero resolvable matches. No fuzzy matching, case folding, nearest match, semantic repair, generated correction, or implicit structured-value serialization is permitted.
 
 ---
 
@@ -414,30 +450,45 @@ No partially trusted review is returned.
 
 The participant SHALL implement an explicit bounded resolver table equivalent to:
 
-| Source | Kind | Resolution key |
-|---|---|---|
-| REVIEW_INPUT | FACT | exact value, unique |
-| REVIEW_INPUT | ASSUMPTION | exact value, unique |
-| REVIEW_INPUT | CONSTRAINT | exact value, unique |
-| REVIEW_INPUT | OBJECTIVE | exact value, unique |
-| REVIEW_INPUT | QUESTION | exact value, unique |
-| PROBLEM_ANALYSIS | INTERPRETATION | exact value, unique |
-| PROBLEM_ANALYSIS | KEY_CONSIDERATION | exact value, unique |
-| PROBLEM_ANALYSIS | ANALYSIS_UNCERTAINTY | exact value, unique |
-| SOLUTION_ALTERNATIVES | ALTERNATIVE | alternative ID; optional compatible value |
-| SOLUTION_ALTERNATIVES | ADVANTAGE | parent alternative ID + exact value |
-| SOLUTION_ALTERNATIVES | DISADVANTAGE | parent alternative ID + exact value |
-| SOLUTION_ALTERNATIVES | DEPENDENCY | parent alternative ID + exact value |
-| SOLUTION_ALTERNATIVES | ALTERNATIVE_ASSUMPTION | parent alternative ID + exact value |
-| RISK_ASSESSMENT | RISK | risk ID; optional compatible value |
-| RISK_ASSESSMENT | MITIGATION | risk ID + exact mitigation value |
-| RISK_ASSESSMENT | RESIDUAL_CONCERN | risk ID + exact residual-concern value |
+| Source | Kind | Exact upstream target | Resolution key |
+|---|---|---|---|
+| REVIEW_INPUT | DESCRIPTION | `ReviewInput.description` | exact value, unique scalar |
+| REVIEW_INPUT | TITLE | `ReviewInput.title` | exact value, unique scalar; no match when `None` |
+| REVIEW_INPUT | REVIEW_OBJECTIVE | `ReviewInput.objective` | exact value, unique scalar; no match when `None` |
+| REVIEW_INPUT | REVIEW_CONSTRAINT | item in `ReviewInput.constraints` | exact value, unique |
+| REVIEW_INPUT | CONTEXT | item in `ReviewInput.context` | exact value, unique |
+| REVIEW_INPUT | STATED_FACT | item in `ReviewInput.stated_facts` | exact value, unique |
+| PROBLEM_ANALYSIS | PROBLEM_OBJECTIVE | `ProblemAnalysis.objective` | exact value, unique scalar |
+| PROBLEM_ANALYSIS | PROBLEM_FACT | item in `ProblemAnalysis.facts` | optional finding ID + exact `text` |
+| PROBLEM_ANALYSIS | PROBLEM_CONSTRAINT | item in `ProblemAnalysis.constraints` | optional finding ID + exact `text` |
+| PROBLEM_ANALYSIS | PROBLEM_ASSUMPTION | item in `ProblemAnalysis.assumptions` | optional finding ID + exact `text` |
+| PROBLEM_ANALYSIS | MISSING_INFORMATION | item in `ProblemAnalysis.missing_information` | optional finding ID + exact `text` |
+| PROBLEM_ANALYSIS | UNCERTAINTY | item in `ProblemAnalysis.uncertainties` | optional finding ID + exact `text` |
+| SOLUTION_ALTERNATIVES | ALTERNATIVE | item in `SolutionAlternatives.alternatives` | alternative ID; optional exact `name` |
+| SOLUTION_ALTERNATIVES | ALTERNATIVE_NAME | `SolutionAlternative.name` | parent alternative ID + exact value |
+| SOLUTION_ALTERNATIVES | ALTERNATIVE_DESCRIPTION | `SolutionAlternative.description` | parent alternative ID + exact value |
+| SOLUTION_ALTERNATIVES | ADVANTAGE | item in `SolutionAlternative.advantages` | parent alternative ID + exact value |
+| SOLUTION_ALTERNATIVES | DISADVANTAGE | item in `SolutionAlternative.disadvantages` | parent alternative ID + exact value |
+| SOLUTION_ALTERNATIVES | ALTERNATIVE_ASSUMPTION | item in `SolutionAlternative.assumptions` | parent alternative ID + exact value |
+| SOLUTION_ALTERNATIVES | IMPLEMENTATION_COMPLEXITY | `SolutionAlternative.implementation_complexity.value` | parent alternative ID + exact enum value |
+| SOLUTION_ALTERNATIVES | GENERATION_EXPLANATION | `GenerationNotes.explanation` | exact value, unique scalar; no match without notes |
+| SOLUTION_ALTERNATIVES | BLOCKING_MISSING_INFORMATION | item in `GenerationNotes.blocking_missing_information` | optional finding ID + exact `text`; no match without notes |
+| SOLUTION_ALTERNATIVES | BLOCKING_UNCERTAINTY | item in `GenerationNotes.blocking_uncertainties` | optional finding ID + exact `text`; no match without notes |
+| RISK_ASSESSMENT | RISK | item in `RiskAssessment.risks` | risk ID; optional exact `description` |
+| RISK_ASSESSMENT | RISK_CATEGORY | `Risk.category` | parent risk ID + exact value; no match when `None` |
+| RISK_ASSESSMENT | RISK_DESCRIPTION | `Risk.description` | parent risk ID + exact value |
+| RISK_ASSESSMENT | RISK_SEVERITY | `Risk.severity.value` | parent risk ID + exact enum value |
+| RISK_ASSESSMENT | MITIGATION | `Risk.mitigation` | parent risk ID + exact value; no match when `None` |
+| RISK_ASSESSMENT | RESIDUAL_UNCERTAINTY | `Risk.residual_uncertainty` | parent risk ID + exact value; no match when `None` |
+| RISK_ASSESSMENT | OVERALL_OBSERVATION | item in `RiskAssessment.overall_observations` | exact value, unique |
 
 ### Important interpretation of `item_id`
 
-For nested characteristics such as an advantage or mitigation that do not have their own stable ID, `item_id` identifies the stable parent (`alternative.id` or `risk.id`) and `value` identifies the exact nested item.
+For `PROBLEM_FACT`, `PROBLEM_CONSTRAINT`, `PROBLEM_ASSUMPTION`, `MISSING_INFORMATION`, `UNCERTAINTY`, `BLOCKING_MISSING_INFORMATION`, and `BLOCKING_UNCERTAINTY`, `item_id` is optional because the accepted upstream finding contracts permit absent IDs. Their `value` always carries the exact finding text.
 
-Therefore these kinds require **both** fields.
+For alternative and risk nested textual/scalar kinds, `item_id` identifies the stable parent and `value` identifies the exact selected field or collection item. These kinds require both fields.
+
+`ALTERNATIVE` and `RISK` are ID-primary. Their optional compatibility values have fixed meanings: alternative `name` and risk `description`, respectively.
 
 This remains Critic-specific and does not change upstream contracts merely to make Critic references easier.
 
@@ -456,14 +507,36 @@ value = exact non-blank text
 
 Kinds:
 
-- FACT
-- ASSUMPTION
-- CONSTRAINT
-- OBJECTIVE
-- QUESTION
-- INTERPRETATION
-- KEY_CONSIDERATION
-- ANALYSIS_UNCERTAINTY
+- DESCRIPTION
+- TITLE
+- REVIEW_OBJECTIVE
+- REVIEW_CONSTRAINT
+- CONTEXT
+- STATED_FACT
+- PROBLEM_OBJECTIVE
+- GENERATION_EXPLANATION
+- OVERALL_OBSERVATION
+
+### Optional-finding-ID references
+
+Require:
+
+```text
+item_id = optional upstream finding ID
+value = exact non-blank finding text
+```
+
+Kinds:
+
+- PROBLEM_FACT
+- PROBLEM_CONSTRAINT
+- PROBLEM_ASSUMPTION
+- MISSING_INFORMATION
+- UNCERTAINTY
+- BLOCKING_MISSING_INFORMATION
+- BLOCKING_UNCERTAINTY
+
+When `item_id` is present, ID and value SHALL resolve to the same finding. When absent, value SHALL match exactly one finding in the selected collection.
 
 ### ID-primary references
 
@@ -471,13 +544,13 @@ Require:
 
 ```text
 item_id = stable upstream ID
-value = optional exact compatible visible value
+value = optional exact kind-specific compatibility value
 ```
 
-Kinds:
+Kinds and compatibility values:
 
-- ALTERNATIVE
-- RISK
+- ALTERNATIVE → `SolutionAlternative.name`
+- RISK → `Risk.description`
 
 ### Parent-ID + value references
 
@@ -485,19 +558,26 @@ Require:
 
 ```text
 item_id = stable parent ID
-value = exact non-blank nested item text
+value = exact non-blank selected field, collection item, or enum value
 ```
 
 Kinds:
 
+- ALTERNATIVE_NAME
+- ALTERNATIVE_DESCRIPTION
 - ADVANTAGE
 - DISADVANTAGE
-- DEPENDENCY
 - ALTERNATIVE_ASSUMPTION
+- IMPLEMENTATION_COMPLEXITY
+- RISK_CATEGORY
+- RISK_DESCRIPTION
+- RISK_SEVERITY
 - MITIGATION
-- RESIDUAL_CONCERN
+- RESIDUAL_UNCERTAINTY
 
-These rules SHALL be enforced intrinsically where possible from `kind`, before contextual resolution.
+These rules SHALL be enforced intrinsically from `kind` before contextual resolution.
+
+Structured `ConstraintReference`, `RiskScope`, and `RiskBasisReference` values are deliberately outside the v0.1 direct-reference vocabulary. No string serialization of those objects is accepted as a substitute.
 
 ---
 
