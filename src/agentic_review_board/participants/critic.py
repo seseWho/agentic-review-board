@@ -1,4 +1,4 @@
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
 from pydantic import ValidationError
@@ -11,10 +11,10 @@ from agentic_review_board.domain.analysis import (
 )
 from agentic_review_board.domain.critics import (
     CriticalReview,
-    CriticReference,
-    CriticReferenceKind,
     Criticism,
     CriticismTargetType,
+    CriticReference,
+    CriticReferenceKind,
 )
 from agentic_review_board.domain.review import ReviewInput
 from agentic_review_board.domain.risks import Risk, RiskAssessment
@@ -120,11 +120,8 @@ class Critic:
     def _validate_criticism(
         cls,
         criticism: Criticism,
-        resolve: object,
+        resolve: Callable[[CriticReference], _ResolvedReference],
     ) -> None:
-        if not callable(resolve):
-            raise CriticOutputError("invalid Critic output")
-
         resolved: list[_ResolvedReference] = []
         if criticism.target_reference is not None:
             resolved.append(resolve(criticism.target_reference))
