@@ -781,3 +781,109 @@ def test_context_rejects_distinct_references_to_same_resolved_target() -> None:
             ),
             analysis=populated_problem_analysis(),
         )
+
+
+
+def test_problem_reference_without_id_rejects_ambiguous_exact_text() -> None:
+    analysis = populated_problem_analysis().model_copy(
+        update={
+            "uncertainties": (
+                AnalysisFinding(id="UNC-001", text="Repeated uncertainty."),
+                AnalysisFinding(id="UNC-002", text="Repeated uncertainty."),
+            )
+        }
+    )
+    reference = {
+        "source": "PROBLEM_ANALYSIS",
+        "kind": "UNCERTAINTY",
+        "value": "Repeated uncertainty.",
+    }
+
+    with pytest.raises(CoordinatorOutputError):
+        run_coordinator_with_context(
+            unresolved_response(reference),
+            analysis=analysis,
+        )
+
+
+def test_blocker_reference_without_id_rejects_ambiguous_exact_text() -> None:
+    alternatives = solution_alternatives_with_blockers()
+    notes = alternatives.generation_notes
+    assert notes is not None
+    ambiguous = alternatives.model_copy(
+        update={
+            "generation_notes": notes.model_copy(
+                update={
+                    "blocking_uncertainties": (
+                        FindingReference(id="UNC-001", text="Repeated blocker."),
+                        FindingReference(id="UNC-002", text="Repeated blocker."),
+                    )
+                }
+            )
+        }
+    )
+    reference = {
+        "source": "SOLUTION_ALTERNATIVES",
+        "kind": "BLOCKING_UNCERTAINTY",
+        "value": "Repeated blocker.",
+    }
+
+    with pytest.raises(CoordinatorOutputError):
+        run_coordinator_with_context(
+            unresolved_response(reference),
+            alternatives=ambiguous,
+        )
+
+
+@pytest.mark.parametrize(
+    "reference",
+    [
+        {
+            "source": "CRITICAL_REVIEW",
+            "kind": "CONTRADICTION",
+            "item_id": "MISSING-001",
+            "value": "Incremental rollout",
+        },
+        {
+            "source": "CRITICAL_REVIEW",
+            "kind": "UNRESOLVED_ISSUE",
+            "item_id": "UNKNOWN",
+            "value": "Operational ownership remains undefined.",
+        },
+        {
+            "source": "CRITICAL_REVIEW",
+            "kind": "MISSING_ALTERNATIVE",
+            "item_id": "MISSING-001",
+            "value": "incremental rollout",
+        },
+    ],
+)
+def test_critic_unresolved_references_reject_wrong_kind_id_or_value(
+    reference: dict[str, object],
+) -> None:
+    with pytest.raises(CoordinatorOutputError):
+        run_coordinator_with_context(
+            unresolved_response(reference),
+            critique=unresolved_critical_review(),
+        )
+
+
+def test_one_invalid_nested_reference_rejects_complete_coordinator_output() -> None:
+    with pytest.raises(CoordinatorOutputError):
+        run_coordinator_with_context(
+            unresolved_response(
+                {
+                    "source": "PROBLEM_ANALYSIS",
+                    "kind": "PROBLEM_ASSUMPTION",
+                    "item_id": "ASM-001",
+                    "value": "Local capacity is sufficient.",
+                },
+                {
+                    "source": "RISK_ASSESSMENT",
+                    "risk_id": "UNKNOWN",
+                    "value": "The final owner is unknown.",
+                },
+            ),
+            analysis=populated_problem_analysis(),
+            risks=populated_risk_assessment(),
+        )
