@@ -340,7 +340,7 @@ def assert_fresh_created_review(review: Review) -> None:
         assert stage.error is None
 
 
-def test_orchestrator_executes_four_roles_in_order_with_exact_trusted_handoffs(
+def test_orchestrator_executes_five_roles_in_order_with_exact_trusted_handoffs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     events: list[str] = []
@@ -1107,7 +1107,6 @@ def test_critic_failure_does_not_contaminate_next_fresh_review() -> None:
     assert_coordinator_completed(second_result)
 
 
-
 def test_coordinator_output_validation_failure_is_mapped_fail_closed() -> None:
     responses = successful_responses()
     responses["coordinator"] = {"unexpected": "invalid"}
@@ -1123,7 +1122,6 @@ def test_coordinator_output_validation_failure_is_mapped_fail_closed() -> None:
     assert coordinator.error is not None
     assert coordinator.error.kind is ReviewErrorKind.OUTPUT_VALIDATION
     assert coordinator.error.message == "Coordinator output validation failed"
-
 
 def test_coordinator_execution_failure_hides_raw_detail() -> None:
     llm = RecordingLLM(
@@ -1141,7 +1139,6 @@ def test_coordinator_execution_failure_hides_raw_detail() -> None:
     assert coordinator.error.kind is ReviewErrorKind.EXECUTION
     assert coordinator.error.message == "Coordinator execution failed"
     assert "provider secret coordinator detail" not in coordinator.error.message
-
 
 def test_coordinator_invariant_failure_outside_call_boundary_propagates(
     monkeypatch: pytest.MonkeyPatch,
@@ -1230,7 +1227,6 @@ def test_orchestrator_reuses_exact_trusted_final_review(
     assert coordinator.inputs.risk_assessment is reviewer.output
     assert coordinator.inputs.critical_review is critic.output
     assert coordinator.output is trusted
-
 
 
 def test_coordinator_failure_does_not_contaminate_fresh_review() -> None:
