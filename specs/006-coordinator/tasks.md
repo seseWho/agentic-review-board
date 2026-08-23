@@ -15,11 +15,11 @@
 - [X] T002 [US2] Test valid RankedAlternative: strict positive position, required ID/justification, non-empty unique considerations, optional unique ranking-change conditions, frozen tuples, and closed schema.
 - [X] T003 [US2] Test invalid RankedAlternative: bool/non-integer/non-positive position, blank text, empty/duplicate collections, and embedded replacement-alternative fields.
 - [X] T004 [US1] Test PrincipalRisk required risk_id/rationale, frozen/closed behavior, blank rejection, and absence of copied Risk fields.
-- [ ] T005 [US1] Test ProblemUnresolvedReference intrinsic shapes for PROBLEM_ASSUMPTION, MISSING_INFORMATION, and UNCERTAINTY with required value and optional non-blank item_id.
-- [ ] T006 [US1] Test SolutionUnresolvedReference shapes: ALTERNATIVE_ASSUMPTION requires alternative_id and forbids item_id; blocker kinds forbid alternative_id and allow optional item_id.
-- [ ] T007 [US1] Test RiskUnresolvedReference and CriticUnresolvedReference allowed kinds, required identifiers/values, discriminators, frozen behavior, blanks, and extra fields.
-- [ ] T008 [US1] Test UnresolvedQuestion required ID/reference/question/rationale and immutable discriminated-union parsing.
-- [ ] T009 [US1] Test CriticismDisposition: REFLECTED requires unique reflected sections; DISMISSED requires none; validate ID/rationale, blanks, frozen and closed behavior.
+- [X] T005 [US1] Test ProblemUnresolvedReference intrinsic shapes for PROBLEM_ASSUMPTION, MISSING_INFORMATION, and UNCERTAINTY with required value and optional non-blank item_id.
+- [X] T006 [US1] Test SolutionUnresolvedReference shapes: ALTERNATIVE_ASSUMPTION requires alternative_id and forbids item_id; blocker kinds forbid alternative_id and allow optional item_id.
+- [X] T007 [US1] Test RiskUnresolvedReference and CriticUnresolvedReference allowed kinds, required identifiers/values, discriminators, frozen behavior, blanks, and extra fields.
+- [X] T008 [US1] Test UnresolvedQuestion required ID/reference/question/rationale and immutable discriminated-union parsing.
+- [X] T009 [US1] Test CriticismDisposition: REFLECTED requires unique reflected sections; DISMISSED requires none; validate ID/rationale, blanks, frozen and closed behavior.
 - [ ] T010 [US2] Test valid FinalReview ranking positions independent of tuple order plus unique alternative, risk, question/reference, and disposition identities.
 - [ ] T011 [US3] Test recommendation consistency: RECOMMENDED requires non-empty ranking and preferred position-1 ID; INSUFFICIENT_EVIDENCE forbids preferred ID but permits ranking; rationale always required.
 - [ ] T012 [US4] Test zero-ranking + INSUFFICIENT_EVIDENCE valid and RECOMMENDED invalid; do not widen the accepted 0/2/3 SolutionAlternatives cardinality.
@@ -28,8 +28,8 @@
 
 ### Implementation
 
-- [ ] T015 [US1] Create src/agentic_review_board/domain/final_reviews.py with approved enums and four unresolved-question source/kind families; reuse QualitativeLevel.
-- [ ] T016 [US1] Implement immutable closed RankedAlternative, PrincipalRisk, four source-specific unresolved-reference models and union, UnresolvedQuestion, and CriticismDisposition.
+- [X] T015 [US1] Create src/agentic_review_board/domain/final_reviews.py with approved enums and four unresolved-question source/kind families; reuse QualitativeLevel.
+- [X] T016 [US1] Implement immutable closed RankedAlternative, PrincipalRisk, four source-specific unresolved-reference models and union, UnresolvedQuestion, and CriticismDisposition.
 - [ ] T017 [US1] Implement FinalReview intrinsic ranking/recommendation/collection invariants and fixed notice without current-review lookup, scoring, or generic references.
 
 **Checkpoint**: intrinsic FinalReview tests pass; no participant/execution changes.
