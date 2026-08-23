@@ -1,8 +1,6 @@
 import pytest
 from pydantic import ValidationError
 
-from agentic_review_board.domain.shared import QualitativeLevel
-
 from agentic_review_board.domain.final_reviews import (
     CriticismDisposition,
     CriticismDispositionOutcome,
@@ -21,6 +19,7 @@ from agentic_review_board.domain.final_reviews import (
     UnresolvedQuestion,
     UnresolvedQuestionSource,
 )
+from agentic_review_board.domain.shared import QualitativeLevel
 
 
 def ranked_alternative(**overrides: object) -> RankedAlternative:
