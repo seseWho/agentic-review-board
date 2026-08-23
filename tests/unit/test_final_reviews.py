@@ -1,11 +1,14 @@
 import pytest
 from pydantic import ValidationError
 
+from agentic_review_board.domain.shared import QualitativeLevel
+
 from agentic_review_board.domain.final_reviews import (
     CriticismDisposition,
     CriticismDispositionOutcome,
     CriticUnresolvedKind,
     CriticUnresolvedReference,
+    FinalReview,
     FinalReviewSection,
     PrincipalRisk,
     ProblemUnresolvedKind,
@@ -522,3 +525,312 @@ def test_criticism_disposition_rejects_invalid_shapes(
 ) -> None:
     with pytest.raises(ValidationError):
         CriticismDisposition.model_validate(data)
+
+
+DECISION_SUPPORT_NOTICE = (
+    "This review supports, but does not replace, human decision-making."
+)
+
+
+def final_review(**overrides: object) -> FinalReview:
+    data: dict[str, object] = {
+        "situation_summary": "Two viable approaches remain.",
+        "ranked_alternatives": [
+            {
+                "alternative_id": "ALT-002",
+                "position": 2,
+                "justification": "Viable fallback.",
+                "considerations": ["Validate support effort."],
+            },
+            {
+                "alternative_id": "ALT-001",
+                "position": 1,
+                "justification": "Best current fit.",
+                "considerations": ["Confirm ownership."],
+                "conditions_that_could_change_ranking": ["Cost exceeds budget."],
+            },
+        ],
+        "recommendation_outcome": "RECOMMENDED",
+        "preferred_alternative_id": "ALT-001",
+        "conclusion_rationale": "Current evidence supports ALT-001.",
+        "principal_risks": [
+            {"risk_id": "RISK-001", "rationale": "Material delivery risk."}
+        ],
+        "unresolved_questions": [
+            {
+                "id": "QUESTION-001",
+                "reference": {
+                    "source": "RISK_ASSESSMENT",
+                    "risk_id": "RISK-001",
+                    "value": "Support effort is unknown.",
+                },
+                "question": "What support effort is required?",
+                "rationale": "It may change the decision.",
+            }
+        ],
+        "criticism_dispositions": [
+            {
+                "criticism_id": "CRIT-001",
+                "outcome": "REFLECTED",
+                "rationale": "The concern is visible in the conclusion.",
+                "reflected_in": ["CONCLUSION"],
+            }
+        ],
+        "next_validation_step": "Measure support effort.",
+        "confidence": "MEDIUM",
+        "decision_support_notice": DECISION_SUPPORT_NOTICE,
+    }
+    data.update(overrides)
+    return FinalReview.model_validate(data)
+
+
+def test_final_review_accepts_tuple_order_independent_contiguous_ranking() -> None:
+    review = final_review()
+
+    assert [item.position for item in review.ranked_alternatives] == [2, 1]
+    assert review.preferred_alternative_id == "ALT-001"
+    assert review.confidence is QualitativeLevel.MEDIUM
+    assert isinstance(review.ranked_alternatives, tuple)
+    assert isinstance(review.principal_risks, tuple)
+    assert isinstance(review.unresolved_questions, tuple)
+    assert isinstance(review.criticism_dispositions, tuple)
+
+
+@pytest.mark.parametrize(
+    "outcome, preferred, ranking",
+    [
+        ("RECOMMENDED", "ALT-001", None),
+        ("INSUFFICIENT_EVIDENCE", None, None),
+        ("INSUFFICIENT_EVIDENCE", None, []),
+    ],
+)
+def test_final_review_accepts_consistent_recommendation_shapes(
+    outcome: str,
+    preferred: str | None,
+    ranking: list[object] | None,
+) -> None:
+    overrides: dict[str, object] = {
+        "recommendation_outcome": outcome,
+        "preferred_alternative_id": preferred,
+    }
+    if ranking is not None:
+        overrides["ranked_alternatives"] = ranking
+
+    review = final_review(**overrides)
+    assert review.recommendation_outcome.value == outcome
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {
+            "recommendation_outcome": "RECOMMENDED",
+            "preferred_alternative_id": None,
+        },
+        {
+            "recommendation_outcome": "RECOMMENDED",
+            "preferred_alternative_id": "ALT-002",
+        },
+        {
+            "recommendation_outcome": "RECOMMENDED",
+            "preferred_alternative_id": "ALT-001",
+            "ranked_alternatives": [],
+        },
+        {
+            "recommendation_outcome": "INSUFFICIENT_EVIDENCE",
+            "preferred_alternative_id": "ALT-001",
+        },
+        {"conclusion_rationale": " "},
+    ],
+)
+def test_final_review_rejects_inconsistent_recommendation_shapes(
+    overrides: dict[str, object],
+) -> None:
+    with pytest.raises(ValidationError):
+        final_review(**overrides)
+
+
+def test_zero_ranking_requires_insufficient_evidence() -> None:
+    review = final_review(
+        ranked_alternatives=[],
+        recommendation_outcome="INSUFFICIENT_EVIDENCE",
+        preferred_alternative_id=None,
+    )
+    assert review.ranked_alternatives == ()
+
+    with pytest.raises(ValidationError):
+        final_review(
+            ranked_alternatives=[],
+            recommendation_outcome="RECOMMENDED",
+            preferred_alternative_id="ALT-001",
+        )
+
+
+def test_final_review_is_closed_frozen_and_uses_fixed_human_notice() -> None:
+    review = final_review()
+
+    assert review.decision_support_notice == DECISION_SUPPORT_NOTICE
+    with pytest.raises(ValidationError):
+        review.confidence = QualitativeLevel.HIGH
+    with pytest.raises(ValidationError):
+        final_review(extra="forbidden")
+    with pytest.raises(ValidationError):
+        final_review(decision_support_notice="A model makes the final decision.")
+    with pytest.raises(ValidationError):
+        final_review(confidence=0.8)
+
+
+@pytest.mark.parametrize(
+    "field",
+    ["score", "weight", "probability", "confidence_score"],
+)
+def test_final_review_rejects_numeric_decision_fields(field: str) -> None:
+    with pytest.raises(ValidationError):
+        final_review(**{field: 1})
+
+
+@pytest.mark.parametrize(
+    "field",
+    ["situation_summary", "conclusion_rationale", "next_validation_step"],
+)
+def test_final_review_rejects_blank_required_text(field: str) -> None:
+    with pytest.raises(ValidationError):
+        final_review(**{field: " "})
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {
+            "ranked_alternatives": [
+                {
+                    "alternative_id": "ALT-001",
+                    "position": 1,
+                    "justification": "First.",
+                    "considerations": ["Valid."],
+                },
+                {
+                    "alternative_id": "ALT-002",
+                    "position": 3,
+                    "justification": "Gap.",
+                    "considerations": ["Valid."],
+                },
+            ]
+        },
+        {
+            "ranked_alternatives": [
+                {
+                    "alternative_id": "ALT-001",
+                    "position": 1,
+                    "justification": "First.",
+                    "considerations": ["Valid."],
+                },
+                {
+                    "alternative_id": "ALT-002",
+                    "position": 1,
+                    "justification": "Tie.",
+                    "considerations": ["Valid."],
+                },
+            ]
+        },
+        {
+            "ranked_alternatives": [
+                {
+                    "alternative_id": "ALT-001",
+                    "position": 1,
+                    "justification": "First.",
+                    "considerations": ["Valid."],
+                },
+                {
+                    "alternative_id": "ALT-001",
+                    "position": 2,
+                    "justification": "Duplicate.",
+                    "considerations": ["Valid."],
+                },
+            ]
+        },
+        {
+            "principal_risks": [
+                {"risk_id": "RISK-001", "rationale": "First."},
+                {"risk_id": "RISK-001", "rationale": "Duplicate."},
+            ]
+        },
+        {
+            "unresolved_questions": [
+                {
+                    "id": "QUESTION-001",
+                    "reference": {
+                        "source": "RISK_ASSESSMENT",
+                        "risk_id": "RISK-001",
+                        "value": "First.",
+                    },
+                    "question": "First?",
+                    "rationale": "First.",
+                },
+                {
+                    "id": "QUESTION-001",
+                    "reference": {
+                        "source": "RISK_ASSESSMENT",
+                        "risk_id": "RISK-002",
+                        "value": "Second.",
+                    },
+                    "question": "Second?",
+                    "rationale": "Second.",
+                },
+            ]
+        },
+        {
+            "unresolved_questions": [
+                {
+                    "id": "QUESTION-001",
+                    "reference": {
+                        "source": "RISK_ASSESSMENT",
+                        "risk_id": "RISK-001",
+                        "value": "Same.",
+                    },
+                    "question": "First?",
+                    "rationale": "First.",
+                },
+                {
+                    "id": "QUESTION-002",
+                    "reference": {
+                        "source": "RISK_ASSESSMENT",
+                        "risk_id": "RISK-001",
+                        "value": "Same.",
+                    },
+                    "question": "Second?",
+                    "rationale": "Second.",
+                },
+            ]
+        },
+        {
+            "criticism_dispositions": [
+                {
+                    "criticism_id": "CRIT-001",
+                    "outcome": "DISMISSED",
+                    "rationale": "First.",
+                },
+                {
+                    "criticism_id": "CRIT-001",
+                    "outcome": "DISMISSED",
+                    "rationale": "Duplicate.",
+                },
+            ]
+        },
+    ],
+)
+def test_final_review_rejects_intrinsic_aggregate_duplicates_and_gaps(
+    overrides: dict[str, object],
+) -> None:
+    with pytest.raises(ValidationError):
+        final_review(**overrides)
+
+
+def test_final_review_rejects_one_invalid_nested_item_atomically() -> None:
+    with pytest.raises(ValidationError):
+        final_review(
+            principal_risks=[
+                {"risk_id": "RISK-001", "rationale": "Valid."},
+                {"risk_id": " ", "rationale": "Invalid."},
+            ]
+        )
