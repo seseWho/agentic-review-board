@@ -13,7 +13,13 @@ from agentic_review_board.domain.critics import (
     CriticReferenceKind,
 )
 from agentic_review_board.domain.review import ReviewInput
-from agentic_review_board.domain.risks import Risk, RiskAssessment, RiskScope, RiskScopeKind
+from agentic_review_board.domain.risks import (
+    ReviewInputBasisReference,
+    Risk,
+    RiskAssessment,
+    RiskScope,
+    RiskScopeKind,
+)
 from agentic_review_board.domain.shared import QualitativeLevel
 from agentic_review_board.domain.solutions import (
     FindingReference,
@@ -490,11 +496,10 @@ def populated_risk_assessment(
         affected_scope=RiskScope(kind=RiskScopeKind.OVERALL),
         severity=QualitativeLevel.HIGH,
         basis=(
-            {
-                "source": "REVIEW_INPUT",
-                "field": "description",
-                "value": "Review a proposed technical deployment change.",
-            },
+            ReviewInputBasisReference(
+                field=ReviewInputSource.DESCRIPTION,
+                value="Review a proposed technical deployment change.",
+            ),
         ),
         mitigation=(
             "Assign an explicit operational owner."
