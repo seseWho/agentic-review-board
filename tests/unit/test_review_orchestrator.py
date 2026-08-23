@@ -7,6 +7,7 @@ from agentic_review_board.domain.analysis import ProblemAnalysis
 from agentic_review_board.domain.critics import CriticalReview
 from agentic_review_board.domain.execution import (
     AnalystStageInput,
+    CoordinatorStageInput,
     CriticStageInput,
     Review,
     ReviewErrorKind,
@@ -16,10 +17,12 @@ from agentic_review_board.domain.execution import (
     StageIdentity,
     StageStatus,
 )
+from agentic_review_board.domain.final_reviews import FinalReview
 from agentic_review_board.domain.review import ReviewInput
 from agentic_review_board.domain.risks import RiskAssessment
 from agentic_review_board.domain.solutions import SolutionAlternatives
 from agentic_review_board.participants.analyst import Analyst
+from agentic_review_board.participants.coordinator import Coordinator
 from agentic_review_board.participants.critic import Critic, CriticOutputError
 from agentic_review_board.participants.risk_reviewer import (
     RiskReviewer,
@@ -51,6 +54,8 @@ class RecordingLLM:
         failure = self._failures.get(role)
         if failure is not None:
             raise failure
+        if role == "coordinator" and role not in self._responses:
+            return coordinator_response_for_payload(payload)
         return self._responses[role]
 
 
@@ -217,6 +222,42 @@ def invalid_critic_response() -> dict[str, object]:
     }
 
 
+def coordinator_response_for_payload(
+    payload: Mapping[str, object],
+) -> dict[str, object]:
+    raw_alternatives = payload["solution_alternatives"]
+    assert isinstance(raw_alternatives, dict)
+    alternatives = raw_alternatives["alternatives"]
+    assert isinstance(alternatives, list)
+    ranking = [
+        {
+            "alternative_id": alternative["id"],
+            "position": index,
+            "justification": "Current evidence supports this relative position.",
+            "considerations": ["Validate the remaining operational assumptions."],
+        }
+        for index, alternative in enumerate(alternatives, start=1)
+        if isinstance(alternative, dict)
+    ]
+    has_alternatives = bool(ranking)
+    return {
+        "situation_summary": "The current artifacts support a bounded conclusion.",
+        "ranked_alternatives": ranking,
+        "recommendation_outcome": (
+            "RECOMMENDED" if has_alternatives else "INSUFFICIENT_EVIDENCE"
+        ),
+        "preferred_alternative_id": (
+            ranking[0]["alternative_id"] if has_alternatives else None
+        ),
+        "conclusion_rationale": "The conclusion follows the current evidence.",
+        "principal_risks": [],
+        "unresolved_questions": [],
+        "criticism_dispositions": [],
+        "next_validation_step": "Validate the remaining operational assumptions.",
+        "confidence": "MEDIUM",
+    }
+
+
 def successful_responses() -> dict[str, Mapping[str, object]]:
     return {
         "analyst": analyst_response(),
@@ -245,6 +286,7 @@ def orchestrator_with(llm: RecordingLLM) -> ReviewOrchestrator:
         SolutionArchitect(llm),
         RiskReviewer(llm),
         Critic(llm),
+        Coordinator(llm),
     )
 
 
@@ -275,6 +317,14 @@ def assert_coordinator_pending(review: Review) -> None:
     assert_downstream_stages_pending(review, (StageIdentity.COORDINATOR,))
 
 
+def assert_coordinator_completed(review: Review) -> None:
+    coordinator = review.stage(StageIdentity.COORDINATOR)
+    assert coordinator.status is StageStatus.COMPLETED
+    assert isinstance(coordinator.inputs, CoordinatorStageInput)
+    assert isinstance(coordinator.output, FinalReview)
+    assert coordinator.error is None
+
+
 def assert_critic_pending(review: Review) -> None:
     assert_downstream_stages_pending(review, (StageIdentity.CRITIC,))
 
@@ -290,7 +340,7 @@ def assert_fresh_created_review(review: Review) -> None:
         assert stage.error is None
 
 
-def test_orchestrator_executes_four_roles_in_order_with_exact_trusted_handoffs(
+def test_orchestrator_executes_five_roles_in_order_with_exact_trusted_handoffs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     events: list[str] = []
@@ -298,6 +348,7 @@ def test_orchestrator_executes_four_roles_in_order_with_exact_trusted_handoffs(
     original_start_solution_architect = Review.start_solution_architect
     original_start_risk_reviewer = Review.start_risk_reviewer
     original_start_critic = Review.start_critic
+    original_start_coordinator = Review.start_coordinator
 
     def recording_start_analyst(self: Review) -> Review:
         events.append("record:analyst_inputs")
@@ -315,6 +366,10 @@ def test_orchestrator_executes_four_roles_in_order_with_exact_trusted_handoffs(
         events.append("record:critic_inputs")
         return original_start_critic(self)
 
+    def recording_start_coordinator(self: Review) -> Review:
+        events.append("record:coordinator_inputs")
+        return original_start_coordinator(self)
+
     monkeypatch.setattr(Review, "start_analyst", recording_start_analyst)
     monkeypatch.setattr(
         Review,
@@ -327,6 +382,11 @@ def test_orchestrator_executes_four_roles_in_order_with_exact_trusted_handoffs(
         recording_start_risk_reviewer,
     )
     monkeypatch.setattr(Review, "start_critic", recording_start_critic)
+    monkeypatch.setattr(
+        Review,
+        "start_coordinator",
+        recording_start_coordinator,
+    )
 
     llm = RecordingLLM(successful_responses(), events)
     created = create_review()
@@ -334,7 +394,7 @@ def test_orchestrator_executes_four_roles_in_order_with_exact_trusted_handoffs(
     result = orchestrator_with(llm).execute(created)
 
     assert created.status is ReviewStatus.CREATED
-    assert result.status is ReviewStatus.RUNNING
+    assert result.status is ReviewStatus.COMPLETED
     assert events == [
         "record:analyst_inputs",
         "invoke:analyst",
@@ -344,27 +404,33 @@ def test_orchestrator_executes_four_roles_in_order_with_exact_trusted_handoffs(
         "invoke:risk_reviewer",
         "record:critic_inputs",
         "invoke:critic",
+        "record:coordinator_inputs",
+        "invoke:coordinator",
     ]
     assert [role for role, _ in llm.calls] == [
         "analyst",
         "solution_architect",
         "risk_reviewer",
         "critic",
+        "coordinator",
     ]
 
     analyst_stage = result.stage(StageIdentity.ANALYST)
     architect_stage = result.stage(StageIdentity.SOLUTION_ARCHITECT)
     reviewer_stage = result.stage(StageIdentity.RISK_REVIEWER)
     critic_stage = result.stage(StageIdentity.CRITIC)
+    coordinator_stage = result.stage(StageIdentity.COORDINATOR)
 
     assert analyst_stage.status is StageStatus.COMPLETED
     assert architect_stage.status is StageStatus.COMPLETED
     assert reviewer_stage.status is StageStatus.COMPLETED
     assert critic_stage.status is StageStatus.COMPLETED
+    assert coordinator_stage.status is StageStatus.COMPLETED
     assert isinstance(analyst_stage.inputs, AnalystStageInput)
     assert isinstance(architect_stage.inputs, SolutionArchitectStageInput)
     assert isinstance(reviewer_stage.inputs, RiskReviewerStageInput)
     assert isinstance(critic_stage.inputs, CriticStageInput)
+    assert isinstance(coordinator_stage.inputs, CoordinatorStageInput)
     assert analyst_stage.inputs.review_input is result.review_input
     assert architect_stage.inputs.review_input is result.review_input
     assert architect_stage.inputs.problem_analysis is analyst_stage.output
@@ -377,6 +443,12 @@ def test_orchestrator_executes_four_roles_in_order_with_exact_trusted_handoffs(
     assert critic_stage.inputs.solution_alternatives is architect_stage.output
     assert critic_stage.inputs.risk_assessment is reviewer_stage.output
     assert isinstance(critic_stage.output, CriticalReview)
+    assert coordinator_stage.inputs.review_input is result.review_input
+    assert coordinator_stage.inputs.problem_analysis is analyst_stage.output
+    assert coordinator_stage.inputs.solution_alternatives is architect_stage.output
+    assert coordinator_stage.inputs.risk_assessment is reviewer_stage.output
+    assert coordinator_stage.inputs.critical_review is critic_stage.output
+    assert isinstance(coordinator_stage.output, FinalReview)
 
     risk_payload = llm.calls[2][1]
     assert risk_payload == {
@@ -391,7 +463,15 @@ def test_orchestrator_executes_four_roles_in_order_with_exact_trusted_handoffs(
         "solution_alternatives": architect_stage.output.model_dump(mode="json"),
         "risk_assessment": reviewer_stage.output.model_dump(mode="json"),
     }
-    assert_coordinator_pending(result)
+    coordinator_payload = llm.calls[4][1]
+    assert coordinator_payload == {
+        "review_input": result.review_input.model_dump(mode="json"),
+        "problem_analysis": analyst_stage.output.model_dump(mode="json"),
+        "solution_alternatives": architect_stage.output.model_dump(mode="json"),
+        "risk_assessment": reviewer_stage.output.model_dump(mode="json"),
+        "critical_review": critic_stage.output.model_dump(mode="json"),
+    }
+    assert_coordinator_completed(result)
 
 
 @pytest.mark.parametrize(
@@ -423,8 +503,8 @@ def test_orchestrator_accepts_zero_risk_and_zero_alternative_results(
     assert isinstance(architect_stage.output, SolutionAlternatives)
     assert isinstance(reviewer_stage.output, RiskAssessment)
     assert reviewer_stage.output.risks == ()
-    assert result.status is ReviewStatus.RUNNING
-    assert_coordinator_pending(result)
+    assert result.status is ReviewStatus.COMPLETED
+    assert_coordinator_completed(result)
 
 
 @pytest.mark.parametrize(
@@ -678,6 +758,8 @@ def test_reused_orchestrator_keeps_sequential_successful_reviews_isolated() -> N
     second_reviewer = second_result.stage(StageIdentity.RISK_REVIEWER)
     first_critic = first_result.stage(StageIdentity.CRITIC)
     second_critic = second_result.stage(StageIdentity.CRITIC)
+    first_coordinator = first_result.stage(StageIdentity.COORDINATOR)
+    second_coordinator = second_result.stage(StageIdentity.COORDINATOR)
 
     assert first_result.review_input is first_created.review_input
     assert second_result.review_input is second_created.review_input
@@ -718,10 +800,25 @@ def test_reused_orchestrator_keeps_sequential_successful_reviews_isolated() -> N
     assert first_critic.output is not None
     assert second_critic.output is not None
     assert first_critic.output is not second_critic.output
-    assert first_result.status is ReviewStatus.RUNNING
-    assert second_result.status is ReviewStatus.RUNNING
-    assert_coordinator_pending(first_result)
-    assert_coordinator_pending(second_result)
+    assert isinstance(first_coordinator.inputs, CoordinatorStageInput)
+    assert isinstance(second_coordinator.inputs, CoordinatorStageInput)
+    assert first_coordinator.inputs.review_input is first_result.review_input
+    assert second_coordinator.inputs.review_input is second_result.review_input
+    assert first_coordinator.inputs.problem_analysis is first_analyst.output
+    assert second_coordinator.inputs.problem_analysis is second_analyst.output
+    assert first_coordinator.inputs.solution_alternatives is first_architect.output
+    assert second_coordinator.inputs.solution_alternatives is second_architect.output
+    assert first_coordinator.inputs.risk_assessment is first_reviewer.output
+    assert second_coordinator.inputs.risk_assessment is second_reviewer.output
+    assert first_coordinator.inputs.critical_review is first_critic.output
+    assert second_coordinator.inputs.critical_review is second_critic.output
+    assert isinstance(first_coordinator.output, FinalReview)
+    assert isinstance(second_coordinator.output, FinalReview)
+    assert first_coordinator.output is not second_coordinator.output
+    assert first_result.status is ReviewStatus.COMPLETED
+    assert second_result.status is ReviewStatus.COMPLETED
+    assert_coordinator_completed(first_result)
+    assert_coordinator_completed(second_result)
 
 
 def test_risk_failure_does_not_contaminate_next_fresh_review() -> None:
@@ -755,7 +852,7 @@ def test_risk_failure_does_not_contaminate_next_fresh_review() -> None:
     second_architect = second_result.stage(StageIdentity.SOLUTION_ARCHITECT)
     second_reviewer = second_result.stage(StageIdentity.RISK_REVIEWER)
 
-    assert second_result.status is ReviewStatus.RUNNING
+    assert second_result.status is ReviewStatus.COMPLETED
     assert second_result.review_input is second_created.review_input
     assert second_result.review_input is not first_result.review_input
     assert second_analyst.status is StageStatus.COMPLETED
@@ -768,7 +865,7 @@ def test_risk_failure_does_not_contaminate_next_fresh_review() -> None:
     assert second_reviewer.output is not None
     assert second_reviewer.error is None
     assert second_reviewer.output is not first_reviewer.output
-    assert_coordinator_pending(second_result)
+    assert_coordinator_completed(second_result)
 
 
 def test_orchestrator_reuses_exact_trusted_critical_review(
@@ -809,8 +906,8 @@ def test_orchestrator_reuses_exact_trusted_critical_review(
     assert critic.inputs.solution_alternatives is architect.output
     assert critic.inputs.risk_assessment is reviewer.output
     assert critic.output is trusted_review
-    assert result.status is ReviewStatus.RUNNING
-    assert_coordinator_pending(result)
+    assert result.status is ReviewStatus.COMPLETED
+    assert_coordinator_completed(result)
 
 
 @pytest.mark.parametrize(
@@ -839,10 +936,10 @@ def test_orchestrator_accepts_empty_validation_only_and_sparse_critic_reviews(
     result = orchestrator_with(llm).execute(create_review())
 
     critic = result.stage(StageIdentity.CRITIC)
-    assert result.status is ReviewStatus.RUNNING
+    assert result.status is ReviewStatus.COMPLETED
     assert critic.status is StageStatus.COMPLETED
     assert isinstance(critic.output, CriticalReview)
-    assert_coordinator_pending(result)
+    assert_coordinator_completed(result)
 
 
 def test_invalid_critic_generated_output_raises_dedicated_participant_error() -> None:
@@ -991,7 +1088,7 @@ def test_critic_failure_does_not_contaminate_next_fresh_review() -> None:
     second_architect = second_result.stage(StageIdentity.SOLUTION_ARCHITECT)
     second_reviewer = second_result.stage(StageIdentity.RISK_REVIEWER)
     second_critic = second_result.stage(StageIdentity.CRITIC)
-    assert second_result.status is ReviewStatus.RUNNING
+    assert second_result.status is ReviewStatus.COMPLETED
     assert second_critic.status is StageStatus.COMPLETED
     assert isinstance(second_critic.inputs, CriticStageInput)
     assert second_critic.inputs.review_input is second_result.review_input
@@ -1007,4 +1104,160 @@ def test_critic_failure_does_not_contaminate_next_fresh_review() -> None:
     assert second_critic.inputs.risk_assessment is not first_critic.inputs.risk_assessment
     assert second_critic.output is not None
     assert second_critic.output is not first_critic.output
-    assert_coordinator_pending(second_result)
+    assert_coordinator_completed(second_result)
+
+
+def test_coordinator_output_validation_failure_is_mapped_fail_closed() -> None:
+    responses = successful_responses()
+    responses["coordinator"] = {"unexpected": "invalid"}
+    llm = RecordingLLM(responses)
+
+    result = orchestrator_with(llm).execute(create_review())
+    coordinator = result.stage(StageIdentity.COORDINATOR)
+
+    assert result.status is ReviewStatus.INCOMPLETE
+    assert coordinator.status is StageStatus.FAILED
+    assert isinstance(coordinator.inputs, CoordinatorStageInput)
+    assert coordinator.output is None
+    assert coordinator.error is not None
+    assert coordinator.error.kind is ReviewErrorKind.OUTPUT_VALIDATION
+    assert coordinator.error.message == "Coordinator output validation failed"
+
+def test_coordinator_execution_failure_hides_raw_detail() -> None:
+    llm = RecordingLLM(
+        successful_responses(),
+        failures={"coordinator": RuntimeError("provider secret coordinator detail")},
+    )
+
+    result = orchestrator_with(llm).execute(create_review())
+    coordinator = result.stage(StageIdentity.COORDINATOR)
+
+    assert result.status is ReviewStatus.INCOMPLETE
+    assert coordinator.status is StageStatus.FAILED
+    assert coordinator.output is None
+    assert coordinator.error is not None
+    assert coordinator.error.kind is ReviewErrorKind.EXECUTION
+    assert coordinator.error.message == "Coordinator execution failed"
+    assert "provider secret coordinator detail" not in coordinator.error.message
+
+def test_coordinator_invariant_failure_outside_call_boundary_propagates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    llm = RecordingLLM(successful_responses())
+
+    def invalid_start_coordinator(self: Review) -> Review:
+        raise ValueError("Coordinator stage invariant failed")
+
+    monkeypatch.setattr(Review, "start_coordinator", invalid_start_coordinator)
+
+    with pytest.raises(ValueError, match="Coordinator stage invariant failed"):
+        orchestrator_with(llm).execute(create_review())
+
+    assert [role for role, _ in llm.calls] == [
+        "analyst",
+        "solution_architect",
+        "risk_reviewer",
+        "critic",
+    ]
+
+
+@pytest.mark.parametrize("control_signal", [KeyboardInterrupt(), SystemExit()])
+def test_orchestrator_does_not_swallow_coordinator_control_signals(
+    control_signal: BaseException,
+) -> None:
+    llm = RecordingLLM(
+        successful_responses(),
+        failures={"coordinator": control_signal},
+    )
+
+    with pytest.raises(type(control_signal)):
+        orchestrator_with(llm).execute(create_review())
+
+
+def test_orchestrator_reuses_exact_trusted_final_review(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    trusted = FinalReview.model_validate(
+        coordinator_response_for_payload(
+            {
+                "solution_alternatives": two_alternative_response(),
+            }
+        )
+    )
+    received: list[tuple[object, object, object, object, object]] = []
+
+    def exact_coordinate(
+        self: Coordinator,
+        review_input: ReviewInput,
+        analysis: ProblemAnalysis,
+        alternatives: SolutionAlternatives,
+        assessment: RiskAssessment,
+        critique: CriticalReview,
+    ) -> FinalReview:
+        received.append(
+            (review_input, analysis, alternatives, assessment, critique)
+        )
+        return trusted
+
+    monkeypatch.setattr(Coordinator, "coordinate", exact_coordinate)
+    result = orchestrator_with(RecordingLLM(successful_responses())).execute(
+        create_review()
+    )
+
+    analyst = result.stage(StageIdentity.ANALYST)
+    architect = result.stage(StageIdentity.SOLUTION_ARCHITECT)
+    reviewer = result.stage(StageIdentity.RISK_REVIEWER)
+    critic = result.stage(StageIdentity.CRITIC)
+    coordinator = result.stage(StageIdentity.COORDINATOR)
+    assert received == [
+        (
+            result.review_input,
+            analyst.output,
+            architect.output,
+            reviewer.output,
+            critic.output,
+        )
+    ]
+    assert result.status is ReviewStatus.COMPLETED
+    assert coordinator.status is StageStatus.COMPLETED
+    assert isinstance(coordinator.inputs, CoordinatorStageInput)
+    assert coordinator.inputs.review_input is result.review_input
+    assert coordinator.inputs.problem_analysis is analyst.output
+    assert coordinator.inputs.solution_alternatives is architect.output
+    assert coordinator.inputs.risk_assessment is reviewer.output
+    assert coordinator.inputs.critical_review is critic.output
+    assert coordinator.output is trusted
+
+
+def test_coordinator_failure_does_not_contaminate_fresh_review() -> None:
+    llm = RecordingLLM(
+        successful_responses(),
+        failures={"coordinator": RuntimeError("first coordinator failure detail")},
+    )
+    orchestrator = orchestrator_with(llm)
+
+    first_result = orchestrator.execute(
+        create_named_review("Review expected to fail at Coordinator.")
+    )
+    first_coordinator = first_result.stage(StageIdentity.COORDINATOR)
+    assert first_result.status is ReviewStatus.INCOMPLETE
+    assert first_coordinator.status is StageStatus.FAILED
+    assert isinstance(first_coordinator.inputs, CoordinatorStageInput)
+    assert first_coordinator.output is None
+
+    llm._failures = {}
+    second_created = create_named_review("Fresh review after Coordinator failure.")
+    assert_fresh_created_review(second_created)
+
+    second_result = orchestrator.execute(second_created)
+    second_coordinator = second_result.stage(StageIdentity.COORDINATOR)
+    assert second_result.status is ReviewStatus.COMPLETED
+    assert second_coordinator.status is StageStatus.COMPLETED
+    assert isinstance(second_coordinator.inputs, CoordinatorStageInput)
+    assert second_coordinator.inputs.review_input is second_result.review_input
+    assert (
+        second_coordinator.inputs.review_input
+        is not first_coordinator.inputs.review_input
+    )
+    assert isinstance(second_coordinator.output, FinalReview)
+    assert second_coordinator.error is None
