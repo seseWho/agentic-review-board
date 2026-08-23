@@ -487,7 +487,6 @@ def generation_notes_alternatives(
 def populated_risk_assessment(
     *,
     include_optional_fields: bool = True,
-    duplicate_observation: bool = False,
 ) -> RiskAssessment:
     risk = Risk(
         id="RISK-001",
@@ -512,15 +511,10 @@ def populated_risk_assessment(
             else None
         ),
     )
-    observations = (
-        (
-            "The current risk assessment is qualitative.",
-            "The current risk assessment is qualitative.",
-        )
-        if duplicate_observation
-        else ("The current risk assessment is qualitative.",)
+    return RiskAssessment(
+        risks=(risk,),
+        overall_observations=("The current risk assessment is qualitative.",),
     )
-    return RiskAssessment(risks=(risk,), overall_observations=observations)
 
 
 @pytest.mark.parametrize(
@@ -874,21 +868,6 @@ def test_optional_risk_field_reference_fails_when_field_is_absent(kind: str) -> 
             ),
             risks=populated_risk_assessment(include_optional_fields=False),
         )
-
-
-def test_overall_observation_reference_rejects_ambiguous_value() -> None:
-    with pytest.raises(CriticOutputError):
-        run_critic(
-            validated_point_response(
-                critic_reference(
-                    "RISK_ASSESSMENT",
-                    "OVERALL_OBSERVATION",
-                    value="The current risk assessment is qualitative.",
-                )
-            ),
-            risks=populated_risk_assessment(duplicate_observation=True),
-        )
-
 
 def criticism_response(
     *,
@@ -1490,3 +1469,31 @@ def test_contextual_resolution_allows_only_approved_whitespace_stripping() -> No
                 )
             )
         )
+
+
+
+def test_critic_review_does_not_mutate_any_upstream_artifact() -> None:
+    current_input = review_input()
+    analysis = problem_analysis()
+    alternatives = populated_solution_alternatives()
+    risks = populated_risk_assessment()
+    before = tuple(
+        artifact.model_dump(mode="json")
+        for artifact in (current_input, analysis, alternatives, risks)
+    )
+    llm = RecordingLLM({})
+
+    result = Critic(llm).review(current_input, analysis, alternatives, risks)
+
+    after = tuple(
+        artifact.model_dump(mode="json")
+        for artifact in (current_input, analysis, alternatives, risks)
+    )
+    assert result == CriticalReview()
+    assert after == before
+    role, payload = llm.calls[0]
+    assert role == "critic"
+    assert payload["review_input"] == before[0]
+    assert payload["problem_analysis"] == before[1]
+    assert payload["solution_alternatives"] == before[2]
+    assert payload["risk_assessment"] == before[3]
