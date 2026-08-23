@@ -12,6 +12,7 @@ from agentic_review_board.domain.final_reviews import (
     FinalReview,
     ProblemUnresolvedKind,
     ProblemUnresolvedReference,
+    RecommendationOutcome,
     RiskUnresolvedReference,
     SolutionUnresolvedKind,
     SolutionUnresolvedReference,
@@ -61,6 +62,11 @@ class Coordinator:
             problem_analysis,
             solution_alternatives,
             risk_assessment,
+            critical_review,
+        )
+        self._validate_dispositions_and_evidence(
+            final_review,
+            solution_alternatives,
             critical_review,
         )
         return final_review
@@ -272,3 +278,28 @@ class Coordinator:
         if len(matches) != 1:
             raise CoordinatorOutputError("invalid Coordinator output")
         return matches[0]
+
+
+    @staticmethod
+    def _validate_dispositions_and_evidence(
+        final_review: FinalReview,
+        solution_alternatives: SolutionAlternatives,
+        critical_review: CriticalReview,
+    ) -> None:
+        current_criticism_ids = {
+            criticism.id for criticism in critical_review.criticisms
+        }
+        disposition_ids = {
+            disposition.criticism_id
+            for disposition in final_review.criticism_dispositions
+        }
+        if disposition_ids != current_criticism_ids:
+            raise CoordinatorOutputError("invalid Coordinator output")
+
+        if (
+            final_review.recommendation_outcome
+            is RecommendationOutcome.INSUFFICIENT_EVIDENCE
+            and solution_alternatives.alternatives
+            and not final_review.unresolved_questions
+        ):
+            raise CoordinatorOutputError("invalid Coordinator output")
