@@ -609,9 +609,11 @@ def test_contradiction_requires_two_non_identical_sides() -> None:
 
 def test_contradiction_side_requires_non_blank_statement() -> None:
     payload = contradiction_payload()
-    side_a = dict(payload["side_a"])  # type: ignore[arg-type]
-    side_a["statement"] = " "
-    payload["side_a"] = side_a
+    side_a = payload["side_a"]
+    assert isinstance(side_a, dict)
+    changed_side_a = side_a.copy()
+    changed_side_a["statement"] = " "
+    payload["side_a"] = changed_side_a
 
     with pytest.raises(ValidationError):
         Contradiction.model_validate(payload)
