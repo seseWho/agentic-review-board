@@ -2,7 +2,7 @@
 
 **Branch**: `005-critic`  
 **Date**: 2026-08-22  
-**Status**: Draft — revised after canonical review; awaiting explicit approval before planning
+**Status**: Approved — reviewed against canonical documents; ready for planning
 
 ## 1. Purpose
 
@@ -303,4 +303,4 @@ Proceed to `plan.md` only after explicit review confirms:
 11. Zero-criticism, fully empty CriticalReview, zero-alternative, and zero-risk cases do not force fabricated activity.
 12. Explicit resolvable targets cannot evade contextual validation through omitted references.
 
-Only after this `spec.md` is reviewed and explicitly approved should `plan.md` be created.
+The specification has been reviewed and explicitly approved. `plan.md` may now be created.
