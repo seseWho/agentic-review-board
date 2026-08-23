@@ -16,7 +16,6 @@ from agentic_review_board.domain.critics import (
     ValidatedPoint,
 )
 
-
 REVIEW_INPUT_KINDS = (
     CriticReferenceKind.DESCRIPTION,
     CriticReferenceKind.TITLE,
