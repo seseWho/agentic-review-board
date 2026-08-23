@@ -321,6 +321,20 @@ def test_context_accepts_complete_three_alternative_ranking_in_any_tuple_order()
         ],
         [
             {
+                "alternative_id": " ",
+                "position": 1,
+                "justification": "Blank ID.",
+                "considerations": ["Valid."],
+            },
+            {
+                "alternative_id": "ALT-002",
+                "position": 2,
+                "justification": "Second.",
+                "considerations": ["Valid."],
+            },
+        ],
+        [
+            {
                 "alternative_id": "ALT-001",
                 "position": 1,
                 "justification": "First.",
@@ -373,6 +387,14 @@ def test_context_rejects_invalid_recommended_preference(
         run_coordinator(response)
 
 
+def test_insufficient_evidence_forbids_preferred_id_with_existing_ranking() -> None:
+    response = recommended_response()
+    response["recommendation_outcome"] = "INSUFFICIENT_EVIDENCE"
+
+    with pytest.raises(CoordinatorOutputError):
+        run_coordinator(response)
+
+
 def test_zero_alternatives_require_empty_insufficient_evidence_result() -> None:
     response = recommended_response()
     response.update(
@@ -415,6 +437,17 @@ def test_principal_risks_resolve_exact_current_ids_and_allow_empty_selection() -
 
     response["principal_risks"] = []
     assert run_coordinator(response, risks=populated_risk_assessment()).principal_risks == ()
+
+
+def test_context_rejects_duplicate_principal_risk_selection() -> None:
+    response = recommended_response()
+    response["principal_risks"] = [
+        {"risk_id": "RISK-001", "rationale": "First selection."},
+        {"risk_id": "RISK-001", "rationale": "Duplicate selection."},
+    ]
+
+    with pytest.raises(CoordinatorOutputError):
+        run_coordinator(response, risks=populated_risk_assessment())
 
 
 @pytest.mark.parametrize("risk_id", ["UNKNOWN", "risk-001"])
