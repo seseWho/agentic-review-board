@@ -5,6 +5,7 @@ from agentic_review_board.domain.critics import CriticalReview
 from agentic_review_board.domain.final_reviews import FinalReview
 from agentic_review_board.domain.review import ReviewInput
 from agentic_review_board.domain.risks import RiskAssessment
+from agentic_review_board.domain.shared import QualitativeLevel
 from agentic_review_board.domain.solutions import (
     SolutionAlternative,
     SolutionAlternatives,
@@ -61,7 +62,7 @@ def solution_alternative(
         advantages=("Works offline.",),
         disadvantages=("Requires local maintenance.",),
         assumptions=("Local compute remains available.",),
-        implementation_complexity="MEDIUM",
+        implementation_complexity=QualitativeLevel.MEDIUM,
         relevant_constraints=(),
     )
 
