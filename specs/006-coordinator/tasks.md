@@ -84,14 +84,14 @@
 
 ### Tests first
 
-- [ ] T044 [US5] Test start_coordinator() preconditions, exact five captured inputs, prior stages completed, Coordinator pending, and premature/repeated rejection.
-- [ ] T045 [US5] Test complete_coordinator(): running required, exact input and supplied FinalReview reused, upstream unchanged, Review COMPLETED.
-- [ ] T046 [US6] Test fail_coordinator(): atomic Coordinator FAILED + Review INCOMPLETE, exact inputs/upstream preserved, no output, invalid timing rejected.
-- [ ] T047 [US5] Test Coordinator transitions use identity and preserve valid noncanonical tuple order.
+- [X] T044 [US5] Test start_coordinator() preconditions, exact five captured inputs, prior stages completed, Coordinator pending, and premature/repeated rejection.
+- [X] T045 [US5] Test complete_coordinator(): running required, exact input and supplied FinalReview reused, upstream unchanged, Review COMPLETED.
+- [X] T046 [US6] Test fail_coordinator(): atomic Coordinator FAILED + Review INCOMPLETE, exact inputs/upstream preserved, no output, invalid timing rejected.
+- [X] T047 [US5] Test Coordinator transitions use identity and preserve valid noncanonical tuple order.
 
 ### Implementation
 
-- [ ] T048 [US5] Implement start_coordinator(), complete_coordinator(final_review), and fail_coordinator(error) in execution.py with complete immutable reconstruction and no transition engine.
+- [X] T048 [US5] Implement start_coordinator(), complete_coordinator(final_review), and fail_coordinator(error) in execution.py with complete immutable reconstruction and no transition engine.
 
 ## Phase 5: Extend ReviewOrchestrator Through Coordinator
 
