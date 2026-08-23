@@ -70,7 +70,7 @@ def test_ranked_alternative_accepts_valid_immutable_closed_contract() -> None:
     )
 
     with pytest.raises(ValidationError):
-        ranked.position = 2  # type: ignore[misc]
+        ranked.position = 2
 
     with pytest.raises(ValidationError):
         RankedAlternative.model_validate(
@@ -140,7 +140,7 @@ def test_principal_risk_is_a_minimal_immutable_reference() -> None:
     )
 
     with pytest.raises(ValidationError):
-        principal.risk_id = "RISK-002"  # type: ignore[misc]
+        principal.risk_id = "RISK-002"
 
 
 @pytest.mark.parametrize("field", ["risk_id", "rationale"])
