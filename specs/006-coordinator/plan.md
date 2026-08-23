@@ -2,7 +2,7 @@
 
 **Branch**: `006-coordinator`  
 **Specification**: `specs/006-coordinator/spec.md` — Approved  
-**Status**: Draft — pending review
+**Status**: Approved — reviewed against specification and existing architecture; ready for data-model design
 
 ## 1. Objective
 
@@ -232,12 +232,12 @@ No fuzzy resolution or silent repair is allowed.
 
 ### 4.5 Material criticism disposition
 
-The smallest explicit mechanism SHALL show that each material Critic criticism is either:
+Every entry present in `CriticalReview.criticisms` SHALL be treated as a criticism that Coordinator must address. Each exact `Criticism.id` SHALL appear once as either:
 
-- reflected in one or more visible final-result fields; or
-- dismissed as not decision-relevant with concise justification.
+- `REFLECTED`, with an inspectable explanation of its effect on the final result; or
+- `DISMISSED`, with a non-empty justification explaining why it is not decision-relevant.
 
-The data model SHALL avoid a generic finding-processing framework and SHALL not require mechanical disposition of validated points.
+Slice 6 SHALL NOT infer materiality from `CriticismImportance` or introduce a new threshold. The data model SHALL avoid a generic finding-processing framework and SHALL not require mechanical disposition of validated points.
 
 ### 4.6 Decision-support notice
 
@@ -306,7 +306,7 @@ Reject:
 - unknown IDs;
 - duplicates;
 - generated replacement risk content;
-- risk identifiers from another review.
+- IDs absent from the current `RiskAssessment`.
 
 ### 6.3 Unresolved-question resolution
 
@@ -755,7 +755,7 @@ Review shall confirm:
 3. one ranking structure for one and multiple alternatives;
 4. exact two-value recommendation outcome;
 5. Coordinator-specific reference direction for risks, unresolved questions, and Critic disposition;
-6. mandatory decision-support notice treatment to be finalized in data-model review;
+6. mandatory decision-support notice as a fixed trusted application value represented in `FinalReview`;
 7. exact 10/5/1 lifecycle matrix;
 8. no ADR is required.
 
