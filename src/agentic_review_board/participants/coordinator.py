@@ -80,7 +80,6 @@ class Coordinator:
         except ValidationError as exc:
             raise CoordinatorOutputError("invalid Coordinator output") from exc
 
-
     @staticmethod
     def _validate_ranking_and_risks(
         final_review: FinalReview,
@@ -110,7 +109,6 @@ class Coordinator:
             for principal in final_review.principal_risks
         ):
             raise CoordinatorOutputError("invalid Coordinator output")
-
 
     @classmethod
     def _validate_unresolved_questions(
@@ -278,7 +276,6 @@ class Coordinator:
         if len(matches) != 1:
             raise CoordinatorOutputError("invalid Coordinator output")
         return matches[0]
-
 
     @staticmethod
     def _validate_dispositions_and_evidence(
