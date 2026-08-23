@@ -324,9 +324,9 @@ class CriticismDisposition(BaseModel):
         return self
 
 
-DECISION_SUPPORT_NOTICE = (
+DECISION_SUPPORT_NOTICE: Literal[
     "This review supports, but does not replace, human decision-making."
-)
+] = "This review supports, but does not replace, human decision-making."
 
 
 class FinalReview(BaseModel):
