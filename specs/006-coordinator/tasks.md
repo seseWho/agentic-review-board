@@ -40,7 +40,7 @@
 
 ### Tests first
 
-- [ ] T018 [US1] Create tests/unit/test_coordinator.py with recording LLMPort and valid two-alternative RECOMMENDED result proving role coordinator, exact five-artifact JSON payload, parsing, trusted return, all five upstream object identities/content unchanged, and FinalReview returned as a separate artifact.
+- [X] T018 [US1] Create tests/unit/test_coordinator.py with recording LLMPort and valid two-alternative RECOMMENDED result proving role coordinator, exact five-artifact JSON payload, parsing, trusted return, all five upstream object identities/content unchanged, and FinalReview returned as a separate artifact.
 - [ ] T019 [US2] Test two/three-alternative complete ID-set equality, contiguous positions, tuple-order independence, per-position justification/considerations, and ranking-change conditions.
 - [ ] T020 [US2] Test ranking rejection for unknown, duplicate, omitted, extra, blank, mismatched-count, tied, or non-contiguous entries.
 - [ ] T021 [US3] Test preferred position 1 and reject preferred unknown/not-first/missing for RECOMMENDED or present for INSUFFICIENT_EVIDENCE.
@@ -58,7 +58,7 @@
 
 ### Implementation
 
-- [ ] T033 [US1] Create src/agentic_review_board/participants/coordinator.py with Coordinator.coordinate(...), CoordinatorOutputError, exact role/payload, and structural FinalReview parsing.
+- [X] T033 [US1] Create src/agentic_review_board/participants/coordinator.py with Coordinator.coordinate(...), CoordinatorOutputError, exact role/payload, and structural FinalReview parsing.
 - [ ] T034 [US2] Implement explicit alternative ranking, recommendation, zero-alternative, and principal-risk contextual validation.
 - [ ] T035 [US1] Implement explicit Coordinator-specific unresolved-question resolver dispatch for every approved source/kind/shape with exact comparisons only.
 - [ ] T036 [US1] Implement exact Criticism-ID disposition completeness and recursive atomic validation; return only the complete parsed FinalReview.
