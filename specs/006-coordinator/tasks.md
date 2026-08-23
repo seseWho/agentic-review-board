@@ -2,7 +2,7 @@
 
 **Input**: Approved spec.md, plan.md, and data-model.md
 **Branch**: 006-coordinator
-**Status**: Draft — pending review and explicit approval
+**Status**: Approved — reviewed against approved artifacts; implementation authorized
 **Tests**: Required; implementation proceeds tests-first in small verified blocks
 
 ## Phase 1: Intrinsic FinalReview Contracts
