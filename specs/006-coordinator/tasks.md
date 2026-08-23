@@ -20,17 +20,17 @@
 - [X] T007 [US1] Test RiskUnresolvedReference and CriticUnresolvedReference allowed kinds, required identifiers/values, discriminators, frozen behavior, blanks, and extra fields.
 - [X] T008 [US1] Test UnresolvedQuestion required ID/reference/question/rationale and immutable discriminated-union parsing.
 - [X] T009 [US1] Test CriticismDisposition: REFLECTED requires unique reflected sections; DISMISSED requires none; validate ID/rationale, blanks, frozen and closed behavior.
-- [ ] T010 [US2] Test valid FinalReview ranking positions independent of tuple order plus unique alternative, risk, question/reference, and disposition identities.
-- [ ] T011 [US3] Test recommendation consistency: RECOMMENDED requires non-empty ranking and preferred position-1 ID; INSUFFICIENT_EVIDENCE forbids preferred ID but permits ranking; rationale always required.
-- [ ] T012 [US4] Test zero-ranking + INSUFFICIENT_EVIDENCE valid and RECOMMENDED invalid; do not widen the accepted 0/2/3 SolutionAlternatives cardinality.
-- [ ] T013 [US1] Test required summary/next step, existing QualitativeLevel confidence, fixed exact decision-support notice, tuple normalization, immutability, unknown fields, and forbidden scoring/probability fields.
-- [ ] T014 [US6] Test intrinsic aggregate rejection for gaps/ties/duplicate positions or identities, structurally identical unresolved references, wrong notice, blanks, and one invalid nested item; do not attempt current-target resolution in domain-only tests.
+- [X] T010 [US2] Test valid FinalReview ranking positions independent of tuple order plus unique alternative, risk, question/reference, and disposition identities.
+- [X] T011 [US3] Test recommendation consistency: RECOMMENDED requires non-empty ranking and preferred position-1 ID; INSUFFICIENT_EVIDENCE forbids preferred ID but permits ranking; rationale always required.
+- [X] T012 [US4] Test zero-ranking + INSUFFICIENT_EVIDENCE valid and RECOMMENDED invalid; do not widen the accepted 0/2/3 SolutionAlternatives cardinality.
+- [X] T013 [US1] Test required summary/next step, existing QualitativeLevel confidence, fixed exact decision-support notice, tuple normalization, immutability, unknown fields, and forbidden scoring/probability fields.
+- [X] T014 [US6] Test intrinsic aggregate rejection for gaps/ties/duplicate positions or identities, structurally identical unresolved references, wrong notice, blanks, and one invalid nested item; do not attempt current-target resolution in domain-only tests.
 
 ### Implementation
 
 - [X] T015 [US1] Create src/agentic_review_board/domain/final_reviews.py with approved enums and four unresolved-question source/kind families; reuse QualitativeLevel.
 - [X] T016 [US1] Implement immutable closed RankedAlternative, PrincipalRisk, four source-specific unresolved-reference models and union, UnresolvedQuestion, and CriticismDisposition.
-- [ ] T017 [US1] Implement FinalReview intrinsic ranking/recommendation/collection invariants and fixed notice without current-review lookup, scoring, or generic references.
+- [X] T017 [US1] Implement FinalReview intrinsic ranking/recommendation/collection invariants and fixed notice without current-review lookup, scoring, or generic references.
 
 **Checkpoint**: intrinsic FinalReview tests pass; no participant/execution changes.
 
