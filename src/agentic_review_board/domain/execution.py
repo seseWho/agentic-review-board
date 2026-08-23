@@ -764,6 +764,83 @@ class Review(BaseModel):
             review_status=ReviewStatus.INCOMPLETE,
         )
 
+    def start_coordinator(self) -> "Review":
+        self._require_running_review()
+        analyst = self.stage(StageIdentity.ANALYST)
+        architect = self.stage(StageIdentity.SOLUTION_ARCHITECT)
+        reviewer = self.stage(StageIdentity.RISK_REVIEWER)
+        critic = self.stage(StageIdentity.CRITIC)
+        coordinator = self.stage(StageIdentity.COORDINATOR)
+
+        if analyst.status is not StageStatus.COMPLETED or not isinstance(
+            analyst.output, ProblemAnalysis
+        ):
+            raise ValueError("Analyst must be completed before Coordinator starts")
+        if architect.status is not StageStatus.COMPLETED or not isinstance(
+            architect.output, SolutionAlternatives
+        ):
+            raise ValueError(
+                "Solution Architect must be completed before Coordinator starts"
+            )
+        if reviewer.status is not StageStatus.COMPLETED or not isinstance(
+            reviewer.output, RiskAssessment
+        ):
+            raise ValueError("Risk Reviewer must be completed before Coordinator starts")
+        if critic.status is not StageStatus.COMPLETED or not isinstance(
+            critic.output, CriticalReview
+        ):
+            raise ValueError("Critic must be completed before Coordinator starts")
+        if coordinator.status is not StageStatus.PENDING:
+            raise ValueError("Coordinator stage must be pending before start")
+
+        return self._replace_stage(
+            StageExecution(
+                identity=StageIdentity.COORDINATOR,
+                status=StageStatus.RUNNING,
+                inputs=CoordinatorStageInput(
+                    review_input=self.review_input,
+                    problem_analysis=analyst.output,
+                    solution_alternatives=architect.output,
+                    risk_assessment=reviewer.output,
+                    critical_review=critic.output,
+                ),
+            )
+        )
+
+    def complete_coordinator(self, final_review: FinalReview) -> "Review":
+        self._require_running_review()
+        coordinator = self.stage(StageIdentity.COORDINATOR)
+        if coordinator.status is not StageStatus.RUNNING or not isinstance(
+            coordinator.inputs, CoordinatorStageInput
+        ):
+            raise ValueError("Coordinator stage must be running before completion")
+        return self._replace_stage(
+            StageExecution(
+                identity=StageIdentity.COORDINATOR,
+                status=StageStatus.COMPLETED,
+                inputs=coordinator.inputs,
+                output=final_review,
+            ),
+            review_status=ReviewStatus.COMPLETED,
+        )
+
+    def fail_coordinator(self, error: ReviewError) -> "Review":
+        self._require_running_review()
+        coordinator = self.stage(StageIdentity.COORDINATOR)
+        if coordinator.status is not StageStatus.RUNNING or not isinstance(
+            coordinator.inputs, CoordinatorStageInput
+        ):
+            raise ValueError("Coordinator stage must be running before failure")
+        return self._replace_stage(
+            StageExecution(
+                identity=StageIdentity.COORDINATOR,
+                status=StageStatus.FAILED,
+                inputs=coordinator.inputs,
+                error=error,
+            ),
+            review_status=ReviewStatus.INCOMPLETE,
+        )
+
     def _require_running_review(self) -> None:
         if self.status is not ReviewStatus.RUNNING:
             raise ValueError("review must be running for this transition")
