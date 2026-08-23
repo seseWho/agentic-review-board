@@ -2,7 +2,7 @@
 
 **Branch**: `005-critic`  
 **Specification**: `specs/005-critic/spec.md` — Approved  
-**Status**: Draft — awaiting review and explicit approval before data-model design
+**Status**: Approved — reviewed against spec and existing architecture; ready for data-model design
 
 ## 1. Objective
 
@@ -144,6 +144,8 @@ A missing-alternative finding SHALL describe:
 - why it matters;
 - whether the omission weakens the later ability to justify a recommendation.
 
+When the omission is inferred from explicit current-review artifacts, the finding SHALL preserve an inspectable basis that can be contextually validated against those artifacts. A missing-alternative finding SHALL NOT be accepted as generic unsupported prose such as “more options are needed” without visible current-review grounding.
+
 It SHALL NOT embed a replacement `SolutionAlternative`.
 
 ### 4.4 Contradictions
@@ -154,7 +156,9 @@ The data-model phase SHALL define the minimum representation needed to identify 
 
 ### 4.5 Unresolved issues
 
-Unresolved issues SHALL remain explicit and inspectable. The data model SHOULD prefer a small structured object if reference/basis traceability is needed; otherwise a constrained textual representation may be sufficient.
+Unresolved issues SHALL remain explicit and inspectable. When an unresolved issue derives from one or more current-review artifacts, the data model SHALL preserve a bounded explicit basis that can be contextually validated. A purely textual unresolved issue is acceptable only where no explicit referencable current artifact exists and the issue's rationale still exposes its visible current-review basis.
+
+The data model SHALL not require a generic artifact graph merely to express such basis.
 
 ### 4.6 Empty review
 
@@ -189,6 +193,8 @@ Some criticisms genuinely span multiple artifacts. These SHALL not be forced int
 
 The data model SHALL support a bounded way to express their visible basis without turning Slice 5 into a generic evidence graph.
 
+This same principle applies to `MissingAlternative` and `UnresolvedIssue`: where their rationale depends on explicit upstream artifacts, the approved data model SHALL preserve enough Critic-specific basis information for contextual validation without requiring a single false target.
+
 ### 5.4 Ambiguity policy
 
 Reference resolution SHALL be fail-closed:
@@ -206,7 +212,7 @@ This follows the established Risk Reviewer trust-boundary discipline.
 
 ## 6. Critic Participant
 
-Add a provider-neutral `Critic` participant with a method conceptually equivalent to:
+Add a provider-neutral `Critic` participant with the Slice 5 application-facing method:
 
 ```text
 review(
@@ -217,17 +223,17 @@ review(
 ) -> CriticalReview
 ```
 
-Exact naming SHALL be fixed in data-model/tasks before implementation.
+The method name `review` is fixed by this plan. Data-model design SHALL define only the data contracts consumed and returned by this API, not rename participant behavior.
 
 The participant SHALL:
 
 1. serialize the four explicit inputs into JSON-compatible structured payloads;
 2. call `LLMPort.generate_structured(...)` using role `critic`;
 3. structurally parse the returned object as `CriticalReview`;
-4. contextually validate all generated references against the four exact input artifacts;
+4. contextually validate all generated references and required bases against the four exact input artifacts;
 5. return the trusted `CriticalReview` only after every required validation succeeds.
 
-A dedicated `CriticOutputError` (or equivalently specific approved name) SHALL distinguish generated-output validation failure from ordinary execution failure.
+A dedicated `CriticOutputError` SHALL distinguish generated-output validation failure from ordinary execution failure.
 
 The participant SHALL hold no mutable per-review state.
 
@@ -267,11 +273,44 @@ For Critic in RUNNING, COMPLETED, or FAILED state, the aggregate SHALL require i
 
 Equal-but-independent model copies SHALL be rejected.
 
-### 7.4 Lifecycle matrix
+### 7.4 Exact Slice 5 lifecycle matrix
 
-The Review aggregate SHALL extend its exact valid prefixes through Critic.
+Lifecycle validation SHALL be explicit over the four implemented stages, resolved by `StageIdentity` in this order for matrix reasoning only:
 
-Successful Slice 5 terminal-for-this-slice shape:
+```text
+Analyst / Solution Architect / Risk Reviewer / Critic
+```
+
+For `ReviewStatus.RUNNING`, exactly these nine prefixes are valid:
+
+```text
+PENDING    PENDING    PENDING    PENDING
+RUNNING    PENDING    PENDING    PENDING
+COMPLETED  PENDING    PENDING    PENDING
+COMPLETED  RUNNING    PENDING    PENDING
+COMPLETED  COMPLETED  PENDING    PENDING
+COMPLETED  COMPLETED  RUNNING    PENDING
+COMPLETED  COMPLETED  COMPLETED  PENDING
+COMPLETED  COMPLETED  COMPLETED  RUNNING
+COMPLETED  COMPLETED  COMPLETED  COMPLETED
+```
+
+Coordinator SHALL be `PENDING` in every valid Slice 5 RUNNING state.
+
+For `ReviewStatus.INCOMPLETE`, exactly these four mandatory-stage failure shapes are valid:
+
+```text
+FAILED     PENDING    PENDING    PENDING
+COMPLETED  FAILED     PENDING    PENDING
+COMPLETED  COMPLETED  FAILED     PENDING
+COMPLETED  COMPLETED  COMPLETED  FAILED
+```
+
+Coordinator SHALL be `PENDING` in every Slice 5 INCOMPLETE state.
+
+This encodes one and only one failed mandatory implemented stage; all earlier implemented stages must be COMPLETED and all later stages must remain PENDING.
+
+Successful Slice 5 terminal-for-this-slice shape is therefore:
 
 ```text
 Review RUNNING
@@ -282,7 +321,7 @@ Critic COMPLETED
 Coordinator PENDING
 ```
 
-Critic failure shape:
+Critic failure shape is:
 
 ```text
 Review INCOMPLETE
@@ -297,7 +336,7 @@ Coordinator PENDING
 
 ### 7.5 StageIdentity, not tuple position
 
-All validation, lookup, and replacement SHALL continue using `StageIdentity`. Existing support for semantically valid noncanonical tuple ordering SHALL not regress.
+All validation, lookup, and replacement SHALL continue using `StageIdentity`. The matrices above define semantic stage order, not tuple indexing. Existing support for semantically valid noncanonical tuple ordering SHALL not regress.
 
 ---
 
@@ -375,9 +414,9 @@ The orchestrator SHALL retrieve upstream outputs by `StageIdentity` and narrow t
 
 ### 9.1 Output-validation failure
 
-Catch dedicated `CriticOutputError` only around the Critic participant invocation.
+Catch `CriticOutputError` only around the Critic participant invocation.
 
-Map it to the established trusted failure category for output validation and a stable safe message conceptually equivalent to:
+Map it to `ReviewErrorKind.OUTPUT_VALIDATION` with the exact stable safe message:
 
 ```text
 Critic output validation failed
@@ -389,7 +428,7 @@ Then call `fail_critic(...)` and return the INCOMPLETE Review immediately.
 
 Catch ordinary `Exception` only around the Critic participant invocation.
 
-Map it to execution failure with a stable safe message conceptually equivalent to:
+Map it to `ReviewErrorKind.EXECUTION` with the exact stable safe message:
 
 ```text
 Critic execution failed
@@ -417,7 +456,8 @@ Test Critic-domain contracts independently of Review and LLMPort:
 - qualitative importance values;
 - reference shape invariants;
 - contradiction shape invariants;
-- missing-alternative semantics;
+- missing-alternative semantics and basis shape;
+- unresolved-issue semantics and basis shape where applicable;
 - duplicate handling where material;
 - all-empty CriticalReview validity;
 - rejection of ranking/recommendation/replacement fields by closed schemas.
@@ -433,6 +473,8 @@ Using deterministic fake/recording `LLMPort`:
 - contradiction side resolution;
 - risk/mitigation references;
 - cross-artifact criticism basis;
+- missing-alternative basis resolution;
+- unresolved-issue basis resolution where explicit current artifacts are supplied;
 - unknown reference failure;
 - ambiguous reference failure;
 - explicit required target omitted failure;
@@ -446,9 +488,11 @@ Using deterministic fake/recording `LLMPort`:
 Extend existing tests for:
 
 - Critic stage local shapes;
-- exact RUNNING prefixes through Critic;
-- Critic failure shape;
+- all nine exact Slice 5 RUNNING prefixes;
+- all four exact Slice 5 INCOMPLETE failure shapes;
+- rejection of skipped stages, multiple failures, and later-stage execution after failure;
 - Coordinator PENDING-only;
+- `ReviewStatus.COMPLETED` unreachable;
 - same-execution identity provenance across all four Critic inputs;
 - rejection of equal-but-independent copies;
 - noncanonical tuple ordering regression.
@@ -466,8 +510,8 @@ Test:
 - successful Slice 5 end state;
 - fully empty CriticalReview success;
 - zero-alternative/zero-risk success;
-- Critic output-validation failure;
-- Critic ordinary execution failure;
+- Critic output-validation failure with exact safe message `Critic output validation failed`;
+- Critic ordinary execution failure with exact safe message `Critic execution failed`;
 - preservation of upstream completed outputs;
 - Coordinator never invoked;
 - internal errors not swallowed;
@@ -539,20 +583,21 @@ The following SHALL be decided explicitly in `data-model.md`, not implicitly dur
 2. exact shape of Critic target references across the four upstream artifact families;
 3. whether cross-artifact criticisms use multiple explicit basis references, a bounded dedicated structure, or another Critic-specific representation;
 4. exact `ValidatedPoint` structure and whether its target reference is optional by shape or by target kind;
-5. exact `MissingAlternative` structure and representation of recommendation-impact severity/boolean/qualitative meaning;
+5. exact `MissingAlternative` structure, its Critic-specific basis representation, and representation of recommendation-impact severity/boolean/qualitative meaning;
 6. exact `Contradiction` side structure and reference requirements;
-7. exact `UnresolvedIssue` structure;
+7. exact `UnresolvedIssue` structure and bounded basis representation where it derives from current artifacts;
 8. duplicate/uniqueness invariants for each collection;
-9. exact dedicated participant exception naming;
-10. whether existing qualitative enums can be reused semantically or a Critic-specific enum is clearer.
+9. whether existing qualitative enums can be reused semantically or a Critic-specific enum is clearer.
 
-No implementation should guess these decisions before data-model approval.
+Participant API naming and failure-message naming are not data-model decisions: `Critic.review(...)`, `CriticOutputError`, `Critic output validation failed`, and `Critic execution failed` are fixed by this approved plan.
+
+No implementation should guess the remaining data-shape decisions before data-model approval.
 
 ---
 
 ## 14. Plan Acceptance Gate
 
-This plan is ready for `data-model.md` only after review confirms:
+This plan has been reviewed and approved. `data-model.md` may be created because review confirmed that:
 
 1. implementation boundaries remain minimal and Slice-5-specific;
 2. the trust boundary is structural validation followed by explicit current-review contextual validation;
@@ -560,9 +605,9 @@ This plan is ready for `data-model.md` only after review confirms:
 4. Critic cannot assume Coordinator responsibilities;
 5. empty CriticalReview remains valid;
 6. all four exact upstream artifacts are carried into Critic execution;
-7. lifecycle/failure states preserve existing Slice 1–4 semantics;
+7. lifecycle/failure states are fixed to the exact 9 RUNNING / 4 INCOMPLETE Slice 5 matrix while preserving Slice 1–4 semantics;
 8. StageIdentity remains authoritative over tuple position;
 9. no generic workflow/reference architecture is introduced prematurely;
-10. all unresolved representation decisions are explicitly deferred to data-model rather than hidden in implementation.
-
-Only after explicit review and approval of this `plan.md` should `data-model.md` be created.
+10. MissingAlternative and UnresolvedIssue preserve explicit contextual basis when grounded in current artifacts;
+11. Critic failure boundaries use exact stable safe messages;
+12. remaining unresolved representation decisions are explicitly deferred to data-model rather than hidden in implementation.
