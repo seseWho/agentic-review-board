@@ -3,7 +3,7 @@ from copy import deepcopy
 
 import pytest
 
-from agentic_review_board.domain.analysis import ProblemAnalysis
+from agentic_review_board.domain.analysis import ProblemAnalysis, ReviewInputSource
 from agentic_review_board.domain.critics import CriticalReview
 from agentic_review_board.domain.final_reviews import FinalReview
 from agentic_review_board.domain.review import ReviewInput
@@ -16,6 +16,8 @@ from agentic_review_board.domain.risks import (
 )
 from agentic_review_board.domain.shared import QualitativeLevel
 from agentic_review_board.domain.solutions import (
+    FindingReference,
+    GenerationNotes,
     SolutionAlternative,
     SolutionAlternatives,
 )
@@ -184,13 +186,16 @@ def three_solution_alternatives() -> SolutionAlternatives:
 def zero_solution_alternatives() -> SolutionAlternatives:
     return SolutionAlternatives(
         alternatives=(),
-        generation_notes={
-            "explanation": "Required capacity evidence is unavailable.",
-            "blocking_missing_information": (
-                {"id": "BLOCK-001", "text": "Required capacity is unknown."},
+        generation_notes=GenerationNotes(
+            explanation="Required capacity evidence is unavailable.",
+            blocking_missing_information=(
+                FindingReference(
+                    id="BLOCK-001",
+                    text="Required capacity is unknown.",
+                ),
             ),
-            "blocking_uncertainties": (),
-        },
+            blocking_uncertainties=(),
+        ),
     )
 
 
@@ -204,7 +209,7 @@ def populated_risk_assessment() -> RiskAssessment:
                 severity=QualitativeLevel.HIGH,
                 basis=(
                     ReviewInputBasisReference(
-                        field="description",
+                        field=ReviewInputSource.DESCRIPTION,
                         value="Review a proposed deployment change.",
                     ),
                 ),
