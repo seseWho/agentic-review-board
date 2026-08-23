@@ -3,7 +3,7 @@
 **Branch**: `006-coordinator`  
 **Specification**: Approved  
 **Plan**: Approved  
-**Status**: Draft — pending review
+**Status**: Approved — reviewed against real Slice 1–5 contracts; ready for task breakdown
 
 ## 1. Purpose
 
