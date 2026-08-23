@@ -2080,6 +2080,10 @@ def test_coordinator_provenance_requires_all_five_exact_instances(
 
 
 @pytest.mark.parametrize(
+    "status",
+    [StageStatus.RUNNING, StageStatus.COMPLETED, StageStatus.FAILED],
+)
+@pytest.mark.parametrize(
     "field",
     [
         "review_input",
@@ -2091,6 +2095,7 @@ def test_coordinator_provenance_requires_all_five_exact_instances(
 )
 def test_coordinator_rejects_equal_independent_provenance_one_field_at_a_time(
     field: str,
+    status: StageStatus,
 ) -> None:
     review_input = valid_review_input()
     analysis = valid_problem_analysis()
@@ -2124,14 +2129,31 @@ def test_coordinator_rejects_equal_independent_provenance_one_field_at_a_time(
     inputs = CoordinatorStageInput.model_validate(exact)
     coordinator = StageExecution(
         identity=StageIdentity.COORDINATOR,
-        status=StageStatus.RUNNING,
+        status=status,
         inputs=inputs,
+        output=valid_final_review() if status is StageStatus.COMPLETED else None,
+        error=(
+            ReviewError(
+                kind=ReviewErrorKind.EXECUTION,
+                message="Coordinator execution failed",
+            )
+            if status is StageStatus.FAILED
+            else None
+        ),
     )
 
     with pytest.raises(ValidationError):
         Review(
             review_input=review_input,
-            status=ReviewStatus.RUNNING,
+            status=(
+                ReviewStatus.COMPLETED
+                if status is StageStatus.COMPLETED
+                else (
+                    ReviewStatus.INCOMPLETE
+                    if status is StageStatus.FAILED
+                    else ReviewStatus.RUNNING
+                )
+            ),
             stages=(*upstream, coordinator),
         )
 
