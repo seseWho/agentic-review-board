@@ -887,3 +887,204 @@ def test_one_invalid_nested_reference_rejects_complete_coordinator_output() -> N
             analysis=populated_problem_analysis(),
             risks=populated_risk_assessment(),
         )
+
+
+
+def critical_review_with_criticisms() -> CriticalReview:
+    target = {
+        "source": "REVIEW_INPUT",
+        "kind": "DESCRIPTION",
+        "value": "Review a proposed deployment change.",
+    }
+    return CriticalReview.model_validate(
+        {
+            "criticisms": [
+                {
+                    "id": "CRIT-LOW",
+                    "target_type": "ANALYSIS",
+                    "target_reference": target,
+                    "basis_references": [],
+                    "issue": "A low-importance concern remains.",
+                    "importance": "LOW",
+                    "rationale": "Every criticism still requires disposition.",
+                },
+                {
+                    "id": "CRIT-HIGH",
+                    "target_type": "ANALYSIS",
+                    "target_reference": {
+                        "source": "PROBLEM_ANALYSIS",
+                        "kind": "PROBLEM_OBJECTIVE",
+                        "value": "Choose a suitable deployment approach.",
+                    },
+                    "basis_references": [],
+                    "issue": "A high-importance concern remains.",
+                    "importance": "HIGH",
+                    "rationale": "This criticism also requires disposition.",
+                },
+            ]
+        }
+    )
+
+
+def test_every_criticism_has_exactly_one_disposition_without_threshold() -> None:
+    response = recommended_response()
+    response["criticism_dispositions"] = [
+        {
+            "criticism_id": "CRIT-LOW",
+            "outcome": "DISMISSED",
+            "rationale": "It does not change the current decision.",
+        },
+        {
+            "criticism_id": "CRIT-HIGH",
+            "outcome": "REFLECTED",
+            "rationale": "It changes the visible conclusion.",
+            "reflected_in": ["CONCLUSION"],
+        },
+    ]
+
+    result = run_coordinator_with_context(
+        response,
+        critique=critical_review_with_criticisms(),
+    )
+    assert {item.criticism_id for item in result.criticism_dispositions} == {
+        "CRIT-LOW",
+        "CRIT-HIGH",
+    }
+
+
+@pytest.mark.parametrize(
+    "dispositions",
+    [
+        [],
+        [
+            {
+                "criticism_id": "CRIT-HIGH",
+                "outcome": "DISMISSED",
+                "rationale": "CRIT-LOW is omitted.",
+            }
+        ],
+        [
+            {
+                "criticism_id": "CRIT-LOW",
+                "outcome": "DISMISSED",
+                "rationale": "First.",
+            },
+            {
+                "criticism_id": "UNKNOWN",
+                "outcome": "DISMISSED",
+                "rationale": "Unknown.",
+            },
+        ],
+        [
+            {
+                "criticism_id": "CRIT-LOW",
+                "outcome": "DISMISSED",
+                "rationale": "First.",
+            },
+            {
+                "criticism_id": "CRIT-LOW",
+                "outcome": "DISMISSED",
+                "rationale": "Duplicate.",
+            },
+        ],
+    ],
+)
+def test_criticism_disposition_set_must_match_current_criticisms(
+    dispositions: list[dict[str, object]],
+) -> None:
+    response = recommended_response()
+    response["criticism_dispositions"] = dispositions
+
+    with pytest.raises(CoordinatorOutputError):
+        run_coordinator_with_context(
+            response,
+            critique=critical_review_with_criticisms(),
+        )
+
+
+def test_insufficient_evidence_with_current_alternatives_requires_question() -> None:
+    response = recommended_response()
+    response.update(
+        {
+            "recommendation_outcome": "INSUFFICIENT_EVIDENCE",
+            "preferred_alternative_id": None,
+            "unresolved_questions": [],
+        }
+    )
+
+    with pytest.raises(CoordinatorOutputError):
+        run_coordinator_with_context(response)
+
+    response["unresolved_questions"] = unresolved_response(
+        {
+            "source": "PROBLEM_ANALYSIS",
+            "kind": "MISSING_INFORMATION",
+            "item_id": "MISS-001",
+            "value": "Peak load is unknown.",
+        }
+    )["unresolved_questions"]
+    result = run_coordinator_with_context(
+        response,
+        analysis=populated_problem_analysis(),
+    )
+    assert result.recommendation_outcome.value == "INSUFFICIENT_EVIDENCE"
+
+
+def test_empty_or_validation_only_critic_requires_no_dispositions() -> None:
+    response = recommended_response()
+    assert run_coordinator_with_context(response).criticism_dispositions == ()
+
+    validation_only = CriticalReview.model_validate(
+        {
+            "validated_points": [
+                {
+                    "id": "VALID-001",
+                    "target_reference": {
+                        "source": "REVIEW_INPUT",
+                        "kind": "DESCRIPTION",
+                        "value": "Review a proposed deployment change.",
+                    },
+                    "rationale": "This point is adequately supported.",
+                }
+            ]
+        }
+    )
+    assert (
+        run_coordinator_with_context(
+            response,
+            critique=validation_only,
+        ).criticism_dispositions
+        == ()
+    )
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        {"unexpected": "forbidden"},
+        {"ranked_alternatives": "not-a-ranking"},
+        {
+            "principal_risks": [
+                {"risk_id": "RISK-001", "rationale": "Valid."},
+                {"risk_id": "", "rationale": "Invalid nested item."},
+            ]
+        },
+    ],
+)
+def test_malformed_output_fails_atomically_without_mutating_inputs(
+    mutation: dict[str, object],
+) -> None:
+    current_input = review_input()
+    analysis = populated_problem_analysis()
+    alternatives = solution_alternatives()
+    risks = populated_risk_assessment()
+    critique = critical_review()
+    upstream = (current_input, analysis, alternatives, risks, critique)
+    before = tuple(artifact.model_dump(mode="json") for artifact in upstream)
+    response = recommended_response()
+    response.update(mutation)
+
+    with pytest.raises(CoordinatorOutputError):
+        Coordinator(RecordingLLM(response)).coordinate(*upstream)
+
+    assert tuple(artifact.model_dump(mode="json") for artifact in upstream) == before
