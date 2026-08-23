@@ -3,7 +3,7 @@
 **Input**: Approved design documents from `specs/005-critic/`  
 **Prerequisites**: approved `spec.md`, approved `plan.md`, approved `data-model.md`, accepted `docs/adr/ADR-0001-pydantic-v2-for-structured-contracts.md`, and merged Slice 1–4 contracts on `main`  
 **Branch**: `005-critic`  
-**Status**: Draft — awaiting review and explicit approval before implementation
+**Status**: Approved — implementation may proceed tests-first in reviewed blocks
 
 Tests are mandatory because Slice 5 introduces a generated critical-review contract, Critic-specific cross-artifact references, contextual resolution across four current-review artifacts, a fourth execution-stage provenance boundary, and a mandatory participant failure boundary. All behavior must remain deterministic, inspectable, provider-neutral, and fail-closed.
 
