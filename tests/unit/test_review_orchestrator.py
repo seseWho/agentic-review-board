@@ -758,6 +758,8 @@ def test_reused_orchestrator_keeps_sequential_successful_reviews_isolated() -> N
     second_reviewer = second_result.stage(StageIdentity.RISK_REVIEWER)
     first_critic = first_result.stage(StageIdentity.CRITIC)
     second_critic = second_result.stage(StageIdentity.CRITIC)
+    first_coordinator = first_result.stage(StageIdentity.COORDINATOR)
+    second_coordinator = second_result.stage(StageIdentity.COORDINATOR)
 
     assert first_result.review_input is first_created.review_input
     assert second_result.review_input is second_created.review_input
@@ -798,6 +800,21 @@ def test_reused_orchestrator_keeps_sequential_successful_reviews_isolated() -> N
     assert first_critic.output is not None
     assert second_critic.output is not None
     assert first_critic.output is not second_critic.output
+    assert isinstance(first_coordinator.inputs, CoordinatorStageInput)
+    assert isinstance(second_coordinator.inputs, CoordinatorStageInput)
+    assert first_coordinator.inputs.review_input is first_result.review_input
+    assert second_coordinator.inputs.review_input is second_result.review_input
+    assert first_coordinator.inputs.problem_analysis is first_analyst.output
+    assert second_coordinator.inputs.problem_analysis is second_analyst.output
+    assert first_coordinator.inputs.solution_alternatives is first_architect.output
+    assert second_coordinator.inputs.solution_alternatives is second_architect.output
+    assert first_coordinator.inputs.risk_assessment is first_reviewer.output
+    assert second_coordinator.inputs.risk_assessment is second_reviewer.output
+    assert first_coordinator.inputs.critical_review is first_critic.output
+    assert second_coordinator.inputs.critical_review is second_critic.output
+    assert isinstance(first_coordinator.output, FinalReview)
+    assert isinstance(second_coordinator.output, FinalReview)
+    assert first_coordinator.output is not second_coordinator.output
     assert first_result.status is ReviewStatus.COMPLETED
     assert second_result.status is ReviewStatus.COMPLETED
     assert_coordinator_completed(first_result)
@@ -1213,3 +1230,38 @@ def test_orchestrator_reuses_exact_trusted_final_review(
     assert coordinator.inputs.risk_assessment is reviewer.output
     assert coordinator.inputs.critical_review is critic.output
     assert coordinator.output is trusted
+
+
+
+def test_coordinator_failure_does_not_contaminate_fresh_review() -> None:
+    llm = RecordingLLM(
+        successful_responses(),
+        failures={"coordinator": RuntimeError("first coordinator failure detail")},
+    )
+    orchestrator = orchestrator_with(llm)
+
+    first_result = orchestrator.execute(
+        create_named_review("Review expected to fail at Coordinator.")
+    )
+    first_coordinator = first_result.stage(StageIdentity.COORDINATOR)
+    assert first_result.status is ReviewStatus.INCOMPLETE
+    assert first_coordinator.status is StageStatus.FAILED
+    assert isinstance(first_coordinator.inputs, CoordinatorStageInput)
+    assert first_coordinator.output is None
+
+    llm._failures = {}
+    second_created = create_named_review("Fresh review after Coordinator failure.")
+    assert_fresh_created_review(second_created)
+
+    second_result = orchestrator.execute(second_created)
+    second_coordinator = second_result.stage(StageIdentity.COORDINATOR)
+    assert second_result.status is ReviewStatus.COMPLETED
+    assert second_coordinator.status is StageStatus.COMPLETED
+    assert isinstance(second_coordinator.inputs, CoordinatorStageInput)
+    assert second_coordinator.inputs.review_input is second_result.review_input
+    assert (
+        second_coordinator.inputs.review_input
+        is not first_coordinator.inputs.review_input
+    )
+    assert isinstance(second_coordinator.output, FinalReview)
+    assert second_coordinator.error is None
