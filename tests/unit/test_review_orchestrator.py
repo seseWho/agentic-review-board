@@ -410,6 +410,7 @@ def test_orchestrator_accepts_zero_risk_and_zero_alternative_results(
             "analyst": analyst_response(),
             "solution_architect": architect_response,
             "risk_reviewer": reviewer_response,
+            "critic": empty_critic_response(),
         }
     )
 
@@ -742,4 +743,222 @@ def test_risk_failure_does_not_contaminate_next_fresh_review() -> None:
     assert second_reviewer.output is not None
     assert second_reviewer.error is None
     assert second_reviewer.output is not first_reviewer.output
+    assert_coordinator_pending(second_result)
+
+
+def test_orchestrator_reuses_exact_trusted_critical_review(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    trusted_review = CriticalReview()
+    received: list[tuple[object, object, object, object]] = []
+
+    def exact_review(
+        self: Critic,
+        review_input: ReviewInput,
+        analysis: ProblemAnalysis,
+        alternatives: SolutionAlternatives,
+        assessment: RiskAssessment,
+    ) -> CriticalReview:
+        received.append((review_input, analysis, alternatives, assessment))
+        return trusted_review
+
+    monkeypatch.setattr(Critic, "review", exact_review)
+    result = orchestrator_with(RecordingLLM(successful_responses())).execute(create_review())
+
+    analyst = result.stage(StageIdentity.ANALYST)
+    architect = result.stage(StageIdentity.SOLUTION_ARCHITECT)
+    reviewer = result.stage(StageIdentity.RISK_REVIEWER)
+    critic = result.stage(StageIdentity.CRITIC)
+    assert received == [
+        (
+            result.review_input,
+            analyst.output,
+            architect.output,
+            reviewer.output,
+        )
+    ]
+    assert critic.status is StageStatus.COMPLETED
+    assert isinstance(critic.inputs, CriticStageInput)
+    assert critic.inputs.review_input is result.review_input
+    assert critic.inputs.problem_analysis is analyst.output
+    assert critic.inputs.solution_alternatives is architect.output
+    assert critic.inputs.risk_assessment is reviewer.output
+    assert critic.output is trusted_review
+    assert result.status is ReviewStatus.RUNNING
+    assert_coordinator_pending(result)
+
+
+@pytest.mark.parametrize(
+    ("architect_response", "reviewer_response", "critic_response"),
+    [
+        (two_alternative_response(), risk_response(), empty_critic_response()),
+        (two_alternative_response(), risk_response(), validation_only_critic_response()),
+        (zero_alternative_response(), zero_risk_response(), empty_critic_response()),
+        (two_alternative_response(), zero_risk_response(), empty_critic_response()),
+    ],
+)
+def test_orchestrator_accepts_empty_validation_only_and_sparse_critic_reviews(
+    architect_response: Mapping[str, object],
+    reviewer_response: Mapping[str, object],
+    critic_response: Mapping[str, object],
+) -> None:
+    llm = RecordingLLM(
+        {
+            "analyst": analyst_response(),
+            "solution_architect": architect_response,
+            "risk_reviewer": reviewer_response,
+            "critic": critic_response,
+        }
+    )
+
+    result = orchestrator_with(llm).execute(create_review())
+
+    critic = result.stage(StageIdentity.CRITIC)
+    assert result.status is ReviewStatus.RUNNING
+    assert critic.status is StageStatus.COMPLETED
+    assert isinstance(critic.output, CriticalReview)
+    assert_coordinator_pending(result)
+
+
+def test_invalid_critic_generated_output_raises_dedicated_participant_error() -> None:
+    current_input = create_review().review_input
+    analysis = ProblemAnalysis.model_validate(analyst_response())
+    alternatives = SolutionAlternatives.model_validate(two_alternative_response())
+    assessment = RiskAssessment.model_validate(risk_response())
+    llm = RecordingLLM({"critic": invalid_critic_response()})
+
+    with pytest.raises(CriticOutputError):
+        Critic(llm).review(current_input, analysis, alternatives, assessment)
+
+
+def test_critic_output_validation_failure_is_mapped_fail_closed() -> None:
+    responses = successful_responses()
+    responses["critic"] = invalid_critic_response()
+    llm = RecordingLLM(responses)
+
+    result = orchestrator_with(llm).execute(create_review())
+
+    analyst = result.stage(StageIdentity.ANALYST)
+    architect = result.stage(StageIdentity.SOLUTION_ARCHITECT)
+    reviewer = result.stage(StageIdentity.RISK_REVIEWER)
+    critic = result.stage(StageIdentity.CRITIC)
+    assert result.status is ReviewStatus.INCOMPLETE
+    assert analyst.status is StageStatus.COMPLETED
+    assert architect.status is StageStatus.COMPLETED
+    assert reviewer.status is StageStatus.COMPLETED
+    assert critic.status is StageStatus.FAILED
+    assert isinstance(critic.inputs, CriticStageInput)
+    assert critic.inputs.review_input is result.review_input
+    assert critic.inputs.problem_analysis is analyst.output
+    assert critic.inputs.solution_alternatives is architect.output
+    assert critic.inputs.risk_assessment is reviewer.output
+    assert critic.output is None
+    assert critic.error is not None
+    assert critic.error.kind is ReviewErrorKind.OUTPUT_VALIDATION
+    assert critic.error.message == "Critic output validation failed"
+    assert [role for role, _ in llm.calls] == [
+        "analyst",
+        "solution_architect",
+        "risk_reviewer",
+        "critic",
+    ]
+    assert_coordinator_pending(result)
+
+
+def test_critic_execution_failure_is_mapped_without_raw_exception_text() -> None:
+    llm = RecordingLLM(
+        successful_responses(),
+        failures={"critic": RuntimeError("provider secret critic detail")},
+    )
+
+    result = orchestrator_with(llm).execute(create_review())
+
+    analyst = result.stage(StageIdentity.ANALYST)
+    architect = result.stage(StageIdentity.SOLUTION_ARCHITECT)
+    reviewer = result.stage(StageIdentity.RISK_REVIEWER)
+    critic = result.stage(StageIdentity.CRITIC)
+    assert result.status is ReviewStatus.INCOMPLETE
+    assert analyst.status is StageStatus.COMPLETED
+    assert architect.status is StageStatus.COMPLETED
+    assert reviewer.status is StageStatus.COMPLETED
+    assert critic.status is StageStatus.FAILED
+    assert isinstance(critic.inputs, CriticStageInput)
+    assert critic.inputs.problem_analysis is analyst.output
+    assert critic.inputs.solution_alternatives is architect.output
+    assert critic.inputs.risk_assessment is reviewer.output
+    assert critic.output is None
+    assert critic.error is not None
+    assert critic.error.kind is ReviewErrorKind.EXECUTION
+    assert critic.error.message == "Critic execution failed"
+    assert "provider secret critic detail" not in critic.error.message
+    assert_coordinator_pending(result)
+
+
+def test_critic_stage_invariant_failure_outside_participant_call_propagates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    llm = RecordingLLM(successful_responses())
+
+    def invalid_start_critic(self: Review) -> Review:
+        raise ValueError("Critic stage invariant failed")
+
+    monkeypatch.setattr(Review, "start_critic", invalid_start_critic)
+
+    with pytest.raises(ValueError, match="Critic stage invariant failed"):
+        orchestrator_with(llm).execute(create_review())
+
+    assert [role for role, _ in llm.calls] == [
+        "analyst",
+        "solution_architect",
+        "risk_reviewer",
+    ]
+
+
+@pytest.mark.parametrize("control_signal", [KeyboardInterrupt(), SystemExit()])
+def test_orchestrator_does_not_swallow_critic_base_exception_control_signals(
+    control_signal: BaseException,
+) -> None:
+    llm = RecordingLLM(
+        successful_responses(),
+        failures={"critic": control_signal},
+    )
+
+    with pytest.raises(type(control_signal)):
+        orchestrator_with(llm).execute(create_review())
+
+    assert [role for role, _ in llm.calls] == [
+        "analyst",
+        "solution_architect",
+        "risk_reviewer",
+        "critic",
+    ]
+
+
+def test_critic_failure_does_not_contaminate_next_fresh_review() -> None:
+    llm = RecordingLLM(
+        successful_responses(),
+        failures={"critic": RuntimeError("first critic failure detail")},
+    )
+    orchestrator = orchestrator_with(llm)
+
+    first_result = orchestrator.execute(
+        create_named_review("Review expected to fail at Critic.")
+    )
+    first_critic = first_result.stage(StageIdentity.CRITIC)
+    assert first_result.status is ReviewStatus.INCOMPLETE
+    assert first_critic.status is StageStatus.FAILED
+    assert first_critic.output is None
+
+    llm._failures = {}
+    second_created = create_named_review("Fresh review after a Critic failure.")
+    assert_fresh_created_review(second_created)
+
+    second_result = orchestrator.execute(second_created)
+    second_critic = second_result.stage(StageIdentity.CRITIC)
+    assert second_result.status is ReviewStatus.RUNNING
+    assert second_critic.status is StageStatus.COMPLETED
+    assert isinstance(second_critic.inputs, CriticStageInput)
+    assert second_critic.inputs.review_input is second_result.review_input
+    assert second_critic.output is not None
+    assert second_critic.output is not first_critic.output
     assert_coordinator_pending(second_result)
