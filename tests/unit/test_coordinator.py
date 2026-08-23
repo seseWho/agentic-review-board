@@ -466,12 +466,12 @@ def test_context_rejects_unknown_principal_risk_id(risk_id: str) -> None:
 
 
 
-def unresolved_response(*references: dict[str, object]) -> dict[str, object]:
+def unresolved_response(*references: Mapping[str, object]) -> dict[str, object]:
     response = recommended_response()
     response["unresolved_questions"] = [
         {
             "id": f"QUESTION-{index:03d}",
-            "reference": reference,
+            "reference": dict(reference),
             "question": "What must be validated?",
             "rationale": "This remains material to the decision.",
         }
