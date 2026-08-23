@@ -110,12 +110,12 @@
 
 ## Phase 6: Cross-Cutting Verification
 
-- [ ] T056 Run full deterministic python -m pytest with no live LLM/network.
-- [ ] T057 Run python -m ruff check . without weakening rules.
-- [ ] T058 Run strict python -m mypy for Coordinator models, discriminators, unions, narrowing, and tests without new plugin/dependency.
-- [ ] T059 Run python -m pip check and confirm no production dependency change.
-- [ ] T060 Inspect production and pyproject.toml for no SDK leakage, autonomous action, replacement alternatives, scoring, persistence/history, RAG/tools/UI, resilience/concurrency, or generic workflow/reference framework.
-- [ ] T061 Review against approved artifacts, canonical docs, Constitution, ADR-0001, and real Slice 1–5 contracts: 0/2/3 cardinality, dispositions, fixed notice, assumption semantics, fail-closed references, separate provenance, human authority, and 10/5/1 lifecycle.
+- [X] T056 Run full deterministic python -m pytest with no live LLM/network.
+- [X] T057 Run python -m ruff check . without weakening rules.
+- [X] T058 Run strict python -m mypy for Coordinator models, discriminators, unions, narrowing, and tests without new plugin/dependency.
+- [X] T059 Run python -m pip check and confirm no production dependency change.
+- [X] T060 Inspect production and pyproject.toml for no SDK leakage, autonomous action, replacement alternatives, scoring, persistence/history, RAG/tools/UI, resilience/concurrency, or generic workflow/reference framework.
+- [X] T061 Review against approved artifacts, canonical docs, Constitution, ADR-0001, and real Slice 1–5 contracts: 0/2/3 cardinality, dispositions, fixed notice, assumption semantics, fail-closed references, separate provenance, human authority, and 10/5/1 lifecycle.
 
 ## Dependencies and Gate
 
