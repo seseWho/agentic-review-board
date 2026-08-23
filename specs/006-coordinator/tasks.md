@@ -11,10 +11,10 @@
 
 ### Tests first
 
-- [ ] T001 [US3] Create tests/unit/test_final_reviews.py with exact RecommendationOutcome, CriticismDispositionOutcome, and bounded FinalReviewSection enum tests.
-- [ ] T002 [US2] Test valid RankedAlternative: strict positive position, required ID/justification, non-empty unique considerations, optional unique ranking-change conditions, frozen tuples, and closed schema.
-- [ ] T003 [US2] Test invalid RankedAlternative: bool/non-integer/non-positive position, blank text, empty/duplicate collections, and embedded replacement-alternative fields.
-- [ ] T004 [US1] Test PrincipalRisk required risk_id/rationale, frozen/closed behavior, blank rejection, and absence of copied Risk fields.
+- [X] T001 [US3] Create tests/unit/test_final_reviews.py with exact RecommendationOutcome, CriticismDispositionOutcome, and bounded FinalReviewSection enum tests.
+- [X] T002 [US2] Test valid RankedAlternative: strict positive position, required ID/justification, non-empty unique considerations, optional unique ranking-change conditions, frozen tuples, and closed schema.
+- [X] T003 [US2] Test invalid RankedAlternative: bool/non-integer/non-positive position, blank text, empty/duplicate collections, and embedded replacement-alternative fields.
+- [X] T004 [US1] Test PrincipalRisk required risk_id/rationale, frozen/closed behavior, blank rejection, and absence of copied Risk fields.
 - [ ] T005 [US1] Test ProblemUnresolvedReference intrinsic shapes for PROBLEM_ASSUMPTION, MISSING_INFORMATION, and UNCERTAINTY with required value and optional non-blank item_id.
 - [ ] T006 [US1] Test SolutionUnresolvedReference shapes: ALTERNATIVE_ASSUMPTION requires alternative_id and forbids item_id; blocker kinds forbid alternative_id and allow optional item_id.
 - [ ] T007 [US1] Test RiskUnresolvedReference and CriticUnresolvedReference allowed kinds, required identifiers/values, discriminators, frozen behavior, blanks, and extra fields.
