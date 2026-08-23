@@ -90,17 +90,17 @@ Every implementation task follows:
 
 ### Tests first
 
-- [ ] T028 [US5] Extend `tests/unit/test_review_execution.py` with `CriticStageInput`, `StageInput`, and `StageOutput` typing tests; verify Critic PENDING/RUNNING/COMPLETED/FAILED local shapes, completed Critic requires `CriticalReview`, and Coordinator remains PENDING-only.
-- [ ] T029 [US5] Extend `tests/unit/test_review_execution.py` with all nine exact Slice 5 RUNNING Analyst/Solution Architect/Risk Reviewer/Critic prefixes and all four exact INCOMPLETE single-failure shapes; reject skipped stages, multiple failures, and later-stage execution after failure.
-- [ ] T030 [US5] Extend `tests/unit/test_review_execution.py` with assertions that Coordinator is PENDING in every valid Slice 5 state and `ReviewStatus.COMPLETED` remains unreachable.
-- [ ] T031 [US2] Extend `tests/unit/test_review_execution.py` with Critic same-execution provenance tests for every non-PENDING local shape (RUNNING, COMPLETED, and FAILED), proving `is` identity for current `ReviewInput`, Analyst `ProblemAnalysis`, Architect `SolutionAlternatives`, and Risk Reviewer `RiskAssessment`; reject equal-but-independent copies for each artifact independently.
-- [ ] T032 [US5] Extend `tests/unit/test_review_execution.py` with regression tests proving lifecycle validation and lookup use `StageIdentity`, directly constructed noncanonical valid tuples remain valid, `Review.create()` emits canonical order, and replacements preserve existing valid order.
+- [X] T028 [US5] Extend `tests/unit/test_review_execution.py` with `CriticStageInput`, `StageInput`, and `StageOutput` typing tests; verify Critic PENDING/RUNNING/COMPLETED/FAILED local shapes, completed Critic requires `CriticalReview`, and Coordinator remains PENDING-only.
+- [X] T029 [US5] Extend `tests/unit/test_review_execution.py` with all nine exact Slice 5 RUNNING Analyst/Solution Architect/Risk Reviewer/Critic prefixes and all four exact INCOMPLETE single-failure shapes; reject skipped stages, multiple failures, and later-stage execution after failure.
+- [X] T030 [US5] Extend `tests/unit/test_review_execution.py` with assertions that Coordinator is PENDING in every valid Slice 5 state and `ReviewStatus.COMPLETED` remains unreachable.
+- [X] T031 [US2] Extend `tests/unit/test_review_execution.py` with Critic same-execution provenance tests for every non-PENDING local shape (RUNNING, COMPLETED, and FAILED), proving `is` identity for current `ReviewInput`, Analyst `ProblemAnalysis`, Architect `SolutionAlternatives`, and Risk Reviewer `RiskAssessment`; reject equal-but-independent copies for each artifact independently.
+- [X] T032 [US5] Extend `tests/unit/test_review_execution.py` with regression tests proving lifecycle validation and lookup use `StageIdentity`, directly constructed noncanonical valid tuples remain valid, `Review.create()` emits canonical order, and replacements preserve existing valid order.
 
 ### Implementation
 
-- [ ] T033 [US5] Extend `src/agentic_review_board/domain/execution.py` with `CriticStageInput`, `CriticalReview` in `StageOutput`, Critic identity/type validation, and Coordinator PENDING-only behavior while preserving explicit unions.
-- [ ] T034 [US5] Extend Review aggregate lifecycle validation in `src/agentic_review_board/domain/execution.py` to exactly the nine RUNNING and four INCOMPLETE Slice 5 shapes using `StageIdentity`, not tuple position.
-- [ ] T035 [US2] Extend same-execution provenance validation in `src/agentic_review_board/domain/execution.py` so every non-PENDING Critic stage carries the exact four current Review artifact instances; keep this identity rule separate from generated `CriticReference` resolution.
+- [X] T033 [US5] Extend `src/agentic_review_board/domain/execution.py` with `CriticStageInput`, `CriticalReview` in `StageOutput`, Critic identity/type validation, and Coordinator PENDING-only behavior while preserving explicit unions.
+- [X] T034 [US5] Extend Review aggregate lifecycle validation in `src/agentic_review_board/domain/execution.py` to exactly the nine RUNNING and four INCOMPLETE Slice 5 shapes using `StageIdentity`, not tuple position.
+- [X] T035 [US2] Extend same-execution provenance validation in `src/agentic_review_board/domain/execution.py` so every non-PENDING Critic stage carries the exact four current Review artifact instances; keep this identity rule separate from generated `CriticReference` resolution.
 
 **Checkpoint**: Domain execution snapshots reject impossible Critic states, Coordinator activity, skipped stages, and cross-review/equal-but-independent provenance.
 
