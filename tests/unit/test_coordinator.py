@@ -49,27 +49,35 @@ def problem_analysis() -> ProblemAnalysis:
     )
 
 
+def solution_alternative(
+    alternative_id: str,
+    name: str,
+    description: str,
+) -> SolutionAlternative:
+    return SolutionAlternative(
+        id=alternative_id,
+        name=name,
+        description=description,
+        advantages=("Works offline.",),
+        disadvantages=("Requires local maintenance.",),
+        assumptions=("Local compute remains available.",),
+        implementation_complexity="MEDIUM",
+        relevant_constraints=(),
+    )
+
+
 def solution_alternatives() -> SolutionAlternatives:
-    common: dict[str, object] = {
-        "advantages": ("Works offline.",),
-        "disadvantages": ("Requires local maintenance.",),
-        "assumptions": ("Local compute remains available.",),
-        "implementation_complexity": "MEDIUM",
-        "relevant_constraints": (),
-    }
     return SolutionAlternatives(
         alternatives=(
-            SolutionAlternative(
-                id="ALT-001",
-                name="Local deployment",
-                description="Deploy the capability locally.",
-                **common,
+            solution_alternative(
+                "ALT-001",
+                "Local deployment",
+                "Deploy the capability locally.",
             ),
-            SolutionAlternative(
-                id="ALT-002",
-                name="Managed appliance",
-                description="Use a managed on-premises appliance.",
-                **common,
+            solution_alternative(
+                "ALT-002",
+                "Managed appliance",
+                "Use a managed on-premises appliance.",
             ),
         ),
     )
@@ -131,7 +139,7 @@ def test_coordinator_calls_exact_boundary_and_returns_separate_trusted_review() 
 
     assert isinstance(result, FinalReview)
     assert result.preferred_alternative_id == "ALT-001"
-    assert all(result is not artifact for artifact in upstream)
+    assert id(result) not in {id(artifact) for artifact in upstream}
     assert tuple(artifact.model_dump(mode="json") for artifact in upstream) == before
 
     assert llm.calls == [
