@@ -457,10 +457,10 @@ def test_criticism_disposition_enforces_outcome_specific_sections() -> None:
         criticism_id="CRIT-001",
         outcome=CriticismDispositionOutcome.REFLECTED,
         rationale="The criticism changes the ranking rationale.",
-        reflected_in=[
+        reflected_in=(
             FinalReviewSection.RANKING,
             FinalReviewSection.CONCLUSION,
-        ],
+        ),
     )
     dismissed = CriticismDisposition(
         criticism_id="CRIT-002",
