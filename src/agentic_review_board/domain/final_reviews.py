@@ -97,7 +97,6 @@ class PrincipalRisk(BaseModel):
         return value
 
 
-
 class UnresolvedQuestionSource(StrEnum):
     """Current upstream artifact family owning an unresolved item."""
 
