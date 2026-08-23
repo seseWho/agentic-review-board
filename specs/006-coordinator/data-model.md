@@ -163,12 +163,14 @@ CRITICAL_REVIEW
 ### 6.2 ProblemUnresolvedKind
 
 ```text
+PROBLEM_ASSUMPTION
 MISSING_INFORMATION
 UNCERTAINTY
 ```
 
 These map exactly to:
 
+- `ProblemAnalysis.assumptions`;
 - `ProblemAnalysis.missing_information`;
 - `ProblemAnalysis.uncertainties`.
 
@@ -195,12 +197,14 @@ This matches the real `AnalysisFinding` contract, whose ID is optional.
 ### 6.4 SolutionUnresolvedKind
 
 ```text
+ALTERNATIVE_ASSUMPTION
 BLOCKING_MISSING_INFORMATION
 BLOCKING_UNCERTAINTY
 ```
 
 These map exactly to:
 
+- `SolutionAlternative.assumptions`;
 - `GenerationNotes.blocking_missing_information`;
 - `GenerationNotes.blocking_uncertainties`.
 
@@ -211,18 +215,20 @@ SolutionUnresolvedReference
 - source: literal SOLUTION_ALTERNATIVES
 - kind: SolutionUnresolvedKind
 - value: str
+- alternative_id: str | None = None
 - item_id: str | None = None
 ```
 
 Rules:
 
-- current `generation_notes` must exist;
 - `value` required/non-blank;
-- optional `item_id` non-blank when present;
-- resolution uses exact ID+text when ID exists, otherwise unique exact text;
-- zero or multiple matches fail.
+- optional identifiers are non-blank when present;
+- `ALTERNATIVE_ASSUMPTION` requires `alternative_id`, forbids `item_id`, and resolves `value` uniquely within exactly that current alternative's `assumptions`;
+- blocker kinds require current `generation_notes`, forbid `alternative_id`, and resolve using exact ID+text when `item_id` exists or unique exact text otherwise;
+- no assumption fallback or search is allowed across multiple alternatives;
+- unknown alternative IDs, absent generation notes, zero matches, or multiple matches fail.
 
-This matches the real `FindingReference` contract.
+This matches the real string-based `SolutionAlternative.assumptions` and optional-ID `FindingReference` contracts.
 
 ### 6.6 RiskUnresolvedReference
 
@@ -882,7 +888,7 @@ Reject because CRIT-002 is omitted.
 4. Use `RecommendationOutcome.RECOMMENDED | INSUFFICIENT_EVIDENCE`.
 5. Require conclusion rationale for both outcomes.
 6. Select principal risks by exact `Risk.id`.
-7. Use a bounded discriminated union only for unresolved-question sources.
+7. Use a bounded discriminated union only for unresolved-question sources, including exact Analyst and alternative assumptions.
 8. Give every current Criticism ID exactly one explicit disposition.
 9. Infer no materiality threshold from Criticism importance.
 10. Use a fixed application-owned decision-support notice.
@@ -896,7 +902,7 @@ Reject because CRIT-002 is omitted.
 Before approval, verify:
 
 1. whether `PrincipalRisk.rationale` adds useful inspectability without duplicating the Risk description;
-2. whether the unresolved-question source/kind matrix matches every real upstream field needed for v0.1 and excludes unnecessary fields;
+2. whether the corrected unresolved-question matrix now covers Analyst assumptions and alternative-local assumptions without enabling global or fuzzy lookup;
 3. whether `CriticUnresolvedReference.value` compatibility mappings are the correct visible values;
 4. whether `FinalReviewSection` is sufficiently bounded for reflected criticism without becoming a generic path system;
 5. whether insufficient evidence with existing alternatives should always require at least one unresolved question;
