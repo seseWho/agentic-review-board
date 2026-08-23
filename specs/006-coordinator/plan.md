@@ -79,11 +79,11 @@ Ranking SHALL use explicit positions and exact alternative identity. Slice 6 SHA
 
 The model proposes an order; deterministic validation checks the order is complete and internally consistent.
 
-### 2.6 One ranking structure for one or many alternatives
+### 2.6 Preserve the accepted alternative cardinality
 
-One alternative SHALL use the same ranking entry structure at position 1. This is an explicit evaluation, not a fabricated comparison, and does not imply automatic preference.
+`SolutionAlternatives` already permits exactly 0, 2, or 3 alternatives. Slice 6 SHALL preserve that upstream contract.
 
-Zero alternatives SHALL produce an empty ranking and `INSUFFICIENT_EVIDENCE`.
+Zero alternatives SHALL produce an empty ranking and `INSUFFICIENT_EVIDENCE`. Two or three alternatives SHALL use one complete ranking structure. A one-alternative state is invalid upstream and SHALL NOT be added as a Coordinator case.
 
 ### 2.7 Extend explicitly, not generically
 
@@ -177,8 +177,9 @@ The complete ranking rules depend on upstream alternative count:
 | Upstream alternatives | Required ranking |
 |---:|---|
 | 0 | empty |
-| 1 | exactly the sole alternative at position 1 |
 | 2–3 | every alternative exactly once at positions 1…N |
+
+A count of 1 remains invalid under the accepted `SolutionAlternatives` contract and is not widened by Slice 6.
 
 No ties, gaps, duplicates, omissions, or unknown alternatives are valid.
 
@@ -532,7 +533,7 @@ Test independently:
 - ranking positions and local invariants;
 - recommendation outcome/preferred alternative consistency;
 - mandatory conclusion rationale, next validation step, confidence, and decision-support notice;
-- zero-, one-, and multi-alternative structurally representable states;
+- zero-, two-, and three-alternative structurally representable states;
 - no numeric scoring/probability fields;
 - no replacement alternative or risk structures.
 
@@ -543,7 +544,7 @@ Use deterministic recording/fake `LLMPort` tests for:
 - exact role and five-artifact serialization;
 - valid multi-alternative recommendation;
 - valid insufficient-evidence outcomes;
-- zero and one alternatives;
+- zero, two, and three alternatives;
 - exact ranking completeness;
 - alternative and risk ID resolution;
 - unresolved-question references;
@@ -735,7 +736,7 @@ The implementation is ready for final review when:
 
 1. approved `FinalReview` and Coordinator contracts are implemented;
 2. contextual validation resolves every required generated reference exactly;
-3. ranking and recommendation invariants hold for zero, one, and multiple alternatives;
+3. ranking and recommendation invariants hold for zero, two, and three alternatives while one alternative remains invalid upstream;
 4. every material Critic criticism is reflected or explicitly dismissed;
 5. Coordinator transitions enforce exact five-object provenance;
 6. successful orchestration yields the sole valid Review COMPLETED shape;
@@ -752,7 +753,7 @@ Review shall confirm:
 
 1. production filenames and responsibility boundaries;
 2. proposed participant method `Coordinator.coordinate(...)`;
-3. one ranking structure for one and multiple alternatives;
+3. preservation of the accepted 0/2/3 alternative cardinality and one ranking structure for two or three alternatives;
 4. exact two-value recommendation outcome;
 5. Coordinator-specific reference direction for risks, unresolved questions, and Critic disposition;
 6. mandatory decision-support notice as a fixed trusted application value represented in `FinalReview`;
