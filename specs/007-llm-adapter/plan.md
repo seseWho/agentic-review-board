@@ -112,7 +112,7 @@ Rationale:
 - avoids creating a project-specific generic transport interface;
 - preserves standard proxy and certificate environment support at the infrastructure boundary.
 
-The adapter will receive or own an `httpx.Client` according to the lifecycle decision finalized in data-model review. Tests shall use `httpx.MockTransport`; they shall not monkey-patch global request functions.
+A composition-owned `ConfiguredReviewRuntime` context manager will create and own one shared `httpx.Client`. All configured adapters use that client, while each request supplies its own endpoint, optional authorization header, model, and timeout. Exiting the runtime closes the client and its connection pool. Tests shall construct the runtime/client with `httpx.MockTransport`; they shall not monkey-patch global request functions.
 
 This material provider integration decision requires a focused ADR before implementation: **ADR-0002 — Direct HTTP for OpenAI-Compatible Model Access**.
 
@@ -127,7 +127,7 @@ The plan requires two separate concepts:
 1. **profile definitions** — how to reach one endpoint/model;
 2. **participant assignments** — which named profile each of the five roles uses.
 
-The external representation shall keep secrets separate from non-secret profile metadata. The data-model phase will choose the smallest explicit environment/composition representation; it shall not add YAML, a configuration framework, provider discovery, or committed secret files.
+The external representation is one optional non-secret JSON configuration file selected through `ARB_LLM_CONFIG_PATH`. It contains named profile metadata, five participant assignments, and—where authentication is needed—the name of an environment variable holding the API key. It never contains the key itself. Tests and embedding code may construct the same configuration objects programmatically without a file. No YAML, `.env` loader, configuration framework, provider discovery, or committed secret file is introduced.
 
 ### 3.3 Optional authentication
 
@@ -196,11 +196,11 @@ src/agentic_review_board/
     ├── __init__.py
     └── llm/
         ├── __init__.py
-        ├── config.py              # immutable profiles, modes, assignments/config loading
+        ├── config.py              # immutable raw/resolved profiles, assignments, JSON/env loading
         ├── errors.py              # safe provider-neutral adapter errors
-        ├── prompts.py             # five explicit provider-neutral role instructions
+        ├── prompts.py             # five explicit semantics + output-model JSON schemas
         ├── openai_compatible.py   # synchronous LLMPort adapter
-        └── composition.py         # smallest complete five-participant wiring helper
+        └── composition.py         # ConfiguredReviewRuntime and five-participant wiring
 ```
 
 Expected test changes:
@@ -228,8 +228,9 @@ Expected documentation/configuration changes:
 docs/adr/
 └── ADR-0002-direct-http-openai-compatible-model-access.md
 
+config/llm.example.json           # committed non-secret multi-profile example
 README.md                         # configuration and opt-in smoke instructions
-pyproject.toml                    # constrained httpx dependency and smoke marker policy
+pyproject.toml                    # constrained httpx dependency and default smoke exclusion
 specs/007-llm-adapter/
 ├── spec.md
 ├── plan.md
@@ -245,15 +246,23 @@ Final filenames may be refined in data-model review. Responsibility boundaries s
 
 ### 5.1 Profile definition
 
-The provisional profile shape is:
+The configuration uses two stages:
 
 ```text
-LLMProfile
+RawLLMProfile
 - name
 - base_url
 - model
-- api_key?
+- api_key_env?              # environment-variable name, never the secret
 - timeout_seconds
+- structured_output_mode
+
+ResolvedLLMProfile
+- name
+- base_url
+- model
+- api_key?                  # runtime-only protected secret value
+- timeout: httpx.Timeout    # same finite value for connect/read/write/pool
 - structured_output_mode
 ```
 
@@ -262,13 +271,15 @@ Expected invariants:
 - immutable;
 - extra fields forbidden if represented with Pydantic;
 - name, base URL, and model non-blank;
-- API key absent or non-blank, never coerced to a bearer with empty content;
-- timeout finite and positive;
+- `api_key_env` absent or a valid non-blank environment-variable name;
+- a referenced credential variable must exist and contain a non-blank value;
+- resolved API key protected from repr/string/model serialization and never coerced to a bearer with empty content;
+- timeout finite and positive and applied equally to connect, read, write, and pool phases;
 - mode from the exact closed set;
 - no network access during construction;
 - secret excluded from safe string/repr output.
 
-The exact URL validation policy must remain compatible with loopback hosts and HTTP local development endpoints while rejecting unusable values. It shall not assume HTTPS for local servers.
+URL validation must accept `http` and `https`, including loopback/local development hosts, and reject credentials embedded in the URL, query strings, fragments, unsupported schemes, and unusable empty hosts. The configured URL represents the API base (for example `http://localhost:11434/v1`); it must not already end in `/chat/completions`. A single trailing slash is normalized only for endpoint joining. HTTPS is not required for loopback/local profiles.
 
 ### 5.2 Participant assignment
 
@@ -296,29 +307,81 @@ The assignment belongs to composition configuration, not Review domain state.
 
 ### 5.3 External configuration and secrets
 
-Data-model review shall select an exact runtime representation satisfying:
+The exact JSON document shape is:
 
-- non-secret profile metadata can be documented and reproduced;
-- API keys are supplied through environment variables or explicit runtime secret injection;
-- profiles without keys work locally;
-- multiple credentials can coexist without one global `LLM_API_KEY`;
-- committed examples contain placeholders only;
-- no `.env` loader dependency is required;
-- configuration loading performs no network call.
+```json
+{
+  "profiles": {
+    "local": {
+      "base_url": "http://localhost:11434/v1",
+      "model": "local-model",
+      "timeout_seconds": 60.0,
+      "structured_output_mode": "PROMPT_ONLY"
+    },
+    "openai": {
+      "base_url": "https://api.openai.com/v1",
+      "model": "configured-openai-model",
+      "api_key_env": "OPENAI_API_KEY",
+      "timeout_seconds": 60.0,
+      "structured_output_mode": "JSON_OBJECT"
+    }
+  },
+  "assignments": {
+    "analyst": "local",
+    "solution_architect": "openai",
+    "risk_reviewer": "local",
+    "critic": "openai",
+    "coordinator": "openai"
+  }
+}
+```
 
-The implementation shall not create an encrypted vault, secrets manager integration, persistent settings database, or UI configuration editor.
+`ARB_LLM_CONFIG_PATH` selects this file for the documented runtime loader. The file is optional for embedding/programmatic construction, not optional when that loader is invoked. Unknown top-level, profile, or assignment fields fail closed. Profile names and references resolve exactly.
 
-### 5.4 HTTP client environment behavior
+`api_key_env` names an environment variable; its value is resolved at runtime and never read from the JSON file. Profiles without `api_key_env` are unauthenticated. Multiple profiles may reference the same credential variable or different variables. The committed example contains only placeholder model/profile data and credential-variable names, never credentials.
 
-The direct HTTP client may honor standard runtime proxy and certificate environment variables. Slice 7 will not create a custom proxy, certificate store, or corporate-network abstraction.
+Configuration loading performs no network call and does not mutate process environment. No `.env` dependency, encrypted vault, secrets-manager integration, persistent settings database, or UI configuration editor is introduced.
 
-Any explicit custom CA/profile fields beyond the standard client environment require evidence and separate review.
+### 5.4 HTTP client policy and environment behavior
+
+`ConfiguredReviewRuntime` creates one synchronous client with a known policy:
+
+```python
+httpx.Client(
+    trust_env=True,
+    follow_redirects=False,
+    transport=optional_injected_transport,
+)
+```
+
+It sets no global authorization header, application cookie, base URL, or disabled timeout. Each adapter request supplies its own complete URL, optional authorization header, and explicit `httpx.Timeout`.
+
+`trust_env=True` intentionally honors standard `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`, `SSL_CERT_FILE`, and `SSL_CERT_DIR` environment behavior. Slice 7 will not create a custom proxy, certificate store, or corporate-network abstraction. Any profile-specific CA or proxy fields require demonstrated need and separate review.
+
+The runtime implements `__enter__`/`__exit__` (and explicit `close`) and is the sole owner responsible for closing the shared client. Adapters never close it per request.
 
 ---
 
 ## 6. Role Instruction Strategy
 
 Each instruction must include only application-controlled semantic requirements already approved for its role.
+
+Every role request combines two sources owned by the application:
+
+1. an explicit role-specific semantic instruction;
+2. the current output model's JSON Schema generated with Pydantic `model_json_schema()` and serialized deterministically.
+
+The exact mappings are closed:
+
+| Role | Output model |
+|---|---|
+| `analyst` | `ProblemAnalysis` |
+| `solution_architect` | `SolutionAlternatives` |
+| `risk_reviewer` | `RiskAssessment` |
+| `critic` | `CriticalReview` |
+| `coordinator` | `FinalReview` |
+
+Infrastructure may import these inward-facing domain contract types to obtain schemas. It shall not reproduce them as parallel prompt-only schemas. Generated schema guides output shape but does not perform trust validation or encode all contextual reference rules.
 
 Common mechanical requirements may be shared:
 
@@ -354,9 +417,9 @@ Require the current `FinalReview` structure, complete explicit ranking when appl
 
 ### 6.6 Contract source of truth
 
-Prompt instructions may describe current JSON shapes, but they do not become trusted schemas or replace participant validation. If a role contract changes later, prompt and deterministic contract tests must change together.
+The Pydantic output models are the sole structural source of truth. Prompt instructions add role semantics, prohibited behavior, contextual-reference guidance, and direct-JSON requirements but do not reproduce a second structural model hierarchy.
 
-The data-model phase shall determine the smallest maintainable way to provide these role-specific JSON shape instructions without duplicating domain semantics into a second executable model hierarchy.
+If a role contract changes, its generated schema changes automatically. Deterministic tests shall prove each exact role selects the correct output model/schema and that participant validation remains authoritative.
 
 ---
 
@@ -371,10 +434,12 @@ For one call:
 5. build headers with JSON content type and optional bearer authentication;
 6. build messages separating application instruction from payload data;
 7. add configured model;
-8. add JSON response format only for `JSON_OBJECT`;
-9. issue exactly one synchronous POST with the configured finite timeout.
+8. set `n` to exactly `1`;
+9. for `JSON_OBJECT`, add exactly `"response_format": {"type": "json_object"}`;
+10. for `PROMPT_ONLY`, omit `response_format` completely;
+11. issue exactly one synchronous POST with `httpx.Timeout(timeout_seconds)`, applying the same finite value to connect, read, write, and pool.
 
-No temperature, token limit, tools, streaming, seed, retry, or provider-specific option is introduced unless separately approved during plan review. Omitting sampling controls lets the endpoint use its configured/default behavior and avoids pretending one setting is portable across all target models.
+No temperature, token limit, tools, streaming, seed, retry, redirect following, or provider-specific option is introduced unless separately approved during a future artifact review. Omitting sampling controls lets the endpoint use its configured/default behavior and avoids pretending one setting is portable across all target models.
 
 ---
 
@@ -431,16 +496,19 @@ A valid JSON object is returned even if it later violates `ProblemAnalysis`, `So
 
 ## 9. Composition Strategy
 
-### 9.1 Resolve before Review execution
+### 9.1 Runtime ownership and resolution before Review execution
+
+`ConfiguredReviewRuntime` is the composition result and context-managed resource boundary. It exposes the ready `ReviewOrchestrator` and safe non-secret profile identities needed by smoke verification; it does not expose credentials or mutable assignment state.
 
 Composition shall:
 
 1. validate all profiles;
 2. resolve all five exact participant assignments;
-3. construct or reuse configured adapter instances;
-4. inject one `LLMPort` into each existing participant;
-5. construct the existing `ReviewOrchestrator`;
-6. return a ready, stateless execution graph.
+3. create the single policy-controlled `httpx.Client`;
+4. construct one adapter per referenced profile and reuse it for repeated assignments;
+5. inject one `LLMPort` into each existing participant;
+6. construct the existing `ReviewOrchestrator`;
+7. return a ready, stateless `ConfiguredReviewRuntime` that owns and closes the client.
 
 Failure in profile or assignment resolution prevents Review start.
 
@@ -468,20 +536,20 @@ A different assignment requires a separately composed orchestrator; it does not 
 
 Implementation proceeds in small red-green-refactor blocks:
 
-1. profile and mode contracts;
+1. raw/resolved profile, JSON loader, assignment, mode, and secret-resolution contracts;
 2. safe error contracts;
-3. exact role instructions;
+3. exact role semantics plus Pydantic-generated schema mapping;
 4. request construction with optional authentication and both modes;
 5. response envelope and direct JSON parsing;
-6. transport/HTTP sanitization;
+6. transport/HTTP sanitization and runtime client closure;
 7. complete participant assignment and mixed composition;
 8. `LLMPort` contract and architecture boundaries;
-9. opt-in live smoke path;
+9. opt-in marker-controlled live smoke path;
 10. full regression and quality gates.
 
 ### 10.2 Deterministic adapter tests
 
-Use `httpx.MockTransport` or its smallest supported equivalent to inspect:
+Use an injected `httpx.MockTransport` in the runtime-owned client to inspect:
 
 - method;
 - URL;
@@ -516,11 +584,14 @@ At least one valid JSON object that is semantically invalid shall demonstrate th
 
 ### 10.5 Live smoke tests
 
+Register the `live_llm` pytest marker and exclude it in default project pytest configuration with `-m "not live_llm"`. Document an explicit command using `-m live_llm`; CI never supplies live configuration or overrides the default exclusion. A live test also skips safely when `ARB_LLM_CONFIG_PATH` or a referenced credential is absent.
+
 Live tests are opt-in and excluded from default pytest and CI. They verify each selected profile independently using synthetic non-sensitive content and assert only:
 
 - endpoint can be called;
 - one direct JSON object is returned;
-- safe profile identity identifies a failure.
+- safe profile identity identifies a failure;
+- the runtime closes its HTTP client after verification.
 
 They do not assert fixed latency, stochastic variation, multilingual quality, code generation, reasoning phrases, or full pipeline quality.
 
@@ -600,11 +671,14 @@ It shall record:
 
 - need to support local, remote, and mixed model assignments;
 - direct `httpx` adapter versus OpenAI SDK versus multiple provider SDKs;
+- JSON metadata file plus environment-resolved credentials;
 - one compatible wire contract;
 - optional authentication;
 - explicit structured-output capability;
 - immutable per-instance profiles;
 - composition instead of dynamic routing;
+- runtime ownership and explicit client closure;
+- Pydantic-generated output schemas plus explicit semantic prompts;
 - consequences for testing, compatibility, proxy/certificate behavior, and future native adapters.
 
 The ADR does not authorize provider routing, fallbacks, or native provider integrations.
@@ -681,16 +755,19 @@ The plan is ready for data-model design when review confirms:
 
 1. unchanged `LLMPort`;
 2. direct synchronous `httpx` strategy;
-3. one immutable profile per adapter instance;
-4. explicit complete five-participant assignment;
-5. local, remote, and mixed composition support;
-6. optional bearer authentication;
-7. exact `JSON_OBJECT` and `PROMPT_ONLY` behavior;
-8. five shared role-specific instructions separated from transport;
-9. direct JSON-object parsing with no repair;
-10. closed safe adapter errors;
-11. deterministic `MockTransport` testing and opt-in per-profile smoke tests;
-12. focused ADR-0002 before implementation;
-13. no dynamic router, fallback, retries, UI, persistence, or generic framework.
+3. exact JSON metadata plus environment-resolved secret strategy;
+4. context-managed runtime ownership of one policy-controlled shared client;
+5. one immutable resolved profile per adapter instance;
+6. explicit complete five-participant assignment;
+7. local, remote, and mixed composition support;
+8. optional bearer authentication;
+9. exact `n=1`, `JSON_OBJECT`, and `PROMPT_ONLY` request behavior;
+10. five explicit semantic instructions combined with Pydantic-generated output schemas;
+11. direct JSON-object parsing with no repair;
+12. one scalar timeout applied to connect/read/write/pool;
+13. closed safe adapter errors;
+14. deterministic `MockTransport` testing and marker-controlled opt-in per-profile smoke tests;
+15. focused ADR-0002 before implementation;
+16. no dynamic router, fallback, retries, UI, persistence, or generic framework.
 
 No `data-model.md`, `tasks.md`, ADR, or implementation shall be created until this plan is reviewed, corrected where necessary, and explicitly approved.
