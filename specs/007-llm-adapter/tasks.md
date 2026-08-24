@@ -497,6 +497,16 @@ Task notation:
 ### Phase 10 final evidence
 
 - T143 local default suite with live authorization, config path, and example credential explicitly unset: **1008 passed, 1 skipped**. The sole skip is the opt-in live smoke test; no live endpoint was contacted.\n- T144 final `ruff check .`: **passed**.\n- T145 final strict mypy with a fresh isolated cache: **passed**, no issues in 59 source files.\n- T146 final `pip check`: **passed**, no broken requirements.
+- T147 CI run #147 exposed one whitespace-sensitive prompt test on both Python versions; the test-only correction commit `029f072ec3ba51f0f44611e9e8a98a92fcb7f62f` normalizes semantic whitespace. CI run #148 then passed install, `pip check`, pytest, Ruff, and mypy on Python **3.12** and **3.13**, with no live secrets configured.
+- T148 dependency diff against `main`: the only runtime addition is constrained `httpx>=0.28,<0.29`; the pytest marker is test configuration only and no other runtime/dev dependency changed.
+- T149 architecture suite: **12 passed**. Scoped production scan found no credential value, secret-bearing logging, prompt/response logging, raw provider-error interpolation, retry/sleep, fallback, routing/registry, provider SDK, persistence/RAG/tool/UI capability, or production import from `tests`; matches were limited to legitimate URL parsing, response JSON parsing, and pre-existing domain reference fields.
+- T150 fixed-error verification: **12 passed**. All nine adapter error classes retain the exact approved messages in `errors.py` and dynamic nested details are not copied.
+- T151 configuration/selection/smoke verification: **34 passed**. Every declared profile validates structurally; only exact selected profiles resolve credentials, create/reuse adapters, and smoke-test. The committed mixed example passes the real loader/resolver without exposing its synthetic credential.
+- T152 participant/orchestration integration verification: **12 passed**. One-model/mixed success, participant-owned semantic validation, selected-provider failure, fixed execution order, and no fallback retain existing Review semantics.
+- T153 runtime lifecycle verification: **21 passed**. Atomic construction, defensive cleanup, idempotent close, context exit, use-after-close rejection, fixed assignments, and absence of retained Review/prompt/response data remain verified.
+- T154 compare `main...007-llm-adapter` changes no existing domain, application, participant, port, lifecycle, or orchestrator file; contract and architecture tests additionally confirm unchanged `LLMPort`, participant validation ownership, dependency direction, and execution behavior.
+- T155 reconciliation covers spec, plan, data model, ADR-0002, task evidence, and all **33 changed files**. Implementation remains within approved local/remote/mixed direct-HTTP scope; no unresolved artifact mismatch or prohibited expansion remains.
+- T156 remains the only pending task and requires explicit approval before marking the draft PR ready or merging.
 
 **Goal:** Close Slice 7 with deterministic evidence and no prohibited expansion.
 
@@ -504,15 +514,15 @@ Task notation:
 - [X] T144 Run `ruff check .`.
 - [X] T145 Run strict `mypy`.
 - [X] T146 Run `pip check`.
-- [ ] T147 Verify GitHub Actions passes on all configured Python versions without secrets.
-- [ ] T148 Review dependency diff and confirm HTTPX is the only new justified runtime dependency.
-- [ ] T149 Search changed production code, runtime dependencies, and executable modules—not canonical docs—for credentials, secret values, full prompt/response logging, raw provider-error interpolation, retries, sleeps, fallback, routing, provider SDKs, and test imports.
-- [ ] T150 Verify every adapter error message exactly matches the approved safe table.
-- [ ] T151 Verify all declared profiles validate structurally while only selected profiles resolve secrets, instantiate adapters, and smoke-test; verify the committed example through the real loader.
-- [ ] T152 Verify one-model and mixed-model deterministic end-to-end paths preserve existing participant validation and Review failure semantics.
-- [ ] T153 Verify runtime construction/close/use-after-close behavior and absence of retained Review data.
-- [ ] T154 Verify no modification to `LLMPort`, participant signatures, domain outputs, lifecycle shapes, or orchestrator execution order.
-- [ ] T155 Update completed task checkboxes and reconcile implementation against spec, plan, data model, ADR-0002, and actual changed files.
+- [X] T147 Verify GitHub Actions passes on all configured Python versions without secrets.
+- [X] T148 Review dependency diff and confirm HTTPX is the only new justified runtime dependency.
+- [X] T149 Search changed production code, runtime dependencies, and executable modules—not canonical docs—for credentials, secret values, full prompt/response logging, raw provider-error interpolation, retries, sleeps, fallback, routing, provider SDKs, and test imports.
+- [X] T150 Verify every adapter error message exactly matches the approved safe table.
+- [X] T151 Verify all declared profiles validate structurally while only selected profiles resolve secrets, instantiate adapters, and smoke-test; verify the committed example through the real loader.
+- [X] T152 Verify one-model and mixed-model deterministic end-to-end paths preserve existing participant validation and Review failure semantics.
+- [X] T153 Verify runtime construction/close/use-after-close behavior and absence of retained Review data.
+- [X] T154 Verify no modification to `LLMPort`, participant signatures, domain outputs, lifecycle shapes, or orchestrator execution order.
+- [X] T155 Update completed task checkboxes and reconcile implementation against spec, plan, data model, ADR-0002, and actual changed files.
 - [ ] T156 [GATE] Perform final architectural review and stop for explicit approval before PR readiness or merge.
 
 ---
