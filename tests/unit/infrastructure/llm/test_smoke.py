@@ -26,6 +26,12 @@ class TrackingTransport(httpx.BaseTransport):
         self.closed = True
 
 
+class FailingCloseTransport(TrackingTransport):
+    def close(self) -> None:
+        self.closed = True
+        raise RuntimeError("secret-cleanup-marker")
+
+
 def smoke_config() -> RawLLMRuntimeConfig:
     return RawLLMRuntimeConfig.model_validate(
         {
@@ -216,3 +222,41 @@ def test_smoke_ignores_missing_unselected_profile_credential() -> None:
 
     assert verified_names == ("local", "remote")
     assert attempts == 2
+
+
+def test_smoke_preserves_safe_provider_failure_when_cleanup_also_fails() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("secret-provider-marker", request=request)
+
+    transport = FailingCloseTransport(handler)
+
+    with pytest.raises(LLMTransportError) as captured:
+        verify_selected_profiles(
+            smoke_config(),
+            {"REMOTE_KEY": "selected-secret"},
+            transport=transport,
+        )
+
+    assert str(captured.value) == "LLM transport failed"
+    assert "cleanup" not in str(captured.value)
+    assert transport.closed is True
+
+
+def test_smoke_maps_cleanup_only_failure_to_safe_transport_error() -> None:
+    transport = FailingCloseTransport(
+        lambda _request: httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": "{}"}}]},
+        )
+    )
+
+    with pytest.raises(LLMTransportError) as captured:
+        verify_selected_profiles(
+            smoke_config(),
+            {"REMOTE_KEY": "selected-secret"},
+            transport=transport,
+        )
+
+    assert str(captured.value) == "LLM transport failed"
+    assert "secret-cleanup-marker" not in str(captured.value)
+    assert transport.closed is True
