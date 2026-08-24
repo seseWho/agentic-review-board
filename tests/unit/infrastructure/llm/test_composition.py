@@ -10,6 +10,7 @@ from agentic_review_board.infrastructure.llm.composition import (
     _create_http_client,
 )
 
+from agentic_review_board.application.orchestrator import ReviewOrchestrator
 from agentic_review_board.infrastructure.llm import composition
 from agentic_review_board.infrastructure.llm.config import RawLLMRuntimeConfig, ResolvedLLMProfile
 
@@ -303,3 +304,61 @@ def test_supports_mixed_local_no_key_and_remote_key_profiles(
     remote_key = created_profiles["remote"].api_key
     assert remote_key is not None
     assert remote_key.get_secret_value() == "remote-secret-marker"
+
+
+def test_constructs_existing_orchestrator_with_exact_five_argument_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = runtime_config(
+        profiles={
+            "shared": profile_data(
+                base_url="http://localhost:11434/v1",
+                model="shared-model",
+            )
+        },
+        assignments={
+            "analyst": "shared",
+            "solution_architect": "shared",
+            "risk_reviewer": "shared",
+            "critic": "shared",
+            "coordinator": "shared",
+        },
+    )
+    _, _, participant_adapters = record_runtime_composition(monkeypatch)
+    orchestrator_calls: list[tuple[object, ...]] = []
+
+    def construct_real_orchestrator(
+        analyst: object,
+        solution_architect: object,
+        risk_reviewer: object,
+        critic: object,
+        coordinator: object,
+    ) -> ReviewOrchestrator:
+        participants = (
+            analyst,
+            solution_architect,
+            risk_reviewer,
+            critic,
+            coordinator,
+        )
+        orchestrator_calls.append(participants)
+        return ReviewOrchestrator(*participants)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(
+        composition,
+        "ReviewOrchestrator",
+        construct_real_orchestrator,
+    )
+
+    runtime = ConfiguredReviewRuntime.from_config(config, {})
+    runtime.close()
+
+    assert orchestrator_calls == [
+        (
+            participant_adapters["analyst"],
+            participant_adapters["solution_architect"],
+            participant_adapters["risk_reviewer"],
+            participant_adapters["critic"],
+            participant_adapters["coordinator"],
+        )
+    ]
