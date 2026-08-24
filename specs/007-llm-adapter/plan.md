@@ -2,7 +2,7 @@
 
 **Branch**: `007-llm-adapter`  
 **Specification**: `specs/007-llm-adapter/spec.md` — Approved  
-**Status**: Draft — pending review and approval before data-model design
+**Status**: Approved — reviewed against specification and existing architecture; ready for data-model design
 
 ## 1. Objective
 
