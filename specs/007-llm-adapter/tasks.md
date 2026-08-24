@@ -417,7 +417,7 @@ Task notation:
 ### 10.1 Tests/documentation first
 
 - [X] T128 [TEST] Add failing tests for registered `live_llm` marker and dual authorization: skip before configuration/network unless both explicit `--run-live-llm` and exact `ARB_RUN_LIVE_LLM=1` are present; also skip safely when the opt-in is enabled but `ARB_LLM_CONFIG_PATH` is absent.
-- [ ] T129 [P] [TEST] Add failing smoke-runner tests proving only selected profiles are checked once each with one documented canonical synthetic role/payload contract and no complete Review.
+- [X] T129 [P] [TEST] Add failing smoke-runner tests proving only selected profiles are checked once each with one documented canonical synthetic role/payload contract and no complete Review.
 - [ ] T130 [P] [TEST] Add failing tests for safe profile-name diagnostics, no credential/endpoint/body leakage, runtime closure after success or failure, selected-profile missing/invalid credential failure, and irrelevance of unselected-profile credentials.
 - [ ] T131 [P] [TEST] Add failing checks proving smoke verification does not run a complete Review or assert latency/model quality.
 - [ ] T132 [DOC] Draft `config/llm.example.json` with local and remote placeholders, exact assignments, and credential-variable names only.
@@ -431,6 +431,9 @@ Task notation:
 - The probe body executes when authorization is absent, the explicit option is currently rejected, and the marker is unregistered; these are the exact missing T135 behaviors.
 - The probe uses only a temporary sentinel file. No LLM configuration is loaded and no network request is made.
 - Ruff and strict mypy pass for both new test files.
+- T129 contract commit: `effd941660177a1f49386660d4b9984f519696e7`.
+- T129 focused collection stops with the expected `ModuleNotFoundError` for the intentionally absent `infrastructure.llm.smoke` runner.
+- The approved contract verifies the exact selected set once each in stable name order and uses only role `analyst` with payload `{"description": "Live LLM connectivity smoke check."}`; no `Review` is constructed.
 
 ### 10.2 Minimal implementation
 
