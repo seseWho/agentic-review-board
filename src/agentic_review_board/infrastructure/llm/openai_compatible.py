@@ -80,11 +80,12 @@ class OpenAICompatibleLLMAdapter:
     @staticmethod
     def _serialize_payload(payload: Mapping[str, object]) -> str:
         try:
+            payload_snapshot = dict(payload)
             return json.dumps(
-                payload,
+                payload_snapshot,
                 ensure_ascii=False,
                 separators=(",", ":"),
                 sort_keys=True,
             )
-        except (TypeError, ValueError) as error:
+        except Exception as error:
             raise LLMPayloadSerializationError() from error
