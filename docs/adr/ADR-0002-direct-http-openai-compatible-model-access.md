@@ -1,6 +1,6 @@
 # ADR-0002 — Direct HTTP for OpenAI-Compatible Model Access
 
-**Status:** Proposed  
+**Status:** Accepted  
 **Date:** 2026-08-24  
 **Decision owners:** Agentic Review Board maintainers  
 **Related feature:** `specs/007-llm-adapter/`  
