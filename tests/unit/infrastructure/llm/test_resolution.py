@@ -81,6 +81,17 @@ class RecordingEnvironment(Mapping[str, str]):
         return len(self._values)
 
 
+class BrokenEnvironment(Mapping[str, str]):
+    def __getitem__(self, key: str) -> str:
+        raise RuntimeError("sensitive environment backend detail")
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(())
+
+    def __len__(self) -> int:
+        return 0
+
+
 def resolved_profiles(
     assignment: ResolvedParticipantLLMAssignment,
 ) -> tuple[ResolvedLLMProfile, ...]:
@@ -172,6 +183,27 @@ def test_selected_invalid_credential_fails_closed(
 
     with pytest.raises(LLMConfigurationError, match=r"^LLM configuration invalid$"):
         resolve_llm_runtime_config(config, environment)
+
+
+def test_environment_backend_failure_is_mapped_to_safe_error() -> None:
+    config = runtime_config(
+        profiles={"remote": profile_data(api_key_env="REMOTE_KEY")},
+        assignments=assignment_data(
+            analyst="remote",
+            solution_architect="remote",
+            risk_reviewer="remote",
+            critic="remote",
+            coordinator="remote",
+        ),
+    )
+
+    with pytest.raises(
+        LLMConfigurationError, match=r"^LLM configuration invalid$"
+    ) as caught:
+        resolve_llm_runtime_config(config, BrokenEnvironment())
+
+    assert "sensitive environment backend detail" not in str(caught.value)
+    assert "sensitive environment backend detail" not in repr(caught.value)
 
 
 def test_unselected_credential_is_never_read_or_required() -> None:
@@ -270,6 +302,20 @@ def test_scalar_timeout_expands_to_all_httpx_phases(timeout: float) -> None:
     assert resolved.analyst.timeout.read == timeout
     assert resolved.analyst.timeout.write == timeout
     assert resolved.analyst.timeout.pool == timeout
+
+
+def test_mutating_obtained_timeout_does_not_degrade_resolved_profile() -> None:
+    resolved = resolve_llm_runtime_config(runtime_config(), {})
+
+    obtained = resolved.analyst.timeout
+    obtained.read = None
+
+    fresh = resolved.analyst.timeout
+    assert fresh is not obtained
+    assert fresh.connect == 30.0
+    assert fresh.read == 30.0
+    assert fresh.write == 30.0
+    assert fresh.pool == 30.0
 
 
 def test_repeated_assignments_reuse_exact_resolved_profile_object() -> None:
