@@ -238,6 +238,20 @@ def test_invalid_or_non_object_structured_content_fails_closed(content: str) -> 
         invoke(response_with_json(envelope(content)))
 
 
+@pytest.mark.parametrize(
+    "content",
+    ['{"value":NaN}', '{"value":Infinity}', '{"value":-Infinity}'],
+)
+def test_non_json_numeric_constant_in_structured_content_fails_closed(
+    content: str,
+) -> None:
+    with pytest.raises(
+        LLMStructuredContentError,
+        match=r"^LLM structured content invalid$",
+    ):
+        invoke(response_with_json(envelope(content)))
+
+
 def test_direct_json_allows_only_parser_whitespace_around_complete_object() -> None:
     result = invoke(response_with_json(envelope(' \n {"value": 1} \t ')))
     assert result == {"value": 1}
