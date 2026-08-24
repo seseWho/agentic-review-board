@@ -472,6 +472,7 @@ Task notation:
 - Fully activated command against the non-secret example with its selected remote credential deliberately absent: **1 failed, 1008 deselected**, before client construction, with public output limited to `LLM configuration invalid`.
 - The first activated run exposed pytest's chained exception context (endpoint/model/environment metadata); the permanent regression test drove removal of that context via a fixed-message, `pytrace=False` boundary outside the caught exception context.
 - No suitable real endpoint/configuration was supplied, so no positive live network call was attempted and no placeholder endpoint was contacted.
+- T141 quality verification: Ruff **passed**; strict mypy **passed** over 58 source files; `pip check` **passed** with no broken requirements.
 
 ### 10.2 Minimal implementation
 
@@ -481,7 +482,7 @@ Task notation:
 - [X] T138 Finalize the non-secret example configuration and README commands.
 - [X] T139 Run default pytest and prove live tests perform no configuration loading or network access and report skipped.
 - [X] T140 Run live smoke only with `ARB_RUN_LIVE_LLM=1 pytest -m live_llm --run-live-llm` and explicit suitable configuration; absence of the opt-in or config path may skip, but invalid selected-profile credentials after activation must fail.
-- [ ] T141 Run Ruff, mypy strict, and `pip check`.
+- [X] T141 Run Ruff, mypy strict, and `pip check`.
 - [ ] T142 [GATE] Review opt-in behavior, example hygiene, operator instructions, diagnostic safety, and regressions; stop before final closure.
 
 ---
