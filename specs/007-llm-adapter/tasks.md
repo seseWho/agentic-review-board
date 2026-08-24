@@ -397,6 +397,8 @@ Task notation:
 - T123/T124 reviewed as no-op: existing exports and type annotations satisfy the approved contracts, and no infrastructure-to-core leakage was found; no production files changed.
 - T125 focused rerun: `pytest -q tests/contract tests/integration tests/architecture` — **24 passed**.
 - T126 full verification rerun: **988 passed**; Ruff **passed**; strict mypy **passed** over 50 source files; `pip check` **passed**.
+- T127 architectural review found no blocking issue: core layers remain infrastructure-independent, `LLMPort` and participant validation ownership are unchanged, mixed local/remote composition preserves existing orchestration failure semantics, and no retry, fallback, routing, registry, persistence, RAG, tools, UI, or provider SDK was introduced.
+- T127 approved on 2026-08-24; Phase 9 tests/documentation-first work authorized.
 
 ### 9.2 Minimal completion
 
@@ -404,7 +406,7 @@ Task notation:
 - [X] T124 Correct any infrastructure-to-core leakage without changing existing domain/application/participant semantics.
 - [X] T125 Run focused Phase 8 tests to green.
 - [X] T126 Run full pytest, Ruff, mypy strict, and `pip check`.
-- [ ] T127 [GATE] Review unchanged core boundaries, mixed orchestration behavior, failure mapping, dependency direction, and regressions; stop before smoke/documentation.
+- [X] T127 [GATE] Review unchanged core boundaries, mixed orchestration behavior, failure mapping, dependency direction, and regressions; stop before smoke/documentation.
 
 ---
 
