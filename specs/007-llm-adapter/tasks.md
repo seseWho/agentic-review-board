@@ -458,12 +458,16 @@ Task notation:
 - The runner resolves selected profiles once, deduplicates by exact name, verifies them in sorted order through one canonical Analyst request each, and closes the shared client in `finally`.
 - Focused runner/architecture suites: **10 passed**; the real live smoke test is **skipped** by default before configuration loading.
 - Ruff and strict mypy pass over the T136 implementation and tests.
+- T137 adversarial cleanup-test commit: `391d670b2023124f24ca64e6be174669d93fdf5c`; production correction commit: `ff8cbddc851f81d95b35cfeec65ea4d2820f749d`.
+- Review found and corrected cleanup masking: a secondary close failure can no longer replace the safe primary provider error; a cleanup-only failure maps to fixed `LLMTransportError`.
+- The close attempt occurs on success, provider failure, reporting failure, and any other post-client-construction exit; live diagnostics receive only the exact safe profile name.
+- Focused result after correction: **12 passed, 1 skipped**; Ruff and strict mypy pass.
 
 ### 10.2 Minimal implementation
 
 - [X] T135 Register the `live_llm` marker and `--run-live-llm` through `pytest_addoption`; require both the explicit option and exact `ARB_RUN_LIVE_LLM=1`, without treating marker expressions or global `addopts` as authorization.
 - [X] T136 Implement the dual-authorized per-selected-profile smoke test/runner using the documented canonical synthetic role/payload, failing on invalid selected-profile configuration once explicitly enabled.
-- [ ] T137 Ensure smoke execution closes the runtime on every path and reports only safe profile identities.
+- [X] T137 Ensure smoke execution closes the runtime on every path and reports only safe profile identities.
 - [ ] T138 Finalize the non-secret example configuration and README commands.
 - [ ] T139 Run default pytest and prove live tests perform no configuration loading or network access and report skipped.
 - [ ] T140 Run live smoke only with `ARB_RUN_LIVE_LLM=1 pytest -m live_llm --run-live-llm` and explicit suitable configuration; absence of the opt-in or config path may skip, but invalid selected-profile credentials after activation must fail.
