@@ -14,6 +14,9 @@ from agentic_review_board.infrastructure.llm.config import (
     resolve_llm_runtime_config,
 )
 from agentic_review_board.infrastructure.llm.errors import LLMRuntimeClosedError
+from agentic_review_board.infrastructure.llm.http_client import (
+    _create_http_client as _build_http_client,
+)
 from agentic_review_board.infrastructure.llm.openai_compatible import (
     OpenAICompatibleLLMAdapter,
 )
@@ -29,16 +32,7 @@ __all__ = ("ConfiguredReviewRuntime",)
 def _create_http_client(
     transport: httpx.BaseTransport | None = None,
 ) -> httpx.Client:
-    if transport is None:
-        return httpx.Client(
-            trust_env=True,
-            follow_redirects=False,
-        )
-    return httpx.Client(
-        trust_env=True,
-        follow_redirects=False,
-        transport=transport,
-    )
+    return _build_http_client(transport)
 
 
 class ConfiguredReviewRuntime:
