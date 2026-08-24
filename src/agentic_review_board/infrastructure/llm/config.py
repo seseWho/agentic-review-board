@@ -6,6 +6,7 @@ import re
 from collections.abc import Mapping
 from enum import StrEnum
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -16,6 +17,7 @@ from agentic_review_board.infrastructure.llm.errors import LLMConfigurationError
 _ENVIRONMENT_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _PROFILE_NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*$")
 _CHAT_COMPLETIONS_SUFFIX = "/chat/completions"
+_INVALID_PERCENT_ESCAPE = re.compile(r"%(?![0-9A-Fa-f]{2})")
 
 
 class StructuredOutputMode(StrEnum):
@@ -45,13 +47,29 @@ class RawLLMProfile(BaseModel):
     def validate_base_url(cls, value: object) -> str:
         if not isinstance(value, str) or not value:
             raise ValueError("invalid base URL")
-        if any(ord(character) < 32 or ord(character) == 127 for character in value):
+        if (
+            any(
+                character.isspace()
+                or ord(character) < 32
+                or ord(character) == 127
+                for character in value
+            )
+            or "\\" in value
+            or value.endswith("//")
+            or _INVALID_PERCENT_ESCAPE.search(value) is not None
+        ):
             raise ValueError("invalid base URL")
 
-        parsed = urlsplit(value)
+        try:
+            parsed = urlsplit(value)
+            hostname = parsed.hostname
+            parsed.port
+        except ValueError as error:
+            raise ValueError("invalid base URL") from error
+
         if (
             parsed.scheme not in {"http", "https"}
-            or not parsed.hostname
+            or not hostname
             or parsed.username is not None
             or parsed.password is not None
             or parsed.query
@@ -121,7 +139,7 @@ class ParticipantLLMAssignment(BaseModel):
 class RawLLMRuntimeConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    profiles: dict[str, RawLLMProfile] = Field(min_length=1)
+    profiles: Mapping[str, RawLLMProfile] = Field(min_length=1)
     assignments: ParticipantLLMAssignment
 
     @field_validator("profiles", mode="before")
@@ -135,6 +153,13 @@ class RawLLMRuntimeConfig(BaseModel):
         ):
             raise ValueError("invalid profile name")
         return value
+
+    @field_validator("profiles")
+    @classmethod
+    def freeze_profiles(
+        cls, value: Mapping[str, RawLLMProfile]
+    ) -> Mapping[str, RawLLMProfile]:
+        return MappingProxyType(dict(value))
 
     @model_validator(mode="after")
     def validate_assignment_references(self) -> RawLLMRuntimeConfig:
