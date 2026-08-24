@@ -454,11 +454,15 @@ Task notation:
 - T135 gate commits: `721fb19febc96abadf34898b88d6c9dd3c817ceb`, `2ae5fbffec6093673cc72ed45db21d4815a901ea`.
 - Focused opt-in suite: **6 passed**. Live-marked items skip during collection unless the explicit option, exact environment value, and configuration-path presence all hold; collection reads no file and performs no request.
 - Ruff and strict mypy pass for the gate and its tests.
+- T136 style/test-support commit: `a4fad637baf923289e831cc8ff535d5ac06f4c51`; runner commit: `264008fad70a1020b03b8ea79c3bd52a0215d869`; opt-in live test commit: `38bd3bd7c1ccb4723eeb4af9e19e6c2853d30942`.
+- The runner resolves selected profiles once, deduplicates by exact name, verifies them in sorted order through one canonical Analyst request each, and closes the shared client in `finally`.
+- Focused runner/architecture suites: **10 passed**; the real live smoke test is **skipped** by default before configuration loading.
+- Ruff and strict mypy pass over the T136 implementation and tests.
 
 ### 10.2 Minimal implementation
 
 - [X] T135 Register the `live_llm` marker and `--run-live-llm` through `pytest_addoption`; require both the explicit option and exact `ARB_RUN_LIVE_LLM=1`, without treating marker expressions or global `addopts` as authorization.
-- [ ] T136 Implement the dual-authorized per-selected-profile smoke test/runner using the documented canonical synthetic role/payload, failing on invalid selected-profile configuration once explicitly enabled.
+- [X] T136 Implement the dual-authorized per-selected-profile smoke test/runner using the documented canonical synthetic role/payload, failing on invalid selected-profile configuration once explicitly enabled.
 - [ ] T137 Ensure smoke execution closes the runtime on every path and reports only safe profile identities.
 - [ ] T138 Finalize the non-secret example configuration and README commands.
 - [ ] T139 Run default pytest and prove live tests perform no configuration loading or network access and report skipped.
