@@ -36,12 +36,14 @@ Task notation:
 - [X] T002 [DOC] Cross-check ADR-0002 against `docs/03-architecture.md`, `docs/04-agent-model.md`, `docs/05-quality-security.md`, and the three approved Slice 7 artifacts; remove any scope expansion.
 - [X] T003 [TEST] Run and record the existing full pytest suite before Slice 7 production changes.
 - [X] T004 [TEST] Run and record existing Ruff, mypy strict, and `pip check` baselines.
-- [ ] T005 [GATE] Review ADR-0002 and baseline results; stop before configuration implementation.
+- [X] T005 [GATE] Review ADR-0002 and baseline results; stop before configuration implementation.
 
 ### Phase 1 evidence
 
-- ADR commit: `dbc02bf800e46e9a90bbedaf13a6e63261daebe1`.
-- ADR status: **Proposed**, pending T005 review.
+- Initial ADR commit: `dbc02bf800e46e9a90bbedaf13a6e63261daebe1`.
+- Review corrections commit: `7fe42f94aca9ece531580d01811e4b7ba51deeaa`.
+- ADR acceptance commit: `f9528c2ce7d026cfd086c196b2ee8b70b6a967ac`.
+- ADR status: **Accepted**; T005 approved on 2026-08-24.
 - Canonical cross-check: no change to `LLMPort`, participant responsibilities, Review lifecycle, human authority, or core provider independence; no retry, fallback, routing, persistence, tool, UI, or framework expansion.
 - Baseline source: Slice 6 final head `6941753b1d0e00e9df7825ee6bc885f27bd63010`, inherited by `main` before the documentation-only Slice 7 commits.
 - GitHub Actions: CI run 145, completed successfully.
@@ -264,7 +266,7 @@ Task notation:
 
 ### 10.1 Tests/documentation first
 
-- [ ] T128 [TEST] Add failing tests for registered `live_llm` marker and dual activation: skip before configuration/network unless both `-m live_llm` selection and exact `ARB_RUN_LIVE_LLM=1` are present; also skip safely when the opt-in is enabled but `ARB_LLM_CONFIG_PATH` is absent.
+- [ ] T128 [TEST] Add failing tests for registered `live_llm` marker and dual authorization: skip before configuration/network unless both explicit `--run-live-llm` and exact `ARB_RUN_LIVE_LLM=1` are present; also skip safely when the opt-in is enabled but `ARB_LLM_CONFIG_PATH` is absent.
 - [ ] T129 [P] [TEST] Add failing smoke-runner tests proving only selected profiles are checked once each with one documented canonical synthetic role/payload contract and no complete Review.
 - [ ] T130 [P] [TEST] Add failing tests for safe profile-name diagnostics, no credential/endpoint/body leakage, runtime closure after success or failure, selected-profile missing/invalid credential failure, and irrelevance of unselected-profile credentials.
 - [ ] T131 [P] [TEST] Add failing checks proving smoke verification does not run a complete Review or assert latency/model quality.
@@ -274,12 +276,12 @@ Task notation:
 
 ### 10.2 Minimal implementation
 
-- [ ] T135 Register the `live_llm` marker and implement the exact `ARB_RUN_LIVE_LLM=1` network gate; do not depend on ambiguous marker expressions in global `addopts`.
-- [ ] T136 Implement the dual-gated per-selected-profile smoke test/runner using the documented canonical synthetic role/payload, failing on invalid selected-profile configuration once explicitly enabled.
+- [ ] T135 Register the `live_llm` marker and `--run-live-llm` through `pytest_addoption`; require both the explicit option and exact `ARB_RUN_LIVE_LLM=1`, without treating marker expressions or global `addopts` as authorization.
+- [ ] T136 Implement the dual-authorized per-selected-profile smoke test/runner using the documented canonical synthetic role/payload, failing on invalid selected-profile configuration once explicitly enabled.
 - [ ] T137 Ensure smoke execution closes the runtime on every path and reports only safe profile identities.
 - [ ] T138 Finalize the non-secret example configuration and README commands.
 - [ ] T139 Run default pytest and prove live tests perform no configuration loading or network access and report skipped.
-- [ ] T140 Run live smoke only with both `ARB_RUN_LIVE_LLM=1` and explicit suitable configuration; absence of the opt-in or config path may skip, but invalid selected-profile credentials after activation must fail.
+- [ ] T140 Run live smoke only with `ARB_RUN_LIVE_LLM=1 pytest -m live_llm --run-live-llm` and explicit suitable configuration; absence of the opt-in or config path may skip, but invalid selected-profile credentials after activation must fail.
 - [ ] T141 Run Ruff, mypy strict, and `pip check`.
 - [ ] T142 [GATE] Review opt-in behavior, example hygiene, operator instructions, diagnostic safety, and regressions; stop before final closure.
 
