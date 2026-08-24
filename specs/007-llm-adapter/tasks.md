@@ -32,11 +32,23 @@ Task notation:
 
 **Goal:** Record the approved integration decision before introducing the runtime dependency or infrastructure code.
 
-- [ ] T001 [DOC] Create `docs/adr/ADR-0002-direct-http-openai-compatible-model-access.md` covering direct synchronous HTTPX versus provider SDKs, local/remote compatibility, JSON metadata plus environment credentials, immutable profiles, static composition, runtime client ownership, prompt schemas, explicit output modes, proxy/certificate behavior, and rejected routing/retry alternatives.
-- [ ] T002 [DOC] Cross-check ADR-0002 against `docs/03-architecture.md`, `docs/04-agent-model.md`, `docs/05-quality-security.md`, and the three approved Slice 7 artifacts; remove any scope expansion.
-- [ ] T003 [TEST] Run and record the existing full pytest suite before Slice 7 production changes.
-- [ ] T004 [TEST] Run and record existing Ruff, mypy strict, and `pip check` baselines.
+- [X] T001 [DOC] Create `docs/adr/ADR-0002-direct-http-openai-compatible-model-access.md` covering direct synchronous HTTPX versus provider SDKs, local/remote compatibility, JSON metadata plus environment credentials, immutable profiles, static composition, runtime client ownership, prompt schemas, explicit output modes, proxy/certificate behavior, and rejected routing/retry alternatives.
+- [X] T002 [DOC] Cross-check ADR-0002 against `docs/03-architecture.md`, `docs/04-agent-model.md`, `docs/05-quality-security.md`, and the three approved Slice 7 artifacts; remove any scope expansion.
+- [X] T003 [TEST] Run and record the existing full pytest suite before Slice 7 production changes.
+- [X] T004 [TEST] Run and record existing Ruff, mypy strict, and `pip check` baselines.
 - [ ] T005 [GATE] Review ADR-0002 and baseline results; stop before configuration implementation.
+
+### Phase 1 evidence
+
+- ADR commit: `dbc02bf800e46e9a90bbedaf13a6e63261daebe1`.
+- ADR status: **Proposed**, pending T005 review.
+- Canonical cross-check: no change to `LLMPort`, participant responsibilities, Review lifecycle, human authority, or core provider independence; no retry, fallback, routing, persistence, tool, UI, or framework expansion.
+- Baseline source: Slice 6 final head `6941753b1d0e00e9df7825ee6bc885f27bd63010`, inherited by `main` before the documentation-only Slice 7 commits.
+- GitHub Actions: CI run 145, completed successfully.
+- Python 3.12: install, `pip check`, pytest, Ruff, and mypy all successful.
+- Python 3.13: install, `pip check`, pytest, Ruff, and mypy all successful.
+- No Slice 7 production code or runtime dependency exists at this gate.
+
 
 ---
 
