@@ -162,6 +162,14 @@ def test_raw_profile_accepts_and_normalizes_base_urls(
         "https://example.test/v1#fragment",
         "https://example.test/v1/chat/completions",
         "https://example.test/chat/completions/",
+        "http://localhost:abc/v1",
+        "https://example.test:99999/v1",
+        "https://example.test /v1",
+        "https://example.test/v 1",
+        "https://example.test/%zz",
+        "https://example.test/%a",
+        "https://example.test\\evil/v1",
+        "https://example.test/v1//",
         "https://example.test/v1\n",
         "https://example.test/\x00v1",
     ],
@@ -274,6 +282,20 @@ def test_runtime_config_rejects_unknown_exact_reference() -> None:
         )
 
 
+def test_runtime_profiles_mapping_is_immutable_after_validation() -> None:
+    config = RawLLMRuntimeConfig.model_validate(runtime_data())
+
+    with pytest.raises(TypeError):
+        config.profiles["remote"] = RawLLMProfile.model_validate(profile_data())  # type: ignore[index]
+    with pytest.raises(TypeError):
+        del config.profiles["local"]  # type: ignore[misc]
+    with pytest.raises(AttributeError):
+        config.profiles.clear()  # type: ignore[attr-defined]
+
+    assert set(config.profiles) == {"local"}
+    assert config.assignments.analyst in config.profiles
+
+
 def write_bytes(path: Path, content: bytes) -> None:
     path.write_bytes(content)
 
@@ -292,6 +314,23 @@ def test_loader_rejects_missing_or_non_regular_file(tmp_path: Path) -> None:
     for path in (tmp_path / "missing.json", tmp_path):
         with pytest.raises(LLMConfigurationError, match=r"^LLM configuration invalid$"):
             load_from_path(path)
+
+
+def test_loader_maps_file_read_failure_to_safe_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "config.json"
+    path.write_text("{}", encoding="utf-8")
+
+    def fail_read(_: Path) -> bytes:
+        raise OSError("sensitive filesystem detail")
+
+    monkeypatch.setattr(Path, "read_bytes", fail_read)
+
+    with pytest.raises(LLMConfigurationError, match=r"^LLM configuration invalid$") as caught:
+        load_from_path(path)
+
+    assert "sensitive filesystem detail" not in str(caught.value)
 
 
 @pytest.mark.parametrize(
