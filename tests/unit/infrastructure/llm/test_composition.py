@@ -13,7 +13,10 @@ from agentic_review_board.infrastructure.llm.composition import (
 from agentic_review_board.application.orchestrator import ReviewOrchestrator
 from agentic_review_board.infrastructure.llm import composition
 from agentic_review_board.infrastructure.llm.config import RawLLMRuntimeConfig, ResolvedLLMProfile
-from agentic_review_board.infrastructure.llm.errors import LLMConfigurationError
+from agentic_review_board.infrastructure.llm.errors import (
+    LLMConfigurationError,
+    LLMRuntimeClosedError,
+)
 
 
 def profile_data(
@@ -39,6 +42,35 @@ def runtime_config(
     assignments: dict[str, str],
 ) -> RawLLMRuntimeConfig:
     return RawLLMRuntimeConfig.model_validate({"profiles": profiles, "assignments": assignments})
+
+
+def shared_runtime_config() -> RawLLMRuntimeConfig:
+    return runtime_config(
+        profiles={
+            "shared": profile_data(
+                base_url="http://localhost:11434/v1",
+                model="shared-model",
+            )
+        },
+        assignments={
+            "analyst": "shared",
+            "solution_architect": "shared",
+            "risk_reviewer": "shared",
+            "critic": "shared",
+            "coordinator": "shared",
+        },
+    )
+
+
+class CloseRecordingTransport(httpx.BaseTransport):
+    def __init__(self) -> None:
+        self.close_count = 0
+
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={}, request=request)
+
+    def close(self) -> None:
+        self.close_count += 1
 
 
 def record_runtime_composition(
@@ -500,3 +532,65 @@ def test_unexpected_failure_after_client_creation_closes_client(
 
     assert len(clients) == 1
     assert clients[0].is_closed
+
+
+def test_open_context_entry_returns_same_runtime() -> None:
+    transport = CloseRecordingTransport()
+    runtime = ConfiguredReviewRuntime.from_config(
+        shared_runtime_config(),
+        {},
+        transport=transport,
+    )
+
+    entered = runtime.__enter__()
+    runtime.close()
+
+    assert entered is runtime
+    assert transport.close_count == 1
+
+
+def test_close_is_idempotent_and_closes_owned_client_once() -> None:
+    transport = CloseRecordingTransport()
+    runtime = ConfiguredReviewRuntime.from_config(
+        shared_runtime_config(),
+        {},
+        transport=transport,
+    )
+
+    runtime.close()
+    runtime.close()
+    runtime.close()
+
+    assert transport.close_count == 1
+
+
+def test_context_exit_closes_runtime_even_when_body_raises() -> None:
+    transport = CloseRecordingTransport()
+
+    with pytest.raises(RuntimeError, match=r"^context failure marker$"):
+        with ConfiguredReviewRuntime.from_config(
+            shared_runtime_config(),
+            {},
+            transport=transport,
+        ):
+            raise RuntimeError("context failure marker")
+
+    assert transport.close_count == 1
+
+
+def test_closed_context_entry_fails_with_exact_safe_error() -> None:
+    transport = CloseRecordingTransport()
+    runtime = ConfiguredReviewRuntime.from_config(
+        shared_runtime_config(),
+        {},
+        transport=transport,
+    )
+    runtime.close()
+
+    with pytest.raises(
+        LLMRuntimeClosedError,
+        match=r"^LLM runtime is closed$",
+    ):
+        runtime.__enter__()
+
+    assert transport.close_count == 1
