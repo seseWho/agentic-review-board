@@ -4,7 +4,6 @@ from collections.abc import Callable, Mapping
 
 import httpx
 
-from agentic_review_board.infrastructure.llm.composition import _create_http_client
 from agentic_review_board.infrastructure.llm.config import (
     LLMRole,
     RawLLMRuntimeConfig,
@@ -12,6 +11,7 @@ from agentic_review_board.infrastructure.llm.config import (
     resolve_llm_runtime_config,
 )
 from agentic_review_board.infrastructure.llm.errors import LLMTransportError
+from agentic_review_board.infrastructure.llm.http_client import _create_http_client
 from agentic_review_board.infrastructure.llm.openai_compatible import (
     OpenAICompatibleLLMAdapter,
 )
