@@ -477,7 +477,7 @@ Task notation:
 - Architecture regression commit: `df5b8498c2a44456717850df8f7db30811adcf09`; shared HTTP-client policy extraction: `67700dc0936aff05cdac4eaf1a3d444164c14784`; composition update: `d79231e5304c66ed0e67fdd6b748d6052f4bbee7`; smoke decoupling: `bea1657a0a2e60a48464c3f57f10d34c43318319`.
 - The HTTP policy now lives in one minimal infrastructure module; composition retains its existing private test seam through a typed wrapper, while smoke has no direct or transitive dependency on Review orchestration.
 - Post-correction focused suites: **33 passed**; full default suite: **1008 passed, 1 skipped**; Ruff **passed**; strict mypy **passed** over 59 source files using a fresh cache after the prior local cache database was found malformed; `pip check` **passed**.
-- T142 remains pending explicit approval after correction review.
+- T142 approved on 2026-08-24 after correction review; Phase 10 final-quality work authorized.
 
 ### 10.2 Minimal implementation
 
@@ -488,7 +488,7 @@ Task notation:
 - [X] T139 Run default pytest and prove live tests perform no configuration loading or network access and report skipped.
 - [X] T140 Run live smoke only with `ARB_RUN_LIVE_LLM=1 pytest -m live_llm --run-live-llm` and explicit suitable configuration; absence of the opt-in or config path may skip, but invalid selected-profile credentials after activation must fail.
 - [X] T141 Run Ruff, mypy strict, and `pip check`.
-- [ ] T142 [GATE] Review opt-in behavior, example hygiene, operator instructions, diagnostic safety, and regressions; stop before final closure.
+- [X] T142 [GATE] Review opt-in behavior, example hygiene, operator instructions, diagnostic safety, and regressions; stop before final closure.
 
 ---
 
