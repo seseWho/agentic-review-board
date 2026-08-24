@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
-from typing import Any
+from collections.abc import Callable
+from typing import cast
 
 import pytest
 from pydantic import ValidationError
@@ -368,5 +369,6 @@ def test_adapter_errors_have_closed_inheritance_and_fixed_messages(
 def test_safe_errors_do_not_accept_dynamic_public_detail() -> None:
     secret_marker = "sensitive-provider-detail"
     for error_type, _ in ERROR_CASES:
+        dynamic_constructor = cast(Callable[[str], LLMAdapterError], error_type)
         with pytest.raises(TypeError):
-            error_type(secret_marker)
+            dynamic_constructor(secret_marker)
