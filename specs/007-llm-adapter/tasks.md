@@ -145,8 +145,8 @@ Task notation:
 ### Phase 3 implementation evidence
 
 - Production commit: `ea00d49ca03c28fe71f699ab73af5b5b45194174`.
-- Focused configuration/resolution suites: **152 passed**.
-- Full repository suite: **834 passed**.
+- Focused configuration/resolution suites after gate corrections: **154 passed**.
+- Full repository suite after gate corrections: **836 passed**.
 - Ruff: **passed**.
 - Strict mypy: **passed** over 40 source files.
 - `pip check`: **passed**, no broken requirements.
@@ -154,6 +154,9 @@ Task notation:
 - Only exact selected profile names resolve credentials and produce one resolved object each; repeated assignments reuse that exact object.
 - Unselected profiles remain in raw validated configuration and cause no environment reads.
 - Scalar timeouts populate finite connect/read/write/pool phases equally.
+- T041 review corrections: timeout is reconstructed from a private immutable scalar on every access, preventing nested mutation from degrading the profile; all environment-mapping read failures map to fixed `LLMConfigurationError`.
+- Review-correction tests commit: `c254c659a95a3aeec82b5d61f72e3b0f8aef73ad`.
+- Review-correction production commit: `fb183a6440109ca14cefbf4f77af2cf1025de750`.
 - T041 remains pending for explicit block review.
 
 ---
