@@ -11,6 +11,7 @@ from agentic_review_board.infrastructure.llm.config import (
     ResolvedLLMProfile,
     resolve_llm_runtime_config,
 )
+from agentic_review_board.infrastructure.llm.errors import LLMTransportError
 from agentic_review_board.infrastructure.llm.openai_compatible import (
     OpenAICompatibleLLMAdapter,
 )
@@ -38,6 +39,7 @@ def verify_selected_profiles(
 
     selected_names = tuple(sorted(resolved_by_name))
     client = _create_http_client(transport)
+    operation_error: BaseException | None = None
     try:
         for name in selected_names:
             if report_profile is not None:
@@ -49,7 +51,14 @@ def verify_selected_profiles(
                 role=LLMRole.ANALYST.value,
                 payload=_SMOKE_PAYLOAD,
             )
+    except BaseException as error:
+        operation_error = error
+        raise
     finally:
-        client.close()
+        try:
+            client.close()
+        except BaseException as cleanup_error:
+            if operation_error is None:
+                raise LLMTransportError() from cleanup_error
 
     return selected_names
