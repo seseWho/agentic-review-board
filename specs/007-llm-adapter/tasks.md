@@ -422,7 +422,7 @@ Task notation:
 - [X] T131 [P] [TEST] Add failing checks proving smoke verification does not run a complete Review or assert latency/model quality.
 - [X] T132 [DOC] Draft `config/llm.example.json` with local and remote placeholders, exact assignments, and credential-variable names only.
 - [X] T133 [DOC] Draft README sections for one-model, mixed local/remote, environment credentials, proxy/certificate variables, default tests, and explicit smoke command.
-- [ ] T134 [TEST] Add a test loading `config/llm.example.json` through the real parser with a synthetic environment mapping, asserting valid mixed composition and absence of credential values; then run Phase 9 non-live tests and confirm the intended red state without any real request.
+- [X] T134 [TEST] Add a test loading `config/llm.example.json` through the real parser with a synthetic environment mapping, asserting valid mixed composition and absence of credential values; then run Phase 9 non-live tests and confirm the intended red state without any real request.
 
 #### Phase 9 T128 red evidence
 
@@ -446,6 +446,10 @@ Task notation:
 - T133 README commit: `c7d5c30c38379c354ac3488632e78a81f65f300b`.
 - The draft documents one-profile reuse, mixed assignments, environment-only credentials, standard proxy/certificate variables, credential-free default tests, the canonical synthetic smoke contract, and all four live-run prerequisites.
 - The guide explicitly distinguishes safe pre-activation skips from authoritative configuration/credential failures after activation and documents no fallback.
+- T134 example-parser test commit: `24f0f9aef8b22cabeb9b7ae07315398cc429a7c1`.
+- The real loader/resolver test passes and proves exact mixed assignments, resolved-object reuse, local/remote distinction, and absence of the synthetic credential from the committed file and reprs.
+- Combined Phase 9 non-live red run: **1 passed, 7 failed, 1 collection error**. All red outcomes are the approved missing T135 gate or T136 runner; no unexpected failure or real HTTP request occurred.
+- The T134 file passes Ruff and strict mypy when checked with `src`.
 
 ### 10.2 Minimal implementation
 
