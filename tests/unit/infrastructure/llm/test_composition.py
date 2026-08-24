@@ -754,3 +754,62 @@ def test_sequential_reviews_keep_fixed_assignment_without_retained_call_data(
     assert all(reference() is None for reference in prompt_references)
     assert all(reference() is None for reference in response_references)
     runtime.close()
+
+
+def test_exposes_only_safe_immutable_composition_metadata() -> None:
+    config = runtime_config(
+        profiles={
+            "local": profile_data(
+                base_url="http://localhost:11434/v1",
+                model="local-model-marker",
+            ),
+            "Remote": profile_data(
+                base_url="https://api.example.test/v1",
+                model="remote-model-marker",
+                api_key_env="REMOTE_KEY",
+            ),
+        },
+        assignments={
+            "analyst": "local",
+            "solution_architect": "Remote",
+            "risk_reviewer": "local",
+            "critic": "Remote",
+            "coordinator": "Remote",
+        },
+    )
+    secret_marker = "credential-must-not-appear"
+    runtime = ConfiguredReviewRuntime.from_config(
+        config,
+        {"REMOTE_KEY": secret_marker},
+        transport=CloseRecordingTransport(),
+    )
+
+    assert runtime.selected_profile_names == ("Remote", "local")
+    assert runtime.participant_profile_names == {
+        "analyst": "local",
+        "solution_architect": "Remote",
+        "risk_reviewer": "local",
+        "critic": "Remote",
+        "coordinator": "Remote",
+    }
+    assert runtime.lifecycle_state == "OPEN"
+
+    with pytest.raises(TypeError):
+        runtime.participant_profile_names["analyst"] = "Remote"  # type: ignore[index]
+
+    rendered_public_surface = (
+        repr(runtime)
+        + repr(runtime.selected_profile_names)
+        + repr(runtime.participant_profile_names)
+        + runtime.lifecycle_state
+    )
+    assert secret_marker not in rendered_public_surface
+    assert "REMOTE_KEY" not in rendered_public_surface
+    assert "local-model-marker" not in rendered_public_surface
+    assert "remote-model-marker" not in rendered_public_surface
+    assert "api.example.test" not in rendered_public_surface
+
+    runtime.close()
+
+    assert runtime.lifecycle_state == "CLOSED"
+    assert runtime.selected_profile_names == ("Remote", "local")
