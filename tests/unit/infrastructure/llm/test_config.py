@@ -296,6 +296,16 @@ def test_runtime_profiles_mapping_is_immutable_after_validation() -> None:
     assert config.assignments.analyst in config.profiles
 
 
+def test_immutable_runtime_config_remains_serializable() -> None:
+    config = RawLLMRuntimeConfig.model_validate(runtime_data())
+
+    dumped = config.model_dump(mode="json")
+
+    assert dumped["profiles"] == {"local": profile_data()}
+    assert dumped["assignments"] == assignment_data()
+    assert RawLLMRuntimeConfig.model_validate_json(config.model_dump_json()) == config
+
+
 def write_bytes(path: Path, content: bytes) -> None:
     path.write_bytes(content)
 
