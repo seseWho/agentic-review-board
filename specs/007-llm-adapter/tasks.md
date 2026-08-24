@@ -80,16 +80,29 @@ Task notation:
 
 ### 3.2 Minimal implementation
 
-- [ ] T016 Add the constrained `httpx>=0.28,<0.29` runtime dependency to `pyproject.toml`.
-- [ ] T017 Create infrastructure package initializers under `src/agentic_review_board/infrastructure/llm/`.
-- [ ] T018 Implement the closed safe error family and exact messages in `src/agentic_review_board/infrastructure/llm/errors.py`.
-- [ ] T019 Implement `StructuredOutputMode`, `LLMRole`, and strict raw profile models in `src/agentic_review_board/infrastructure/llm/config.py`.
-- [ ] T020 Implement exact five-field assignment and top-level configuration cross-validation.
-- [ ] T021 Implement UTF-8 JSON loading with duplicate-key rejection at all nesting levels and `ARB_LLM_CONFIG_PATH` boundary validation.
-- [ ] T022 Map every public loader/validation failure to exact safe `LLMConfigurationError` without dynamic detail.
-- [ ] T023 Run focused Phase 2 tests to green.
-- [ ] T024 Run full pytest, Ruff, mypy strict, and `pip check`.
+- [X] T016 Add the constrained `httpx>=0.28,<0.29` runtime dependency to `pyproject.toml`.
+- [X] T017 Create infrastructure package initializers under `src/agentic_review_board/infrastructure/llm/`.
+- [X] T018 Implement the closed safe error family and exact messages in `src/agentic_review_board/infrastructure/llm/errors.py`.
+- [X] T019 Implement `StructuredOutputMode`, `LLMRole`, and strict raw profile models in `src/agentic_review_board/infrastructure/llm/config.py`.
+- [X] T020 Implement exact five-field assignment and top-level configuration cross-validation.
+- [X] T021 Implement UTF-8 JSON loading with duplicate-key rejection at all nesting levels and `ARB_LLM_CONFIG_PATH` boundary validation.
+- [X] T022 Map every public loader/validation failure to exact safe `LLMConfigurationError` without dynamic detail.
+- [X] T023 Run focused Phase 2 tests to green.
+- [X] T024 Run full pytest, Ruff, mypy strict, and `pip check`.
 - [ ] T025 [GATE] Review configuration scope, exact identity behavior, URL policy, error safety, dependency diff, and regression results; stop before secret resolution.
+
+### Phase 2 implementation evidence
+
+- Runtime dependency: `httpx>=0.28,<0.29`; HTTPX is not imported outside infrastructure.
+- Production contracts: `infrastructure/llm/errors.py` and `infrastructure/llm/config.py`, plus package initializers.
+- Focused configuration suite: **121 passed**.
+- Full repository suite: **803 passed**.
+- Ruff: **passed**.
+- Strict mypy: **passed** over 39 source files.
+- `pip check`: **passed**, no broken requirements.
+- Configuration loading performs file/UTF-8/JSON/Pydantic validation only; no network, credential resolution, adapter construction, retry, routing, or provider SDK behavior exists.
+- Every public loader failure maps to fixed `LLM configuration invalid`; the other approved error classes also expose only their fixed message.
+- T025 remains pending for explicit block review.
 
 ---
 
