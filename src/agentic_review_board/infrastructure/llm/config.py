@@ -10,7 +10,14 @@ from types import MappingProxyType
 from typing import Any
 from urllib.parse import urlsplit
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_serializer,
+    field_validator,
+    model_validator,
+)
 
 from agentic_review_board.infrastructure.llm.errors import LLMConfigurationError
 
@@ -160,6 +167,12 @@ class RawLLMRuntimeConfig(BaseModel):
         cls, value: Mapping[str, RawLLMProfile]
     ) -> Mapping[str, RawLLMProfile]:
         return MappingProxyType(dict(value))
+
+    @field_serializer("profiles")
+    def serialize_profiles(
+        self, value: Mapping[str, RawLLMProfile]
+    ) -> dict[str, RawLLMProfile]:
+        return dict(value)
 
     @model_validator(mode="after")
     def validate_assignment_references(self) -> RawLLMRuntimeConfig:
