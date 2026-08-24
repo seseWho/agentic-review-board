@@ -289,14 +289,28 @@ Task notation:
 
 ### 7.2 Minimal implementation
 
-- [ ] T086 Implement ordered timeout, transport, and HTTP-status exception mapping without copying nested text.
-- [ ] T087 Implement strict provider-envelope shape validation with tolerated unrelated envelope extras.
-- [ ] T088 Implement one direct JSON parse and top-level object requirement.
-- [ ] T089 Preserve valid mapping content unchanged and retain no call-specific state.
-- [ ] T090 Ensure adapter errors use only fixed safe messages while optionally chaining causes.
-- [ ] T091 Run focused Phase 6 tests to green.
-- [ ] T092 Run full pytest, Ruff, mypy strict, and `pip check`.
+- [X] T086 Implement ordered timeout, transport, and HTTP-status exception mapping without copying nested text.
+- [X] T087 Implement strict provider-envelope shape validation with tolerated unrelated envelope extras.
+- [X] T088 Implement one direct JSON parse and top-level object requirement.
+- [X] T089 Preserve valid mapping content unchanged and retain no call-specific state.
+- [X] T090 Ensure adapter errors use only fixed safe messages while optionally chaining causes.
+- [X] T091 Run focused Phase 6 tests to green.
+- [X] T092 Run full pytest, Ruff, mypy strict, and `pip check`.
 - [ ] T093 [GATE] Review failure taxonomy, sanitization, direct parsing, no-repair behavior, state retention, and regressions; stop before composition.
+
+### Phase 6 implementation evidence
+
+- Production commit: `a203f29f112b84c9131a79f67add015941d0f4ac`.
+- Focused response suite: **49 passed**; combined request/response suites: **65 passed**.
+- Full repository suite: **937 passed**.
+- Ruff: **passed**.
+- Strict mypy: **passed** over 45 source files.
+- `pip check`: **passed**, no broken requirements.
+- Failure mapping is ordered timeout → other RequestError → non-2xx status → envelope → structured content, with only fixed public messages.
+- Envelope extras are ignored while the required one-choice/message/content path remains strict.
+- Content receives one direct `json.loads`; fences, prose, arrays, scalars, booleans, and null fail without repair or a second request.
+- A valid top-level object is returned unchanged and remains untrusted for existing participant validation; the adapter retains no call-specific state.
+- T093 remains pending for explicit block review.
 
 ---
 
