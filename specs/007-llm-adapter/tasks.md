@@ -496,12 +496,12 @@ Task notation:
 
 ### Phase 10 final evidence
 
-- T143 local default suite with live authorization, config path, and example credential explicitly unset: **1008 passed, 1 skipped**. The sole skip is the opt-in live smoke test; no live endpoint was contacted.
+- T143 local default suite with live authorization, config path, and example credential explicitly unset: **1008 passed, 1 skipped**. The sole skip is the opt-in live smoke test; no live endpoint was contacted.\n- T144 final `ruff check .`: **passed**.
 
 **Goal:** Close Slice 7 with deterministic evidence and no prohibited expansion.
 
 - [X] T143 Run the complete default pytest suite on the supported local Python version with no credentials or live endpoints.
-- [ ] T144 Run `ruff check .`.
+- [X] T144 Run `ruff check .`.
 - [ ] T145 Run strict `mypy`.
 - [ ] T146 Run `pip check`.
 - [ ] T147 Verify GitHub Actions passes on all configured Python versions without secrets.
