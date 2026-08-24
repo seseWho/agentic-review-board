@@ -241,7 +241,7 @@ Task notation:
 - [X] T072 Map payload serialization failures safely before network activity.
 - [X] T073 Run focused Phase 5 tests to green.
 - [X] T074 Run full pytest, Ruff, mypy strict, and `pip check`.
-- [ ] T075 [GATE] Review captured requests, authentication isolation, schema/payload separation, timeout, forbidden fields, request count, and regressions; stop before response processing.
+- [X] T075 [GATE] Review captured requests, authentication isolation, schema/payload separation, timeout, forbidden fields, request count, and regressions; stop before response processing.
 
 ### Phase 5 implementation evidence
 
@@ -258,7 +258,7 @@ Task notation:
 - T075 review correction: the adapter snapshots every valid `Mapping[str, object]` into a plain per-call dictionary inside the safe serialization boundary; mapping iteration/snapshot failures are sanitized before network activity.
 - Review-correction tests commit: `0e24b4485cf8a8b2a3777d79b79d204a782dcce5`.
 - Review-correction production commit: `e2eb445573b00f64a0a6048f14ac35e3ee27c76b`.
-- T075 remains pending for explicit block review.
+- T075 approved on 2026-08-24; Phase 6 tests-first work authorized.
 
 ---
 
