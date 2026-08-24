@@ -57,7 +57,7 @@ Adopt direct synchronous HTTP through **HTTPX** for the first production `LLMPor
 The dependency policy is:
 
 ```text
-httpx>=0.28,<1
+httpx>=0.28,<0.29
 ```
 
 The adapter targets one narrow OpenAI-compatible Chat Completions contract:
@@ -147,7 +147,7 @@ The adapter requires:
 - a success HTTP status;
 - a JSON-object provider envelope;
 - exactly one choice;
-- one assistant message with non-blank string content;
+- one response message with non-blank string content;
 - content that parses directly as one top-level JSON object.
 
 It does not strip fences, extract substrings, repair JSON, normalize content parts, make a correction call, or retry.
@@ -209,12 +209,20 @@ JSON Schema is generated and deterministically serialized once per role definiti
 
 Default tests use `httpx.MockTransport` and require no network, endpoint, credential, or installed local model.
 
+The `live_llm` marker classifies and filters live smoke tests; it is not an authorization gate by itself.
+
 Live smoke access requires both:
 
-- explicit `-m live_llm` selection;
+- explicit `--run-live-llm` command-line authorization, registered through `pytest_addoption`;
 - exact `ARB_RUN_LIVE_LLM=1`.
 
-Absence of the explicit opt-in or config path skips before network access. Once activated with a config path, invalid selected-profile credentials fail rather than skip.
+The canonical invocation is:
+
+```text
+ARB_RUN_LIVE_LLM=1 pytest -m live_llm --run-live-llm
+```
+
+Without both authorizations, live tests skip before loading the configuration, resolving credentials, constructing runtime HTTP resources, or making network requests. Absence of the config path also skips before those actions. Once both authorizations and a config path are present, invalid configuration or selected-profile credentials fail rather than skip.
 
 ## 4. Alternatives Considered
 
