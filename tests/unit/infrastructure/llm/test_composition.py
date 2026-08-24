@@ -7,16 +7,20 @@ from typing import Any
 
 import httpx
 import pytest
-from agentic_review_board.infrastructure.llm.composition import (
-    ConfiguredReviewRuntime,
-    _create_http_client,
-)
 
 from agentic_review_board.application.orchestrator import ReviewOrchestrator
 from agentic_review_board.domain.execution import Review, ReviewStatus, StageStatus
 from agentic_review_board.domain.review import ReviewInput
 from agentic_review_board.infrastructure.llm import composition
-from agentic_review_board.infrastructure.llm.config import RawLLMRuntimeConfig, ResolvedLLMProfile
+from agentic_review_board.infrastructure.llm.composition import (
+    ConfiguredReviewRuntime,
+    _create_http_client,
+)
+from agentic_review_board.infrastructure.llm.config import (
+    RawLLMRuntimeConfig,
+    ResolvedLLMProfile,
+    resolve_llm_runtime_config,
+)
 from agentic_review_board.infrastructure.llm.errors import (
     LLMConfigurationError,
     LLMRuntimeClosedError,
@@ -225,7 +229,7 @@ def test_creates_one_adapter_per_selected_name_and_reuses_exact_instances(
     )
     created_adapters, _, participant_adapters = record_runtime_composition(monkeypatch)
 
-    runtime = ConfiguredReviewRuntime.from_config(config, {})
+    runtime = ConfiguredReviewRuntime.from_config(config, {}, transport=CloseRecordingTransport())
     runtime.close()
 
     assert set(created_adapters) == {"local", "remote"}
@@ -264,7 +268,7 @@ def test_supports_one_profile_shared_by_all_five_participants(
     )
     created_adapters, _, participant_adapters = record_runtime_composition(monkeypatch)
 
-    runtime = ConfiguredReviewRuntime.from_config(config, {})
+    runtime = ConfiguredReviewRuntime.from_config(config, {}, transport=CloseRecordingTransport())
     runtime.close()
 
     assert set(created_adapters) == {"shared"}
@@ -300,7 +304,7 @@ def test_supports_five_distinct_selected_profiles(
     )
     created_adapters, _, participant_adapters = record_runtime_composition(monkeypatch)
 
-    runtime = ConfiguredReviewRuntime.from_config(config, {})
+    runtime = ConfiguredReviewRuntime.from_config(config, {}, transport=CloseRecordingTransport())
     runtime.close()
 
     assert set(created_adapters) == set(roles)
@@ -336,6 +340,7 @@ def test_supports_mixed_local_no_key_and_remote_key_profiles(
     runtime = ConfiguredReviewRuntime.from_config(
         config,
         {"REMOTE_KEY": "remote-secret-marker"},
+        transport=CloseRecordingTransport(),
     )
     runtime.close()
 
@@ -363,8 +368,35 @@ def test_constructs_existing_orchestrator_with_exact_five_argument_order(
             "coordinator": "shared",
         },
     )
-    _, _, participant_adapters = record_runtime_composition(monkeypatch)
+    record_runtime_composition(monkeypatch)
+    expected_participants: dict[str, object] = {}
     orchestrator_calls: list[tuple[object, ...]] = []
+
+    def capture_participant(role: str) -> Callable[[object], object]:
+        def construct_participant(adapter: object) -> object:
+            participant = object()
+            expected_participants[role] = participant
+            return participant
+
+        return construct_participant
+
+    monkeypatch.setattr(composition, "Analyst", capture_participant("analyst"))
+    monkeypatch.setattr(
+        composition,
+        "SolutionArchitect",
+        capture_participant("solution_architect"),
+    )
+    monkeypatch.setattr(
+        composition,
+        "RiskReviewer",
+        capture_participant("risk_reviewer"),
+    )
+    monkeypatch.setattr(composition, "Critic", capture_participant("critic"))
+    monkeypatch.setattr(
+        composition,
+        "Coordinator",
+        capture_participant("coordinator"),
+    )
 
     def construct_real_orchestrator(
         analyst: object,
@@ -389,16 +421,16 @@ def test_constructs_existing_orchestrator_with_exact_five_argument_order(
         construct_real_orchestrator,
     )
 
-    runtime = ConfiguredReviewRuntime.from_config(config, {})
+    runtime = ConfiguredReviewRuntime.from_config(config, {}, transport=CloseRecordingTransport())
     runtime.close()
 
     assert orchestrator_calls == [
         (
-            participant_adapters["analyst"],
-            participant_adapters["solution_architect"],
-            participant_adapters["risk_reviewer"],
-            participant_adapters["critic"],
-            participant_adapters["coordinator"],
+            expected_participants["analyst"],
+            expected_participants["solution_architect"],
+            expected_participants["risk_reviewer"],
+            expected_participants["critic"],
+            expected_participants["coordinator"],
         )
     ]
 
@@ -423,7 +455,7 @@ def test_completes_resolution_before_creating_http_client(
         },
     )
     events: list[str] = []
-    real_resolve = composition.resolve_llm_runtime_config
+    real_resolve = resolve_llm_runtime_config
     real_create_client = composition._create_http_client
 
     def resolve_before_resources(
@@ -451,6 +483,7 @@ def test_completes_resolution_before_creating_http_client(
     runtime = ConfiguredReviewRuntime.from_config(
         config,
         {"REMOTE_KEY": "remote-secret-marker"},
+        transport=CloseRecordingTransport(),
     )
     runtime.close()
 
@@ -491,7 +524,7 @@ def test_resolution_failure_occurs_before_http_client_creation(
         LLMConfigurationError,
         match=r"^LLM configuration invalid$",
     ):
-        ConfiguredReviewRuntime.from_config(config, {})
+        ConfiguredReviewRuntime.from_config(config, {}, transport=CloseRecordingTransport())
 
     assert client_creation_count == 0
 
@@ -534,7 +567,7 @@ def test_unexpected_failure_after_client_creation_closes_client(
         RuntimeError,
         match=r"^unexpected construction failure marker$",
     ):
-        ConfiguredReviewRuntime.from_config(config, {})
+        ConfiguredReviewRuntime.from_config(config, {}, transport=CloseRecordingTransport())
 
     assert len(clients) == 1
     assert clients[0].is_closed
@@ -725,7 +758,7 @@ def test_sequential_reviews_keep_fixed_assignment_without_retained_call_data(
         "ReviewOrchestrator",
         StatelessRecordingOrchestrator,
     )
-    runtime = ConfiguredReviewRuntime.from_config(config, {})
+    runtime = ConfiguredReviewRuntime.from_config(config, {}, transport=CloseRecordingTransport())
     initial_adapters = dict(created_adapters)
     initial_participant_adapters = dict(participant_adapters)
 
