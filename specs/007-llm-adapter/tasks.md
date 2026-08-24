@@ -462,13 +462,16 @@ Task notation:
 - Review found and corrected cleanup masking: a secondary close failure can no longer replace the safe primary provider error; a cleanup-only failure maps to fixed `LLMTransportError`.
 - The close attempt occurs on success, provider failure, reporting failure, and any other post-client-construction exit; live diagnostics receive only the exact safe profile name.
 - Focused result after correction: **12 passed, 1 skipped**; Ruff and strict mypy pass.
+- T138 final cross-check completed as a reviewed no-op: README and `config/llm.example.json` already match the implemented loader, explicit authorization gate, canonical runner contract, and mixed assignments.
+- Verified documentation coverage includes one-model reuse, mixed local/remote use, exact environment variables, proxy/certificate variables, default no-network tests, explicit live command, skip/fail distinction, and no fallback.
+- The example has exactly local/remote profiles and five assignments, references only `REMOTE_LLM_API_KEY`, and contains no bearer token or credential-shaped value; no document change was required.
 
 ### 10.2 Minimal implementation
 
 - [X] T135 Register the `live_llm` marker and `--run-live-llm` through `pytest_addoption`; require both the explicit option and exact `ARB_RUN_LIVE_LLM=1`, without treating marker expressions or global `addopts` as authorization.
 - [X] T136 Implement the dual-authorized per-selected-profile smoke test/runner using the documented canonical synthetic role/payload, failing on invalid selected-profile configuration once explicitly enabled.
 - [X] T137 Ensure smoke execution closes the runtime on every path and reports only safe profile identities.
-- [ ] T138 Finalize the non-secret example configuration and README commands.
+- [X] T138 Finalize the non-secret example configuration and README commands.
 - [ ] T139 Run default pytest and prove live tests perform no configuration loading or network access and report skipped.
 - [ ] T140 Run live smoke only with `ARB_RUN_LIVE_LLM=1 pytest -m live_llm --run-live-llm` and explicit suitable configuration; absence of the opt-in or config path may skip, but invalid selected-profile credentials after activation must fail.
 - [ ] T141 Run Ruff, mypy strict, and `pip check`.
