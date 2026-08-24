@@ -246,8 +246,8 @@ Task notation:
 ### Phase 5 implementation evidence
 
 - Production commit: `d1c62f2fdfe8c2cb1fb3973478aae8355227344d`.
-- Focused request-construction suite: **14 passed**.
-- Full repository suite: **886 passed**.
+- Focused request-construction suite after gate corrections: **16 passed**.
+- Full repository suite after gate corrections: **888 passed**.
 - Ruff: **passed**.
 - Strict mypy: **passed** over 44 source files.
 - `pip check`: **passed**, no broken requirements.
@@ -255,6 +255,9 @@ Task notation:
 - System instruction/schema and deterministically serialized Unicode payload occupy separate messages with explicit untrusted-data delimiters.
 - Authentication is per request and omitted for unauthenticated profiles; no global client auth, retry, fallback, tool, streaming, temperature, or provider option is introduced.
 - Until Phase 6, a returned HTTP response is deliberately rejected with fixed `LLMResponseEnvelopeError`; no raw or placeholder mapping can cross the port.
+- T075 review correction: the adapter snapshots every valid `Mapping[str, object]` into a plain per-call dictionary inside the safe serialization boundary; mapping iteration/snapshot failures are sanitized before network activity.
+- Review-correction tests commit: `0e24b4485cf8a8b2a3777d79b79d204a782dcce5`.
+- Review-correction production commit: `e2eb445573b00f64a0a6048f14ac35e3ee27c76b`.
 - T075 remains pending for explicit block review.
 
 ---
