@@ -268,16 +268,24 @@ Task notation:
 
 ### 7.1 Tests first
 
-- [ ] T076 [TEST] Add failing success tests for the accepted minimum envelope and ignored unrelated provider-envelope extras.
-- [ ] T077 [P] [TEST] Add failing tests for timeout subclasses mapping to exact `LLMRequestTimeoutError`.
-- [ ] T078 [P] [TEST] Add failing tests proving HTTPX `RequestError` failures—including connection, proxy, protocol, and HTTP content-decoding failures—map to exact `LLMTransportError`; keep response-body `json.JSONDecodeError` under T080.
-- [ ] T079 [P] [TEST] Add failing tests for 3xx/4xx/5xx statuses mapping to exact `LLMHTTPStatusError` with redirects disabled.
-- [ ] T080 [P] [TEST] Add failing envelope tests for response-body `json.JSONDecodeError`, non-object envelope JSON, absent/wrong `choices`, zero/multiple choices, wrong choice/message, and absent/blank/non-string content.
-- [ ] T081 [P] [TEST] Add failing structured-content tests for malformed JSON, array, string, number, boolean, null, fenced JSON, and prefix/suffix prose.
-- [ ] T082 [P] [TEST] Add failing sanitization tests using secret, endpoint, model, payload, prompt, response-body, and provider-error markers.
-- [ ] T083 [P] [TEST] Add failing tests proving exactly one attempted request and no JSON repair, second request, mode downgrade, or fallback.
-- [ ] T084 [P] [TEST] Add failing tests proving a valid JSON object is returned unchanged for participant validation even when semantically invalid.
-- [ ] T085 [TEST] Run Phase 6 tests and confirm the intended red state.
+- [X] T076 [TEST] Add failing success tests for the accepted minimum envelope and ignored unrelated provider-envelope extras.
+- [X] T077 [P] [TEST] Add failing tests for timeout subclasses mapping to exact `LLMRequestTimeoutError`.
+- [X] T078 [P] [TEST] Add failing tests proving HTTPX `RequestError` failures—including connection, proxy, protocol, and HTTP content-decoding failures—map to exact `LLMTransportError`; keep response-body `json.JSONDecodeError` under T080.
+- [X] T079 [P] [TEST] Add failing tests for 3xx/4xx/5xx statuses mapping to exact `LLMHTTPStatusError` with redirects disabled.
+- [X] T080 [P] [TEST] Add failing envelope tests for response-body `json.JSONDecodeError`, non-object envelope JSON, absent/wrong `choices`, zero/multiple choices, wrong choice/message, and absent/blank/non-string content.
+- [X] T081 [P] [TEST] Add failing structured-content tests for malformed JSON, array, string, number, boolean, null, fenced JSON, and prefix/suffix prose.
+- [X] T082 [P] [TEST] Add failing sanitization tests using secret, endpoint, model, payload, prompt, response-body, and provider-error markers.
+- [X] T083 [P] [TEST] Add failing tests proving exactly one attempted request and no JSON repair, second request, mode downgrade, or fallback.
+- [X] T084 [P] [TEST] Add failing tests proving a valid JSON object is returned unchanged for participant validation even when semantically invalid.
+- [X] T085 [TEST] Run Phase 6 tests and confirm the intended red state.
+
+#### Phase 6 red evidence
+
+- Response-contract commit: `1107615cd4f61d724487641e2fc3c4e2708ab299`.
+- Focused result against the Phase 5 fail-closed placeholder: **32 failed, 17 passed**.
+- Failures are the intended missing Phase 6 behaviors: success parsing, timeout/transport/status taxonomy, structured-content classification, sanitized mapping, and unchanged valid-object return.
+- Passing cases are envelope shapes already rejected by the Phase 5 placeholder; they do not indicate response-processing implementation.
+- All HTTP interactions use MockTransport and each retry/no-repair assertion observes at most one attempted request.
 
 ### 7.2 Minimal implementation
 
