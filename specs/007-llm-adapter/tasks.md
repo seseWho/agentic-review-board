@@ -395,12 +395,13 @@ Task notation:
 - `pip check`: **passed**, no broken requirements.
 - Phase 8 produced no red state: the production adapter and runtime already expose all approved support required by the new verification contracts.
 - T123/T124 reviewed as no-op: existing exports and type annotations satisfy the approved contracts, and no infrastructure-to-core leakage was found; no production files changed.
+- T125 focused rerun: `pytest -q tests/contract tests/integration tests/architecture` — **24 passed**.
 
 ### 9.2 Minimal completion
 
 - [X] T123 Add only the smallest exports/type annotations required for the approved contract and architecture tests.
 - [X] T124 Correct any infrastructure-to-core leakage without changing existing domain/application/participant semantics.
-- [ ] T125 Run focused Phase 8 tests to green.
+- [X] T125 Run focused Phase 8 tests to green.
 - [ ] T126 Run full pytest, Ruff, mypy strict, and `pip check`.
 - [ ] T127 [GATE] Review unchanged core boundaries, mixed orchestration behavior, failure mapping, dependency direction, and regressions; stop before smoke/documentation.
 
