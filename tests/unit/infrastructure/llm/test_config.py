@@ -288,7 +288,7 @@ def test_runtime_profiles_mapping_is_immutable_after_validation() -> None:
     with pytest.raises(TypeError):
         config.profiles["remote"] = RawLLMProfile.model_validate(profile_data())  # type: ignore[index]
     with pytest.raises(TypeError):
-        del config.profiles["local"]  # type: ignore[misc]
+        del config.profiles["local"]  # type: ignore[attr-defined]
     with pytest.raises(AttributeError):
         config.profiles.clear()  # type: ignore[attr-defined]
 
