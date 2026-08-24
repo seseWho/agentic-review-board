@@ -1,0 +1,24 @@
+{
+  "profiles": {
+    "local": {
+      "base_url": "http://localhost:11434/v1",
+      "model": "local-model-name",
+      "timeout_seconds": 30.0,
+      "structured_output_mode": "PROMPT_ONLY"
+    },
+    "remote": {
+      "base_url": "https://api.example.com/v1",
+      "model": "remote-model-name",
+      "api_key_env": "REMOTE_LLM_API_KEY",
+      "timeout_seconds": 30.0,
+      "structured_output_mode": "JSON_OBJECT"
+    }
+  },
+  "assignments": {
+    "analyst": "local",
+    "solution_architect": "remote",
+    "risk_reviewer": "local",
+    "critic": "remote",
+    "coordinator": "remote"
+  }
+}
