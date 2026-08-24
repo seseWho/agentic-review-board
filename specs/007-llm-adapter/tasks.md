@@ -358,8 +358,8 @@ Task notation:
 
 - Hermetic-test correction commit: `4671626f90224325eedfe9ff8476bab3d391ebbb`; every runtime test supplies MockTransport while production retains `trust_env=True`.
 - Production composition commit: `2c7cfb1d53f00e376e71a465c7c8a36c74cf4f42`.
-- Focused composition suite: **20 passed**.
-- Full repository suite: **963 passed**.
+- Focused composition suite after review correction: **21 passed**.
+- Full repository suite after review correction: **964 passed**.
 - Ruff: **passed**.
 - Strict mypy: **passed** over 47 source files.
 - `pip check`: **passed**, no broken requirements.
@@ -367,7 +367,7 @@ Task notation:
 - Construction closes the client on every later exception; lifecycle is exactly OPEN/CLOSED with idempotent close, guarded enter/execute, and context-exit cleanup.
 - Public runtime operations are limited to `from_config`, `execute`, and `close`; safe immutable metadata exposes only selected names, participant/name mapping, and lifecycle state.
 - Sequential execution retains fixed composition but no Review, prompt, or response objects.
-- T114 remains pending for explicit block review.
+- T114 review correction preserves the primary construction exception when defensive client cleanup also fails; cleanup is still attempted exactly once and its dynamic detail is not promoted.\n- Review test commit: `8c2c2794f32737f9cf32c72ba1910704da13a918`; production correction commit: `a4846a7946d5e82540aafe87b31892603ab67741`.\n- T114 remains pending for explicit approval.
 
 ---
 
