@@ -26,6 +26,9 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+markers = [
+    "live_llm: explicitly authorized live connectivity checks for selected LLM profiles",
+]
 
 [tool.ruff]
 target-version = "py312"
