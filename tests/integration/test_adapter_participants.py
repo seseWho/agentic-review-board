@@ -10,6 +10,13 @@ from pydantic import BaseModel
 
 from agentic_review_board.domain.analysis import ProblemAnalysis
 from agentic_review_board.domain.critics import CriticalReview
+from agentic_review_board.domain.execution import (
+    Review,
+    ReviewErrorKind,
+    ReviewStatus,
+    StageIdentity,
+    StageStatus,
+)
 from agentic_review_board.domain.final_reviews import (
     FinalReview,
     RecommendationOutcome,
@@ -21,6 +28,7 @@ from agentic_review_board.domain.solutions import (
     GenerationNotes,
     SolutionAlternatives,
 )
+from agentic_review_board.infrastructure.llm.composition import ConfiguredReviewRuntime
 from agentic_review_board.infrastructure.llm.config import (
     RawLLMRuntimeConfig,
     ResolvedLLMProfile,
@@ -126,6 +134,50 @@ def trusted_inputs() -> tuple[
     return review_input, analysis, alternatives, assessment, critique
 
 
+def final_review() -> FinalReview:
+    return FinalReview(
+        situation_summary="The current input does not justify alternatives.",
+        ranked_alternatives=(),
+        recommendation_outcome=RecommendationOutcome.INSUFFICIENT_EVIDENCE,
+        preferred_alternative_id=None,
+        conclusion_rationale="No supported recommendation can be made.",
+        principal_risks=(),
+        unresolved_questions=(),
+        criticism_dispositions=(),
+        next_validation_step="Provide additional decision constraints.",
+        confidence=QualitativeLevel.LOW,
+    )
+
+
+def mixed_runtime_config() -> RawLLMRuntimeConfig:
+    return RawLLMRuntimeConfig.model_validate(
+        {
+            "profiles": {
+                "local": {
+                    "base_url": "http://localhost:11434/v1",
+                    "model": "local-model",
+                    "timeout_seconds": 5.0,
+                    "structured_output_mode": "PROMPT_ONLY",
+                },
+                "remote": {
+                    "base_url": "https://api.example.test/v1",
+                    "model": "remote-model",
+                    "api_key_env": "REMOTE_KEY",
+                    "timeout_seconds": 5.0,
+                    "structured_output_mode": "JSON_OBJECT",
+                },
+            },
+            "assignments": {
+                "analyst": "local",
+                "solution_architect": "remote",
+                "risk_reviewer": "local",
+                "critic": "remote",
+                "coordinator": "remote",
+            },
+        }
+    )
+
+
 def test_production_adapter_integrates_with_analyst() -> None:
     review_input, expected, _, _, _ = trusted_inputs()
 
@@ -177,18 +229,7 @@ def test_production_adapter_integrates_with_critic() -> None:
 
 def test_production_adapter_integrates_with_coordinator() -> None:
     review_input, analysis, alternatives, assessment, critique = trusted_inputs()
-    expected = FinalReview(
-        situation_summary="The current input does not justify alternatives.",
-        ranked_alternatives=(),
-        recommendation_outcome=RecommendationOutcome.INSUFFICIENT_EVIDENCE,
-        preferred_alternative_id=None,
-        conclusion_rationale="No supported recommendation can be made.",
-        principal_risks=(),
-        unresolved_questions=(),
-        criticism_dispositions=(),
-        next_validation_step="Provide additional decision constraints.",
-        confidence=QualitativeLevel.LOW,
-    )
+    expected = final_review()
 
     with adapter_returning(expected) as (adapter, requests):
         result = Coordinator(adapter).coordinate(
@@ -283,3 +324,98 @@ def test_coordinator_owns_semantically_invalid_adapter_object_rejection() -> Non
             )
 
     assert len(requests) == 1
+
+
+def test_mixed_profile_runtime_executes_complete_review_in_fixed_order() -> None:
+    review_input, analysis, alternatives, assessment, critique = trusted_inputs()
+    outputs: list[BaseModel] = [
+        analysis,
+        alternatives,
+        assessment,
+        critique,
+        final_review(),
+    ]
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        output = outputs[len(requests)]
+        requests.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {"message": {"content": output.model_dump_json()}}
+                ]
+            },
+        )
+
+    with ConfiguredReviewRuntime.from_config(
+        mixed_runtime_config(),
+        {"REMOTE_KEY": "remote-secret-marker"},
+        transport=httpx.MockTransport(handler),
+    ) as runtime:
+        result = runtime.execute(Review.create(review_input))
+
+    assert result.status is ReviewStatus.COMPLETED
+    assert all(stage.status is StageStatus.COMPLETED for stage in result.stages)
+    assert [str(request.url) for request in requests] == [
+        "http://localhost:11434/v1/chat/completions",
+        "https://api.example.test/v1/chat/completions",
+        "http://localhost:11434/v1/chat/completions",
+        "https://api.example.test/v1/chat/completions",
+        "https://api.example.test/v1/chat/completions",
+    ]
+    assert [json.loads(request.content)["model"] for request in requests] == [
+        "local-model",
+        "remote-model",
+        "local-model",
+        "remote-model",
+        "remote-model",
+    ]
+    assert [request.headers.get("authorization") for request in requests] == [
+        None,
+        "Bearer remote-secret-marker",
+        None,
+        "Bearer remote-secret-marker",
+        "Bearer remote-secret-marker",
+    ]
+
+
+def test_selected_remote_provider_failure_stops_without_local_fallback() -> None:
+    review_input, analysis, _, _, _ = trusted_inputs()
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if len(requests) == 1:
+            return httpx.Response(
+                200,
+                json={
+                    "choices": [
+                        {"message": {"content": analysis.model_dump_json()}}
+                    ]
+                },
+            )
+        return httpx.Response(503, content=b"provider detail must not escape")
+
+    with ConfiguredReviewRuntime.from_config(
+        mixed_runtime_config(),
+        {"REMOTE_KEY": "remote-secret-marker"},
+        transport=httpx.MockTransport(handler),
+    ) as runtime:
+        result = runtime.execute(Review.create(review_input))
+
+    failed_stage = result.stage(StageIdentity.SOLUTION_ARCHITECT)
+    assert result.status is ReviewStatus.INCOMPLETE
+    assert result.stage(StageIdentity.ANALYST).status is StageStatus.COMPLETED
+    assert failed_stage.status is StageStatus.FAILED
+    assert failed_stage.error is not None
+    assert failed_stage.error.kind is ReviewErrorKind.EXECUTION
+    assert failed_stage.error.message == "Solution Architect execution failed"
+    assert result.stage(StageIdentity.RISK_REVIEWER).status is StageStatus.PENDING
+    assert result.stage(StageIdentity.CRITIC).status is StageStatus.PENDING
+    assert result.stage(StageIdentity.COORDINATOR).status is StageStatus.PENDING
+    assert [str(request.url) for request in requests] == [
+        "http://localhost:11434/v1/chat/completions",
+        "https://api.example.test/v1/chat/completions",
+    ]
