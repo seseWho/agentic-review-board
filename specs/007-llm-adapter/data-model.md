@@ -3,7 +3,7 @@
 **Branch**: `007-llm-adapter`  
 **Specification**: `specs/007-llm-adapter/spec.md` — Approved  
 **Plan**: `specs/007-llm-adapter/plan.md` — Approved  
-**Status**: Draft — pending review and approval before task decomposition
+**Status**: Approved — reviewed against specification and plan; ready for task decomposition
 
 ## 1. Purpose
 
