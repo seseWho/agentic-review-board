@@ -9,6 +9,7 @@ import pytest
 from agentic_review_board.infrastructure.llm.config import (
     RawLLMRuntimeConfig,
     ResolvedLLMProfile,
+    ResolvedParticipantLLMAssignment,
     StructuredOutputMode,
     resolve_llm_runtime_config,
 )
@@ -80,7 +81,9 @@ class RecordingEnvironment(Mapping[str, str]):
         return len(self._values)
 
 
-def resolved_profiles(assignment: object) -> tuple[ResolvedLLMProfile, ...]:
+def resolved_profiles(
+    assignment: ResolvedParticipantLLMAssignment,
+) -> tuple[ResolvedLLMProfile, ...]:
     return (
         assignment.analyst,
         assignment.solution_architect,
