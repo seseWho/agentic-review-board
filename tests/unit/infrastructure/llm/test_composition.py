@@ -11,6 +11,8 @@ from agentic_review_board.infrastructure.llm.composition import (
 )
 
 from agentic_review_board.application.orchestrator import ReviewOrchestrator
+from agentic_review_board.domain.execution import Review, ReviewStatus, StageStatus
+from agentic_review_board.domain.review import ReviewInput
 from agentic_review_board.infrastructure.llm import composition
 from agentic_review_board.infrastructure.llm.config import RawLLMRuntimeConfig, ResolvedLLMProfile
 from agentic_review_board.infrastructure.llm.errors import (
@@ -65,8 +67,10 @@ def shared_runtime_config() -> RawLLMRuntimeConfig:
 class CloseRecordingTransport(httpx.BaseTransport):
     def __init__(self) -> None:
         self.close_count = 0
+        self.request_count = 0
 
     def handle_request(self, request: httpx.Request) -> httpx.Response:
+        self.request_count += 1
         return httpx.Response(200, json={}, request=request)
 
     def close(self) -> None:
@@ -640,3 +644,32 @@ def test_public_surface_does_not_expose_owned_runtime_objects() -> None:
         "resolved_assignment",
         "resolved_profiles",
     }.isdisjoint(public_names)
+
+
+def test_closed_runtime_execute_fails_before_review_transition_or_request() -> None:
+    transport = CloseRecordingTransport()
+    runtime = ConfiguredReviewRuntime.from_config(
+        shared_runtime_config(),
+        {},
+        transport=transport,
+    )
+    review = Review.create(
+        ReviewInput(
+            description="Closed runtime guard marker.",
+            title="Guard test",
+        )
+    )
+    original_stages = review.stages
+    runtime.close()
+
+    with pytest.raises(
+        LLMRuntimeClosedError,
+        match=r"^LLM runtime is closed$",
+    ):
+        runtime.execute(review)
+
+    assert review.status is ReviewStatus.CREATED
+    assert review.stages is original_stages
+    assert all(stage.status is StageStatus.PENDING for stage in review.stages)
+    assert transport.request_count == 0
+    assert transport.close_count == 1
