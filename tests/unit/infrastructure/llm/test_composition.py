@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import gc
+import weakref
 from collections.abc import Callable, Mapping
 from typing import Any
 
@@ -673,3 +675,82 @@ def test_closed_runtime_execute_fails_before_review_transition_or_request() -> N
     assert all(stage.status is StageStatus.PENDING for stage in review.stages)
     assert transport.request_count == 0
     assert transport.close_count == 1
+
+
+def test_sequential_reviews_keep_fixed_assignment_without_retained_call_data(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = runtime_config(
+        profiles={
+            "local": profile_data(
+                base_url="http://localhost:11434/v1",
+                model="local-model",
+            ),
+            "remote": profile_data(
+                base_url="https://api.example.test/v1",
+                model="remote-model",
+            ),
+        },
+        assignments={
+            "analyst": "local",
+            "solution_architect": "remote",
+            "risk_reviewer": "local",
+            "critic": "remote",
+            "coordinator": "remote",
+        },
+    )
+    created_adapters, _, participant_adapters = record_runtime_composition(monkeypatch)
+    execution_ids: list[int] = []
+    construction_calls: list[tuple[object, ...]] = []
+    prompt_references: list[weakref.ReferenceType[object]] = []
+    response_references: list[weakref.ReferenceType[object]] = []
+
+    class CallMarker:
+        pass
+
+    class StatelessRecordingOrchestrator:
+        def __init__(self, *participants: object) -> None:
+            construction_calls.append(participants)
+
+        def execute(self, review: Review) -> Review:
+            prompt_marker = CallMarker()
+            response_marker = CallMarker()
+            prompt_references.append(weakref.ref(prompt_marker))
+            response_references.append(weakref.ref(response_marker))
+            execution_ids.append(id(review))
+            return review
+
+    monkeypatch.setattr(
+        composition,
+        "ReviewOrchestrator",
+        StatelessRecordingOrchestrator,
+    )
+    runtime = ConfiguredReviewRuntime.from_config(config, {})
+    initial_adapters = dict(created_adapters)
+    initial_participant_adapters = dict(participant_adapters)
+
+    first_review = Review.create(ReviewInput(description="first-review-marker"))
+    second_review = Review.create(ReviewInput(description="second-review-marker"))
+    first_id = id(first_review)
+    second_id = id(second_review)
+    first_reference = weakref.ref(first_review)
+    second_reference = weakref.ref(second_review)
+
+    first_result = runtime.execute(first_review)
+    second_result = runtime.execute(second_review)
+
+    assert first_result is first_review
+    assert second_result is second_review
+    assert execution_ids == [first_id, second_id]
+    assert len(construction_calls) == 1
+    assert created_adapters == initial_adapters
+    assert participant_adapters == initial_participant_adapters
+
+    del first_result, second_result, first_review, second_review
+    gc.collect()
+
+    assert first_reference() is None
+    assert second_reference() is None
+    assert all(reference() is None for reference in prompt_references)
+    assert all(reference() is None for reference in response_references)
+    runtime.close()
