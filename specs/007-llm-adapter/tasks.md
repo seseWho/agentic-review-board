@@ -233,15 +233,29 @@ Task notation:
 
 ### 6.2 Minimal implementation
 
-- [ ] T067 Implement `OpenAICompatibleLLMAdapter` construction with one resolved profile, shared HTTPX client, and immutable prompt definitions.
-- [ ] T068 Implement exact role-first validation and deterministic payload/schema rendering.
-- [ ] T069 Implement headers, target, two-message body, model, and `n=1`.
-- [ ] T070 Implement exact structured-output-mode request branching without probing, fallback, or retry.
-- [ ] T071 Issue exactly one synchronous client POST with the resolved profile timeout.
-- [ ] T072 Map payload serialization failures safely before network activity.
-- [ ] T073 Run focused Phase 5 tests to green.
-- [ ] T074 Run full pytest, Ruff, mypy strict, and `pip check`.
+- [X] T067 Implement `OpenAICompatibleLLMAdapter` construction with one resolved profile, shared HTTPX client, and immutable prompt definitions.
+- [X] T068 Implement exact role-first validation and deterministic payload/schema rendering.
+- [X] T069 Implement headers, target, two-message body, model, and `n=1`.
+- [X] T070 Implement exact structured-output-mode request branching without probing, fallback, or retry.
+- [X] T071 Issue exactly one synchronous client POST with the resolved profile timeout.
+- [X] T072 Map payload serialization failures safely before network activity.
+- [X] T073 Run focused Phase 5 tests to green.
+- [X] T074 Run full pytest, Ruff, mypy strict, and `pip check`.
 - [ ] T075 [GATE] Review captured requests, authentication isolation, schema/payload separation, timeout, forbidden fields, request count, and regressions; stop before response processing.
+
+### Phase 5 implementation evidence
+
+- Production commit: `d1c62f2fdfe8c2cb1fb3973478aae8355227344d`.
+- Focused request-construction suite: **14 passed**.
+- Full repository suite: **886 passed**.
+- Ruff: **passed**.
+- Strict mypy: **passed** over 44 source files.
+- `pip check`: **passed**, no broken requirements.
+- Every tested generation performs exactly one MockTransport-captured POST with explicit per-request timeout; unsupported roles and unserializable payloads fail before the handler.
+- System instruction/schema and deterministically serialized Unicode payload occupy separate messages with explicit untrusted-data delimiters.
+- Authentication is per request and omitted for unauthenticated profiles; no global client auth, retry, fallback, tool, streaming, temperature, or provider option is introduced.
+- Until Phase 6, a returned HTTP response is deliberately rejected with fixed `LLMResponseEnvelopeError`; no raw or placeholder mapping can cross the port.
+- T075 remains pending for explicit block review.
 
 ---
 
