@@ -496,14 +496,14 @@ Task notation:
 
 ### Phase 10 final evidence
 
-- T143 local default suite with live authorization, config path, and example credential explicitly unset: **1008 passed, 1 skipped**. The sole skip is the opt-in live smoke test; no live endpoint was contacted.\n- T144 final `ruff check .`: **passed**.\n- T145 final strict mypy with a fresh isolated cache: **passed**, no issues in 59 source files.
+- T143 local default suite with live authorization, config path, and example credential explicitly unset: **1008 passed, 1 skipped**. The sole skip is the opt-in live smoke test; no live endpoint was contacted.\n- T144 final `ruff check .`: **passed**.\n- T145 final strict mypy with a fresh isolated cache: **passed**, no issues in 59 source files.\n- T146 final `pip check`: **passed**, no broken requirements.
 
 **Goal:** Close Slice 7 with deterministic evidence and no prohibited expansion.
 
 - [X] T143 Run the complete default pytest suite on the supported local Python version with no credentials or live endpoints.
 - [X] T144 Run `ruff check .`.
 - [X] T145 Run strict `mypy`.
-- [ ] T146 Run `pip check`.
+- [X] T146 Run `pip check`.
 - [ ] T147 Verify GitHub Actions passes on all configured Python versions without secrets.
 - [ ] T148 Review dependency diff and confirm HTTPX is the only new justified runtime dependency.
 - [ ] T149 Search changed production code, runtime dependencies, and executable modules—not canonical docs—for credentials, secret values, full prompt/response logging, raw provider-error interpolation, retries, sleeps, fallback, routing, provider SDKs, and test imports.
