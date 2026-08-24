@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
+import json
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 
 import httpx
+import pytest
 from pydantic import BaseModel
 
 from agentic_review_board.domain.analysis import ProblemAnalysis
@@ -27,11 +29,20 @@ from agentic_review_board.infrastructure.llm.config import (
 from agentic_review_board.infrastructure.llm.openai_compatible import (
     OpenAICompatibleLLMAdapter,
 )
-from agentic_review_board.participants.analyst import Analyst
-from agentic_review_board.participants.coordinator import Coordinator
-from agentic_review_board.participants.critic import Critic
-from agentic_review_board.participants.risk_reviewer import RiskReviewer
-from agentic_review_board.participants.solution_architect import SolutionArchitect
+from agentic_review_board.participants.analyst import Analyst, AnalystOutputError
+from agentic_review_board.participants.coordinator import (
+    Coordinator,
+    CoordinatorOutputError,
+)
+from agentic_review_board.participants.critic import Critic, CriticOutputError
+from agentic_review_board.participants.risk_reviewer import (
+    RiskReviewer,
+    RiskReviewerOutputError,
+)
+from agentic_review_board.participants.solution_architect import (
+    SolutionArchitect,
+    SolutionArchitectOutputError,
+)
 
 
 def resolved_profile() -> ResolvedLLMProfile:
@@ -59,9 +70,14 @@ def resolved_profile() -> ResolvedLLMProfile:
 
 @contextmanager
 def adapter_returning(
-    output: BaseModel,
+    output: BaseModel | Mapping[str, object],
 ) -> Iterator[tuple[OpenAICompatibleLLMAdapter, list[httpx.Request]]]:
     requests: list[httpx.Request] = []
+    content = (
+        output.model_dump_json()
+        if isinstance(output, BaseModel)
+        else json.dumps(dict(output))
+    )
 
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
@@ -69,7 +85,7 @@ def adapter_returning(
             200,
             json={
                 "choices": [
-                    {"message": {"content": output.model_dump_json()}}
+                    {"message": {"content": content}}
                 ]
             },
         )
@@ -184,4 +200,86 @@ def test_production_adapter_integrates_with_coordinator() -> None:
         )
 
     assert result == expected
+    assert len(requests) == 1
+
+
+def test_analyst_owns_semantically_invalid_adapter_object_rejection() -> None:
+    review_input, _, _, _, _ = trusted_inputs()
+
+    with adapter_returning({"objective": 123}) as (adapter, requests):
+        with pytest.raises(AnalystOutputError):
+            Analyst(adapter).analyze(review_input)
+
+    assert len(requests) == 1
+
+
+def test_solution_architect_owns_semantically_invalid_adapter_object_rejection() -> None:
+    review_input, analysis, _, _, _ = trusted_inputs()
+    one_alternative = {
+        "alternatives": [
+            {
+                "id": "ALT-001",
+                "name": "Only option",
+                "description": "One option violates the approved result cardinality.",
+                "advantages": [],
+                "disadvantages": [],
+                "assumptions": [],
+                "implementation_complexity": "LOW",
+                "relevant_constraints": [],
+            }
+        ],
+        "generation_notes": None,
+    }
+
+    with adapter_returning(one_alternative) as (adapter, requests):
+        with pytest.raises(SolutionArchitectOutputError):
+            SolutionArchitect(adapter).propose(review_input, analysis)
+
+    assert len(requests) == 1
+
+
+def test_risk_reviewer_owns_semantically_invalid_adapter_object_rejection() -> None:
+    review_input, analysis, alternatives, _, _ = trusted_inputs()
+    invalid_assessment = {
+        "risks": "not-a-risk-collection",
+        "overall_observations": [],
+    }
+
+    with adapter_returning(invalid_assessment) as (adapter, requests):
+        with pytest.raises(RiskReviewerOutputError):
+            RiskReviewer(adapter).assess(review_input, analysis, alternatives)
+
+    assert len(requests) == 1
+
+
+def test_critic_owns_semantically_invalid_adapter_object_rejection() -> None:
+    review_input, analysis, alternatives, assessment, _ = trusted_inputs()
+    invalid_critique = {"criticisms": "not-a-criticism-collection"}
+
+    with adapter_returning(invalid_critique) as (adapter, requests):
+        with pytest.raises(CriticOutputError):
+            Critic(adapter).review(
+                review_input,
+                analysis,
+                alternatives,
+                assessment,
+            )
+
+    assert len(requests) == 1
+
+
+def test_coordinator_owns_semantically_invalid_adapter_object_rejection() -> None:
+    review_input, analysis, alternatives, assessment, critique = trusted_inputs()
+    invalid_final_review = {"situation_summary": 123}
+
+    with adapter_returning(invalid_final_review) as (adapter, requests):
+        with pytest.raises(CoordinatorOutputError):
+            Coordinator(adapter).coordinate(
+                review_input,
+                analysis,
+                alternatives,
+                assessment,
+                critique,
+            )
+
     assert len(requests) == 1
