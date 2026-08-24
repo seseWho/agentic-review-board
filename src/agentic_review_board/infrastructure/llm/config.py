@@ -4,7 +4,7 @@ import json
 import math
 import re
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 from types import MappingProxyType
@@ -191,8 +191,17 @@ class ResolvedLLMProfile:
     base_url: str
     model: str
     api_key: SecretStr | None
-    timeout: httpx.Timeout
+    _timeout_seconds: float = field(repr=False)
     structured_output_mode: StructuredOutputMode
+
+    @property
+    def timeout(self) -> httpx.Timeout:
+        return httpx.Timeout(
+            connect=self._timeout_seconds,
+            read=self._timeout_seconds,
+            write=self._timeout_seconds,
+            pool=self._timeout_seconds,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -213,7 +222,7 @@ def _resolve_api_key(
 
     try:
         value = environment[raw_profile.api_key_env]
-    except KeyError as error:
+    except Exception as error:
         raise LLMConfigurationError() from error
 
     if (
@@ -236,12 +245,7 @@ def _resolve_profile(
         base_url=raw_profile.base_url,
         model=raw_profile.model,
         api_key=_resolve_api_key(raw_profile, environment),
-        timeout=httpx.Timeout(
-            connect=timeout,
-            read=timeout,
-            write=timeout,
-            pool=timeout,
-        ),
+        _timeout_seconds=timeout,
         structured_output_mode=raw_profile.structured_output_mode,
     )
 
