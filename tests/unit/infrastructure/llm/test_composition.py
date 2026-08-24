@@ -594,3 +594,49 @@ def test_closed_context_entry_fails_with_exact_safe_error() -> None:
         runtime.__enter__()
 
     assert transport.close_count == 1
+
+
+def test_execute_is_the_only_public_review_execution_path() -> None:
+    transport = CloseRecordingTransport()
+    runtime = ConfiguredReviewRuntime.from_config(
+        shared_runtime_config(),
+        {},
+        transport=transport,
+    )
+
+    public_callables = {
+        name
+        for name in dir(runtime)
+        if not name.startswith("_") and callable(getattr(runtime, name))
+    }
+    runtime.close()
+
+    assert public_callables == {"close", "execute", "from_config"}
+    assert "run" not in public_callables
+    assert "orchestrate" not in public_callables
+
+
+def test_public_surface_does_not_expose_owned_runtime_objects() -> None:
+    transport = CloseRecordingTransport()
+    runtime = ConfiguredReviewRuntime.from_config(
+        shared_runtime_config(),
+        {},
+        transport=transport,
+    )
+
+    public_names = {name for name in dir(runtime) if not name.startswith("_")}
+    runtime.close()
+
+    assert set(composition.__all__) == {"ConfiguredReviewRuntime"}
+    assert {
+        "adapter",
+        "adapters",
+        "adapter_by_profile",
+        "assignment",
+        "client",
+        "http_client",
+        "orchestrator",
+        "profiles",
+        "resolved_assignment",
+        "resolved_profiles",
+    }.isdisjoint(public_names)
