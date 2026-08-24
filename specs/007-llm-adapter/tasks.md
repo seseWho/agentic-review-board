@@ -330,7 +330,16 @@ Task notation:
 - [X] T101 [P] [TEST] Add failing tests proving closed-runtime execution raises exact `LLMRuntimeClosedError` before Review transition or request.
 - [X] T102 [P] [TEST] Add failing sequential-Review tests proving fixed assignments and no retained Review/prompt/response data.
 - [X] T103 [P] [TEST] Add failing safe-public-surface tests for profile names, participant/profile mapping, lifecycle state, and absence of credentials.
-- [ ] T104 [TEST] Run Phase 7 tests and confirm the intended red state.
+- [X] T104 [TEST] Run Phase 7 tests and confirm the intended red state.
+
+#### Phase 7 red evidence
+
+- Composition-contract commits: `cdf70c7fc28ff24a96d936d4b5b0e6a018a307a8` through `af2f3a8fcf136417dba08575f26dea53eaeabba9`.
+- The focused Phase 7 file defines **20 deterministic tests** covering client policy, adapter identity/reuse, supported topologies, exact orchestrator wiring, construction atomicity, lifecycle, public surface, closed execution, sequential statelessness, and safe metadata.
+- Focused collection stops with exactly one expected error: `ModuleNotFoundError: No module named 'agentic_review_board.infrastructure.llm.composition'`.
+- The failure is caused exclusively by the intentionally absent Phase 7 composition module; no runtime composition or lifecycle production behavior has been added.
+- The Phase 7 test file passes Ruff and formatting checks.
+- All HTTP behavior remains MockTransport-backed; no live endpoint, credential, or installed model is required.
 
 ### 8.2 Minimal implementation
 
