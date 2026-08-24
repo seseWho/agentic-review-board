@@ -18,7 +18,6 @@ from agentic_review_board.infrastructure.llm.prompts import (
     get_role_prompt_definition,
 )
 
-
 ROLE_MODELS: dict[LLMRole, type[BaseModel]] = {
     LLMRole.ANALYST: ProblemAnalysis,
     LLMRole.SOLUTION_ARCHITECT: SolutionAlternatives,
