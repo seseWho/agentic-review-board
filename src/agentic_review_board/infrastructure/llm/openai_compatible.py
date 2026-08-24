@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import NoReturn
 
 import httpx
 
@@ -25,6 +26,10 @@ from agentic_review_board.infrastructure.llm.prompts import (
 _UNTRUSTED_PAYLOAD_BEGIN = "UNTRUSTED_PAYLOAD_JSON_BEGIN"
 _UNTRUSTED_PAYLOAD_END = "UNTRUSTED_PAYLOAD_JSON_END"
 _OUTPUT_SCHEMA_LABEL = "OUTPUT_JSON_SCHEMA:"
+
+
+def _reject_non_json_constant(_value: str) -> NoReturn:
+    raise ValueError("non-JSON numeric constant")
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,8 +123,8 @@ class OpenAICompatibleLLMAdapter:
     @staticmethod
     def _parse_structured_content(content: str) -> dict[str, object]:
         try:
-            parsed = json.loads(content)
-        except json.JSONDecodeError as error:
+            parsed = json.loads(content, parse_constant=_reject_non_json_constant)
+        except ValueError as error:
             raise LLMStructuredContentError() from error
 
         if not isinstance(parsed, dict):
@@ -132,6 +137,7 @@ class OpenAICompatibleLLMAdapter:
             payload_snapshot = dict(payload)
             return json.dumps(
                 payload_snapshot,
+                allow_nan=False,
                 ensure_ascii=False,
                 separators=(",", ":"),
                 sort_keys=True,
