@@ -184,13 +184,25 @@ Task notation:
 
 ### 5.2 Minimal implementation
 
-- [ ] T049 Implement immutable `RolePromptDefinition` and the closed role/model mapping in `src/agentic_review_board/infrastructure/llm/prompts.py`.
-- [ ] T050 Implement five explicit semantic instruction constants with only approved role behavior.
-- [ ] T051 Generate and deterministically serialize each output model's `model_json_schema()` once when prompt definitions are constructed.
-- [ ] T052 Implement exact role lookup raising `UnsupportedLLMRoleError`.
-- [ ] T053 Run focused Phase 4 tests to green.
-- [ ] T054 Run full pytest, Ruff, mypy strict, and `pip check`.
+- [X] T049 Implement immutable `RolePromptDefinition` and the closed role/model mapping in `src/agentic_review_board/infrastructure/llm/prompts.py`.
+- [X] T050 Implement five explicit semantic instruction constants with only approved role behavior.
+- [X] T051 Generate and deterministically serialize each output model's `model_json_schema()` once when prompt definitions are constructed.
+- [X] T052 Implement exact role lookup raising `UnsupportedLLMRoleError`.
+- [X] T053 Run focused Phase 4 tests to green.
+- [X] T054 Run full pytest, Ruff, mypy strict, and `pip check`.
 - [ ] T055 [GATE] Review role separation, schema source of truth, prompt-injection boundary, absence of duplicate model hierarchy, and regressions; stop before HTTP requests.
+
+### Phase 4 implementation evidence
+
+- Production commit: `8da078a362a5e1ff1a49283241897bfa9e99fbea`.
+- Focused prompt suite: **36 passed**.
+- Full repository suite: **872 passed**.
+- Ruff: **passed**.
+- Strict mypy: **passed** over 42 source files.
+- `pip check`: **passed**, no broken requirements.
+- Exactly five frozen role definitions are constructed once; schemas derive directly from the five existing Pydantic output models and are serialized deterministically.
+- Lookup is exact and fail-closed; no fallback role, provider/model-specific prompt, payload state, credential, endpoint, HTTP behavior, prompt framework, or duplicate output model exists.
+- T055 remains pending for explicit block review.
 
 ---
 
