@@ -167,13 +167,20 @@ Task notation:
 
 ### 5.1 Tests first
 
-- [ ] T042 [TEST] Add failing tests for the closed role-to-output-model mapping: Analyst/ProblemAnalysis, Solution Architect/SolutionAlternatives, Risk Reviewer/RiskAssessment, Critic/CriticalReview, and Coordinator/FinalReview.
-- [ ] T043 [P] [TEST] Add failing tests that each role has distinct non-blank semantic instructions preserving its approved responsibility and prohibitions.
-- [ ] T044 [P] [TEST] Add failing tests for shared requirements: payload as untrusted data, direct JSON object, no Markdown/prose, no private chain-of-thought request, and no external action.
-- [ ] T045 [P] [TEST] Add failing tests proving JSON Schema is generated from the exact existing Pydantic model and deterministically serialized once per role definition.
-- [ ] T046 [P] [TEST] Add failing tests proving cached prompt/schema definitions contain no Review data, model endpoint, credential, or provider response.
-- [ ] T047 [P] [TEST] Add failing unknown-role tests proving failure occurs before payload serialization.
-- [ ] T048 [TEST] Run Phase 4 tests and confirm the intended red state.
+- [X] T042 [TEST] Add failing tests for the closed role-to-output-model mapping: Analyst/ProblemAnalysis, Solution Architect/SolutionAlternatives, Risk Reviewer/RiskAssessment, Critic/CriticalReview, and Coordinator/FinalReview.
+- [X] T043 [P] [TEST] Add failing tests that each role has distinct non-blank semantic instructions preserving its approved responsibility and prohibitions.
+- [X] T044 [P] [TEST] Add failing tests for shared requirements: payload as untrusted data, direct JSON object, no Markdown/prose, no private chain-of-thought request, and no external action.
+- [X] T045 [P] [TEST] Add failing tests proving JSON Schema is generated from the exact existing Pydantic model and deterministically serialized once per role definition.
+- [X] T046 [P] [TEST] Add failing tests proving cached prompt/schema definitions contain no Review data, model endpoint, credential, or provider response.
+- [X] T047 [P] [TEST] Add failing unknown-role tests proving failure occurs before payload serialization.
+- [X] T048 [TEST] Run Phase 4 tests and confirm the intended red state.
+
+#### Phase 4 red evidence
+
+- Contract-test commit: `3c9b8f5b5d0f15fa7691e122c7e71c13bb904676`.
+- Focused collection stops with the expected missing module: `ModuleNotFoundError: No module named 'agentic_review_board.infrastructure.llm.prompts'`.
+- The red state is caused exclusively by the intentionally absent Phase 4 prompt-definition contracts.
+- No prompt module, schema cache, HTTP request, adapter, or network behavior has been added.
 
 ### 5.2 Minimal implementation
 
