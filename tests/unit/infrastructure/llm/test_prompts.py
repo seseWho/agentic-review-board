@@ -86,7 +86,9 @@ def test_role_instruction_preserves_approved_responsibility_and_prohibitions(
     required_fragments: tuple[str, ...],
     prohibited_fragments: tuple[str, ...],
 ) -> None:
-    instruction = get_role_prompt_definition(role.value).semantic_instruction.lower()
+    instruction = " ".join(
+        get_role_prompt_definition(role.value).semantic_instruction.lower().split()
+    )
 
     assert all(fragment in instruction for fragment in required_fragments)
     assert all(fragment in instruction for fragment in prohibited_fragments)
