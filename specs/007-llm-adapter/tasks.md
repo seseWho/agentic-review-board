@@ -327,7 +327,7 @@ Task notation:
 - [X] T098 [P] [TEST] Add failing ordering tests proving every naturally fallible configuration, credential, and assignment step completes before client creation; verify the implementation closes the client defensively on an unexpected later exception without adding an injectable participant/orchestrator factory solely for this test.
 - [X] T099 [P] [TEST] Add failing `OPEN` context-entry, idempotent close, automatic context exit, and `CLOSED.__enter__` tests.
 - [X] T100 [P] [TEST] Add failing public-API tests proving `runtime.execute(review)` is the only documented/public execution path and that no public properties or exports expose the orchestrator, client, or adapters; do not claim absolute inaccessibility of underscore-prefixed Python internals.
-- [ ] T101 [P] [TEST] Add failing tests proving closed-runtime execution raises exact `LLMRuntimeClosedError` before Review transition or request.
+- [X] T101 [P] [TEST] Add failing tests proving closed-runtime execution raises exact `LLMRuntimeClosedError` before Review transition or request.
 - [ ] T102 [P] [TEST] Add failing sequential-Review tests proving fixed assignments and no retained Review/prompt/response data.
 - [ ] T103 [P] [TEST] Add failing safe-public-surface tests for profile names, participant/profile mapping, lifecycle state, and absence of credentials.
 - [ ] T104 [TEST] Run Phase 7 tests and confirm the intended red state.
