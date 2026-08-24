@@ -384,7 +384,17 @@ Task notation:
 - [X] T119 [P] [TEST] Extend architecture tests proving domain, application, and participants do not import HTTPX or infrastructure.
 - [X] T120 [P] [TEST] Extend architecture tests proving only infrastructure owns endpoint/auth/envelope behavior and production code never imports `tests/`.
 - [X] T121 [P] [TEST] Add scoped production checks over `src/`, runtime dependencies, and new executable modules for provider SDKs, retry/fallback/router/registry, native provider adapters, persistence, RAG, external-action tools, and UI additions; exclude canonical documentation and legitimate test vocabulary.
-- [ ] T122 [TEST] Run Phase 8 tests and confirm any red state reflects missing verification support only.
+- [X] T122 [TEST] Run Phase 8 tests and confirm any red state reflects missing verification support only.
+
+#### Phase 8 verification evidence
+
+- Focused contract/integration/architecture suites: **24 passed**.
+- Full repository suite: **988 passed**.
+- Ruff: **passed**.
+- Strict mypy: **passed** over 50 source files.
+- `pip check`: **passed**, no broken requirements.
+- Phase 8 produced no red state: the production adapter and runtime already expose all approved support required by the new verification contracts.
+- T123 requires no export or annotation change; T124 finds no infrastructure-to-core leakage to correct. Both remain pending explicit no-op completion review.
 
 ### 9.2 Minimal completion
 
