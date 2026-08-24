@@ -230,7 +230,7 @@ docs/adr/
 
 config/llm.example.json           # committed non-secret multi-profile example
 README.md                         # configuration and opt-in smoke instructions
-pyproject.toml                    # constrained httpx dependency and default smoke exclusion
+pyproject.toml                    # constrained httpx dependency and registered smoke marker
 specs/007-llm-adapter/
 ├── spec.md
 ├── plan.md
@@ -545,7 +545,7 @@ Implementation proceeds in small red-green-refactor blocks:
 6. transport/HTTP sanitization and runtime client closure;
 7. complete participant assignment and mixed composition;
 8. `LLMPort` contract and architecture boundaries;
-9. opt-in marker-controlled live smoke path;
+9. dual-gated marker-and-environment live smoke path;
 10. full regression and quality gates.
 
 ### 10.2 Deterministic adapter tests
@@ -585,9 +585,11 @@ At least one valid JSON object that is semantically invalid shall demonstrate th
 
 ### 10.5 Live smoke tests
 
-Register the `live_llm` pytest marker and exclude it in default project pytest configuration with `-m "not live_llm"`. Document an explicit command using `-m live_llm`; CI never supplies live configuration or overrides the default exclusion. A live test also skips safely when `ARB_LLM_CONFIG_PATH` or a credential referenced by a selected profile is absent.
+Register the `live_llm` pytest marker and require two explicit conditions before network access: selection with `-m live_llm` and `ARB_RUN_LIVE_LLM=1`. A normal `pytest` run may collect the live module but it skips before configuration loading or network access. CI never sets the opt-in variable.
 
-Live tests are opt-in and excluded from default pytest and CI. They verify each selected profile independently using synthetic non-sensitive content and assert only:
+Skip safely when `ARB_RUN_LIVE_LLM` is not exactly `1` or when `ARB_LLM_CONFIG_PATH` is absent. Once both are present, configuration is authoritative: a missing or invalid credential for a selected profile fails rather than skips, while unselected-profile credentials remain irrelevant.
+
+Live tests verify each selected profile independently using synthetic non-sensitive content and assert only:
 
 - endpoint can be called;
 - one direct JSON object is returned;
@@ -767,7 +769,7 @@ The plan is ready for data-model design when review confirms:
 11. direct JSON-object parsing with no repair;
 12. one scalar timeout applied to connect/read/write/pool;
 13. closed safe adapter errors;
-14. deterministic `MockTransport` testing and marker-controlled opt-in per-profile smoke tests;
+14. deterministic `MockTransport` testing and dual-gated opt-in per-selected-profile smoke tests;
 15. focused ADR-0002 before implementation;
 16. no dynamic router, fallback, retries, UI, persistence, or generic framework.
 
