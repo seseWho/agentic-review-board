@@ -60,20 +60,27 @@ Task notation:
 
 ### 3.1 Tests first
 
-- [ ] T006 [TEST] Add failing tests for the exact `StructuredOutputMode` values and rejection of aliases, different case, blanks, and unknown modes in `tests/unit/infrastructure/llm/test_config.py`.
-- [ ] T007 [P] [TEST] Add failing tests for exact `LLMRole` values and rejection without normalization in `tests/unit/infrastructure/llm/test_config.py`.
-- [ ] T008 [P] [TEST] Add failing tests for `RawLLMProfile` required fields, forbidden extras, model normalization, finite positive timeout, and boolean/non-numeric rejection.
-- [ ] T009 [P] [TEST] Add failing base-URL tests covering HTTP/HTTPS, loopback, ports, `/v1`, one trailing slash, missing host/scheme, credentials, query, fragment, unsupported scheme, control characters, and pre-appended `/chat/completions`.
-- [ ] T010 [P] [TEST] Add failing `api_key_env` identity tests covering valid names, absent authentication, blanks, whitespace, invalid first character, punctuation, and exact preservation.
-- [ ] T011 [P] [TEST] Add failing `ParticipantLLMAssignment` tests for five mandatory exact references, forbidden extras, invalid identity grammar, and no whitespace/case repair.
-- [ ] T012 [P] [TEST] Add failing `RawLLMRuntimeConfig` tests for at least one profile, exact profile-name grammar, forbidden top-level extras, complete assignments, exact cross-reference resolution, and declared-but-unselected profiles.
-- [ ] T013 [P] [TEST] Add failing JSON-loader tests for absent/blank path, unreadable file, non-UTF-8, malformed/non-object JSON, duplicate keys at every nesting level, and safe errors.
-- [ ] T014 [P] [TEST] Add failing fixed-message and inheritance tests for all approved adapter error classes, including `LLMRuntimeClosedError`.
-- [ ] T015 [TEST] Run the Phase 2 tests and confirm failure is caused only by missing Slice 7 contracts.
+- [X] T006 [TEST] Add failing tests for the exact `StructuredOutputMode` values and rejection of aliases, different case, blanks, and unknown modes in `tests/unit/infrastructure/llm/test_config.py`.
+- [X] T007 [P] [TEST] Add failing tests for exact `LLMRole` values and rejection without normalization in `tests/unit/infrastructure/llm/test_config.py`.
+- [X] T008 [P] [TEST] Add failing tests for `RawLLMProfile` required fields, forbidden extras, model normalization, finite positive timeout, and boolean/non-numeric rejection.
+- [X] T009 [P] [TEST] Add failing base-URL tests covering HTTP/HTTPS, loopback, ports, `/v1`, one trailing slash, missing host/scheme, credentials, query, fragment, unsupported scheme, control characters, and pre-appended `/chat/completions`.
+- [X] T010 [P] [TEST] Add failing `api_key_env` identity tests covering valid names, absent authentication, blanks, whitespace, invalid first character, punctuation, and exact preservation.
+- [X] T011 [P] [TEST] Add failing `ParticipantLLMAssignment` tests for five mandatory exact references, forbidden extras, invalid identity grammar, and no whitespace/case repair.
+- [X] T012 [P] [TEST] Add failing `RawLLMRuntimeConfig` tests for at least one profile, exact profile-name grammar, forbidden top-level extras, complete assignments, exact cross-reference resolution, and declared-but-unselected profiles.
+- [X] T013 [P] [TEST] Add failing JSON-loader tests for absent/blank path, unreadable file, non-UTF-8, malformed/non-object JSON, duplicate keys at every nesting level, and safe errors.
+- [X] T014 [P] [TEST] Add failing fixed-message and inheritance tests for all approved adapter error classes, including `LLMRuntimeClosedError`.
+- [X] T015 [TEST] Run the Phase 2 tests and confirm failure is caused only by missing Slice 7 contracts.
+
+#### Phase 2 red evidence
+
+- Contract-test commit: `d14ef90192ba1b441ca9690e7ad89658cb1c9f96`.
+- Focused collection stops with exactly one expected error: `ModuleNotFoundError: No module named 'agentic_review_board.infrastructure'`.
+- The failure is caused by the intentionally absent Slice 7 infrastructure package; no production behavior has been added.
+- T016 is aligned with accepted ADR-0002 at `httpx>=0.28,<0.29`.
 
 ### 3.2 Minimal implementation
 
-- [ ] T016 Add the constrained `httpx>=0.28,<1` runtime dependency to `pyproject.toml`.
+- [ ] T016 Add the constrained `httpx>=0.28,<0.29` runtime dependency to `pyproject.toml`.
 - [ ] T017 Create infrastructure package initializers under `src/agentic_review_board/infrastructure/llm/`.
 - [ ] T018 Implement the closed safe error family and exact messages in `src/agentic_review_board/infrastructure/llm/errors.py`.
 - [ ] T019 Implement `StructuredOutputMode`, `LLMRole`, and strict raw profile models in `src/agentic_review_board/infrastructure/llm/config.py`.
