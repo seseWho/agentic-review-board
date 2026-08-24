@@ -506,7 +506,7 @@ Task notation:
 - T153 runtime lifecycle verification: **21 passed**. Atomic construction, defensive cleanup, idempotent close, context exit, use-after-close rejection, fixed assignments, and absence of retained Review/prompt/response data remain verified.
 - T154 compare `main...007-llm-adapter` changes no existing domain, application, participant, port, lifecycle, or orchestrator file; contract and architecture tests additionally confirm unchanged `LLMPort`, participant validation ownership, dependency direction, and execution behavior.
 - T155 reconciliation covers spec, plan, data model, ADR-0002, task evidence, and all **33 changed files**. Implementation remains within approved local/remote/mixed direct-HTTP scope; no unresolved artifact mismatch or prohibited expansion remains.
-- T156 remains the only pending task and requires explicit approval before marking the draft PR ready or merging.
+- T156 final architectural review approved explicitly on 2026-08-24; PR readiness and merge authorized.
 
 **Goal:** Close Slice 7 with deterministic evidence and no prohibited expansion.
 
@@ -523,7 +523,7 @@ Task notation:
 - [X] T153 Verify runtime construction/close/use-after-close behavior and absence of retained Review data.
 - [X] T154 Verify no modification to `LLMPort`, participant signatures, domain outputs, lifecycle shapes, or orchestrator execution order.
 - [X] T155 Update completed task checkboxes and reconcile implementation against spec, plan, data model, ADR-0002, and actual changed files.
-- [ ] T156 [GATE] Perform final architectural review and stop for explicit approval before PR readiness or merge.
+- [X] T156 [GATE] Perform final architectural review and stop for explicit approval before PR readiness or merge.
 
 ---
 
