@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import ast
+import re
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -8,6 +10,7 @@ import pytest
 PRODUCTION_PACKAGE = (
     Path(__file__).resolve().parents[2] / "src" / "agentic_review_board"
 )
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 FORBIDDEN_PREFIXES = (
     "httpx",
     "agentic_review_board.infrastructure",
@@ -18,6 +21,41 @@ EXTERNAL_PROTOCOL_MARKERS = (
     "Bearer ",
     "choices",
 )
+FORBIDDEN_RUNTIME_IMPORTS = {
+    "anthropic",
+    "boto3",
+    "chromadb",
+    "faiss",
+    "fastapi",
+    "flask",
+    "google.generativeai",
+    "gradio",
+    "langchain",
+    "litellm",
+    "llama_index",
+    "ollama",
+    "openai",
+    "requests",
+    "sqlalchemy",
+    "streamlit",
+}
+FORBIDDEN_EXECUTABLE_TOKENS = {
+    "browse",
+    "browsing",
+    "fallback",
+    "persistence",
+    "rag",
+    "registry",
+    "repository",
+    "retrieval",
+    "retries",
+    "retry",
+    "router",
+    "routing",
+    "tool",
+    "tools",
+    "ui",
+}
 
 
 def imported_modules(path: Path) -> tuple[str, ...]:
@@ -45,6 +83,20 @@ def string_literals(path: Path) -> tuple[str, ...]:
         for node in ast.walk(tree)
         if isinstance(node, ast.Constant) and isinstance(node.value, str)
     )
+
+
+def definition_tokens(path: Path) -> set[str]:
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    names = (
+        node.name
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+    )
+    return {
+        token.lower()
+        for name in names
+        for token in re.findall(r"[A-Z]+(?=[A-Z][a-z]|$)|[A-Z]?[a-z]+|\d+", name)
+    }
 
 
 @pytest.mark.parametrize("layer", ["domain", "application", "participants"])
@@ -79,6 +131,43 @@ def test_only_infrastructure_owns_external_protocol_markers(marker: str) -> None
         for path in sorted(PRODUCTION_PACKAGE.rglob("*.py"))
         if not path.is_relative_to(infrastructure_root)
         if any(marker in literal for literal in string_literals(path))
+    ]
+
+    assert violations == []
+
+
+def test_runtime_dependencies_remain_exactly_pydantic_and_httpx() -> None:
+    pyproject = tomllib.loads(
+        (PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    )
+    dependencies = pyproject["project"]["dependencies"]
+    names = {
+        re.split(r"[<>=!~\[]", dependency, maxsplit=1)[0].strip().lower()
+        for dependency in dependencies
+    }
+
+    assert names == {"pydantic", "httpx"}
+
+
+def test_production_imports_no_provider_sdk_or_out_of_scope_framework() -> None:
+    violations = [
+        f"{path.relative_to(PRODUCTION_PACKAGE)}: {module}"
+        for path in sorted(PRODUCTION_PACKAGE.rglob("*.py"))
+        for module in imported_modules(path)
+        if any(
+            module == forbidden or module.startswith(f"{forbidden}.")
+            for forbidden in FORBIDDEN_RUNTIME_IMPORTS
+        )
+    ]
+
+    assert violations == []
+
+
+def test_production_defines_no_out_of_scope_executable_capability() -> None:
+    violations = [
+        f"{path.relative_to(PRODUCTION_PACKAGE)}: {sorted(tokens)}"
+        for path in sorted(PRODUCTION_PACKAGE.rglob("*.py"))
+        if (tokens := definition_tokens(path) & FORBIDDEN_EXECUTABLE_TOKENS)
     ]
 
     assert violations == []
