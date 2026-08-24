@@ -133,14 +133,28 @@ Task notation:
 
 ### 4.2 Minimal implementation
 
-- [ ] T034 Implement immutable `ResolvedLLMProfile` with protected `SecretStr`, normalized base URL, exact model, `httpx.Timeout`, and output mode.
-- [ ] T035 Implement selected-profile discovery and credential resolution from an explicit read-only environment mapping.
-- [ ] T036 Reject selected-profile credentials with missing, blank, or boundary-whitespace values without repair.
-- [ ] T037 Implement immutable `ResolvedParticipantLLMAssignment` with exact resolved-object reuse.
-- [ ] T038 Ensure resolved runtime values provide no ordinary secret-bearing serialization or repr.
-- [ ] T039 Run focused Phase 3 tests to green.
-- [ ] T040 Run full pytest, Ruff, mypy strict, and `pip check`.
+- [X] T034 Implement immutable `ResolvedLLMProfile` with protected `SecretStr`, normalized base URL, exact model, `httpx.Timeout`, and output mode.
+- [X] T035 Implement selected-profile discovery and credential resolution from an explicit read-only environment mapping.
+- [X] T036 Reject selected-profile credentials with missing, blank, or boundary-whitespace values without repair.
+- [X] T037 Implement immutable `ResolvedParticipantLLMAssignment` with exact resolved-object reuse.
+- [X] T038 Ensure resolved runtime values provide no ordinary secret-bearing serialization or repr.
+- [X] T039 Run focused Phase 3 tests to green.
+- [X] T040 Run full pytest, Ruff, mypy strict, and `pip check`.
 - [ ] T041 [GATE] Review selected/unselected semantics, secret handling, timeout construction, identity reuse, and regressions; stop before prompts.
+
+### Phase 3 implementation evidence
+
+- Production commit: `ea00d49ca03c28fe71f699ab73af5b5b45194174`.
+- Focused configuration/resolution suites: **152 passed**.
+- Full repository suite: **834 passed**.
+- Ruff: **passed**.
+- Strict mypy: **passed** over 40 source files.
+- `pip check`: **passed**, no broken requirements.
+- Resolved profiles and assignments are frozen slotted dataclasses, not Pydantic input models and expose no ordinary secret-bearing serialization API.
+- Only exact selected profile names resolve credentials and produce one resolved object each; repeated assignments reuse that exact object.
+- Unselected profiles remain in raw validated configuration and cause no environment reads.
+- Scalar timeouts populate finite connect/read/write/pool phases equally.
+- T041 remains pending for explicit block review.
 
 ---
 
