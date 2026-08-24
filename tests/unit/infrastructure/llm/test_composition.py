@@ -83,6 +83,12 @@ class CloseRecordingTransport(httpx.BaseTransport):
         self.close_count += 1
 
 
+class FailingCloseTransport(CloseRecordingTransport):
+    def close(self) -> None:
+        self.close_count += 1
+        raise RuntimeError("sensitive cleanup failure marker")
+
+
 def record_runtime_composition(
     monkeypatch: pytest.MonkeyPatch,
 ) -> tuple[
@@ -571,6 +577,31 @@ def test_unexpected_failure_after_client_creation_closes_client(
 
     assert len(clients) == 1
     assert clients[0].is_closed
+
+
+def test_cleanup_failure_does_not_mask_original_construction_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    transport = FailingCloseTransport()
+
+    def fail_participant_construction(adapter: object) -> object:
+        raise ValueError("original construction failure marker")
+
+    monkeypatch.setattr(composition, "Analyst", fail_participant_construction)
+
+    with pytest.raises(
+        ValueError,
+        match=r"^original construction failure marker$",
+    ) as caught:
+        ConfiguredReviewRuntime.from_config(
+            shared_runtime_config(),
+            {},
+            transport=transport,
+        )
+
+    assert transport.close_count == 1
+    assert "sensitive cleanup failure marker" not in str(caught.value)
+    assert "sensitive cleanup failure marker" not in repr(caught.value)
 
 
 def test_open_context_entry_returns_same_runtime() -> None:
