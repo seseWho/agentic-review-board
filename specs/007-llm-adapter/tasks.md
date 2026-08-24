@@ -473,6 +473,11 @@ Task notation:
 - The first activated run exposed pytest's chained exception context (endpoint/model/environment metadata); the permanent regression test drove removal of that context via a fixed-message, `pytrace=False` boundary outside the caught exception context.
 - No suitable real endpoint/configuration was supplied, so no positive live network call was attempted and no placeholder endpoint was contacted.
 - T141 quality verification: Ruff **passed**; strict mypy **passed** over 58 source files; `pip check` **passed** with no broken requirements.
+- T142 review found one blocking transitive dependency: `smoke.py` imported `composition.py`, which loads the Review orchestrator and participants even though smoke does not execute them.
+- Architecture regression commit: `df5b8498c2a44456717850df8f7db30811adcf09`; shared HTTP-client policy extraction: `67700dc0936aff05cdac4eaf1a3d444164c14784`; composition update: `d79231e5304c66ed0e67fdd6b748d6052f4bbee7`; smoke decoupling: `bea1657a0a2e60a48464c3f57f10d34c43318319`.
+- The HTTP policy now lives in one minimal infrastructure module; composition retains its existing private test seam through a typed wrapper, while smoke has no direct or transitive dependency on Review orchestration.
+- Post-correction focused suites: **33 passed**; full default suite: **1008 passed, 1 skipped**; Ruff **passed**; strict mypy **passed** over 59 source files using a fresh cache after the prior local cache database was found malformed; `pip check` **passed**.
+- T142 remains pending explicit approval after correction review.
 
 ### 10.2 Minimal implementation
 
