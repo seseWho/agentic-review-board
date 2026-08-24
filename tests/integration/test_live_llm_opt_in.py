@@ -28,7 +28,7 @@ def run_probe(
     if config_path is not None:
         environment["ARB_LLM_CONFIG_PATH"] = str(config_path)
 
-    command = [sys.executable, "-m", "pytest", "-q", str(PROBE_TEST)]
+    command = [sys.executable, "-m", "pytest", "-q", "-rA", str(PROBE_TEST)]
     if option_enabled:
         command.append("--run-live-llm")
 
@@ -47,7 +47,8 @@ def run_probe(
 
 def assert_probe_skipped(result: subprocess.CompletedProcess[str], probe_path: Path) -> None:
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "1 skipped" in result.stdout
+    assert "SKIPPED [1]" in result.stdout
+    assert "live LLM smoke not explicitly authorized" in result.stdout
     assert not probe_path.exists()
 
 
@@ -100,7 +101,7 @@ def test_live_probe_runs_when_both_authorizations_and_config_path_are_present(
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "1 passed" in result.stdout
+    assert "PASSED tests/fixtures/live_llm_probe.py" in result.stdout
     assert probe_path.read_text(encoding="utf-8") == "executed"
 
 
