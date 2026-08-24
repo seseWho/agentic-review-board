@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any
 
 import httpx
@@ -13,6 +13,7 @@ from agentic_review_board.infrastructure.llm.composition import (
 from agentic_review_board.application.orchestrator import ReviewOrchestrator
 from agentic_review_board.infrastructure.llm import composition
 from agentic_review_board.infrastructure.llm.config import RawLLMRuntimeConfig, ResolvedLLMProfile
+from agentic_review_board.infrastructure.llm.errors import LLMConfigurationError
 
 
 def profile_data(
@@ -362,3 +363,140 @@ def test_constructs_existing_orchestrator_with_exact_five_argument_order(
             participant_adapters["coordinator"],
         )
     ]
+
+
+def test_completes_resolution_before_creating_http_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = runtime_config(
+        profiles={
+            "remote": profile_data(
+                base_url="https://api.example.test/v1",
+                model="remote-model",
+                api_key_env="REMOTE_KEY",
+            )
+        },
+        assignments={
+            "analyst": "remote",
+            "solution_architect": "remote",
+            "risk_reviewer": "remote",
+            "critic": "remote",
+            "coordinator": "remote",
+        },
+    )
+    events: list[str] = []
+    real_resolve = composition.resolve_llm_runtime_config
+    real_create_client = composition._create_http_client
+
+    def resolve_before_resources(
+        raw_config: RawLLMRuntimeConfig,
+        environ: Mapping[str, str],
+    ) -> Any:
+        resolved = real_resolve(raw_config, environ)
+        events.append("resolution-complete")
+        return resolved
+
+    def create_after_resolution(
+        transport: httpx.BaseTransport | None = None,
+    ) -> httpx.Client:
+        assert events == ["resolution-complete"]
+        events.append("client-created")
+        return real_create_client(transport)
+
+    monkeypatch.setattr(
+        composition,
+        "resolve_llm_runtime_config",
+        resolve_before_resources,
+    )
+    monkeypatch.setattr(composition, "_create_http_client", create_after_resolution)
+
+    runtime = ConfiguredReviewRuntime.from_config(
+        config,
+        {"REMOTE_KEY": "remote-secret-marker"},
+    )
+    runtime.close()
+
+    assert events == ["resolution-complete", "client-created"]
+
+
+def test_resolution_failure_occurs_before_http_client_creation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = runtime_config(
+        profiles={
+            "remote": profile_data(
+                base_url="https://api.example.test/v1",
+                model="remote-model",
+                api_key_env="REMOTE_KEY",
+            )
+        },
+        assignments={
+            "analyst": "remote",
+            "solution_architect": "remote",
+            "risk_reviewer": "remote",
+            "critic": "remote",
+            "coordinator": "remote",
+        },
+    )
+    client_creation_count = 0
+
+    def must_not_create_client(
+        transport: httpx.BaseTransport | None = None,
+    ) -> httpx.Client:
+        nonlocal client_creation_count
+        client_creation_count += 1
+        raise AssertionError(f"unexpected transport: {transport!r}")
+
+    monkeypatch.setattr(composition, "_create_http_client", must_not_create_client)
+
+    with pytest.raises(
+        LLMConfigurationError,
+        match=r"^LLM configuration invalid$",
+    ):
+        ConfiguredReviewRuntime.from_config(config, {})
+
+    assert client_creation_count == 0
+
+
+def test_unexpected_failure_after_client_creation_closes_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = runtime_config(
+        profiles={
+            "shared": profile_data(
+                base_url="http://localhost:11434/v1",
+                model="shared-model",
+            )
+        },
+        assignments={
+            "analyst": "shared",
+            "solution_architect": "shared",
+            "risk_reviewer": "shared",
+            "critic": "shared",
+            "coordinator": "shared",
+        },
+    )
+    clients: list[httpx.Client] = []
+    real_create_client = composition._create_http_client
+
+    def track_client(
+        transport: httpx.BaseTransport | None = None,
+    ) -> httpx.Client:
+        client = real_create_client(transport)
+        clients.append(client)
+        return client
+
+    def fail_participant_construction(adapter: object) -> object:
+        raise RuntimeError("unexpected construction failure marker")
+
+    monkeypatch.setattr(composition, "_create_http_client", track_client)
+    monkeypatch.setattr(composition, "Analyst", fail_participant_construction)
+
+    with pytest.raises(
+        RuntimeError,
+        match=r"^unexpected construction failure marker$",
+    ):
+        ConfiguredReviewRuntime.from_config(config, {})
+
+    assert len(clients) == 1
+    assert clients[0].is_closed
