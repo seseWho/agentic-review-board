@@ -1,0 +1,358 @@
+# Tasks: Configurable OpenAI-Compatible LLM Adapter v0.1
+
+**Branch**: `007-llm-adapter`  
+**Specification**: `specs/007-llm-adapter/spec.md` — Approved  
+**Plan**: `specs/007-llm-adapter/plan.md` — Approved  
+**Data model**: `specs/007-llm-adapter/data-model.md` — Approved  
+**Status**: Draft — pending review and approval before implementation
+
+## 1. Execution Rules
+
+- Complete tasks in identifier order unless marked `[P]` within the same tests-first group.
+- Every behavior block begins with failing deterministic tests.
+- Confirm the intended red failure before adding production behavior.
+- Implement only enough production code to make the approved block green.
+- Run the focused tests after every small implementation step.
+- Run the full existing suite at every block review gate.
+- Do not begin the next block until the current block is reviewed.
+- Live endpoints, local models, credentials, and network access are never required by default tests or CI.
+- Do not create UI, persistence, retries, fallbacks, routing, provider registries, native provider adapters, or generic prompt/transport frameworks.
+- Do not modify `LLMPort`, existing participant signatures, domain outputs, Review lifecycle, or orchestration behavior.
+
+Task notation:
+
+- `[P]`: may be completed in parallel with other `[P]` tasks in the same group after their shared prerequisites.
+- `[TEST]`: test or verification task that must precede corresponding production behavior.
+- `[DOC]`: documentation or decision record.
+- `[GATE]`: mandatory review/checkpoint; stop before the next block.
+
+---
+
+## 2. Phase 1 — Architectural Decision and Baseline
+
+**Goal:** Record the approved integration decision before introducing the runtime dependency or infrastructure code.
+
+- [ ] T001 [DOC] Create `docs/adr/ADR-0002-direct-http-openai-compatible-model-access.md` covering direct synchronous HTTPX versus provider SDKs, local/remote compatibility, JSON metadata plus environment credentials, immutable profiles, static composition, runtime client ownership, prompt schemas, explicit output modes, proxy/certificate behavior, and rejected routing/retry alternatives.
+- [ ] T002 [DOC] Cross-check ADR-0002 against `docs/03-architecture.md`, `docs/04-agent-model.md`, `docs/05-quality-security.md`, and the three approved Slice 7 artifacts; remove any scope expansion.
+- [ ] T003 [TEST] Run and record the existing full pytest suite before Slice 7 production changes.
+- [ ] T004 [TEST] Run and record existing Ruff, mypy strict, and `pip check` baselines.
+- [ ] T005 [GATE] Review ADR-0002 and baseline results; stop before configuration implementation.
+
+---
+
+## 3. Phase 2 — Safe Errors and Raw Configuration Contracts
+
+**Goal:** Define the closed safe error family and deterministic non-secret configuration parsing.
+
+### 3.1 Tests first
+
+- [ ] T006 [TEST] Add failing tests for the exact `StructuredOutputMode` values and rejection of aliases, different case, blanks, and unknown modes in `tests/unit/infrastructure/llm/test_config.py`.
+- [ ] T007 [P] [TEST] Add failing tests for exact `LLMRole` values and rejection without normalization in `tests/unit/infrastructure/llm/test_config.py`.
+- [ ] T008 [P] [TEST] Add failing tests for `RawLLMProfile` required fields, forbidden extras, model normalization, finite positive timeout, and boolean/non-numeric rejection.
+- [ ] T009 [P] [TEST] Add failing base-URL tests covering HTTP/HTTPS, loopback, ports, `/v1`, one trailing slash, missing host/scheme, credentials, query, fragment, unsupported scheme, control characters, and pre-appended `/chat/completions`.
+- [ ] T010 [P] [TEST] Add failing `api_key_env` identity tests covering valid names, absent authentication, blanks, whitespace, invalid first character, punctuation, and exact preservation.
+- [ ] T011 [P] [TEST] Add failing `ParticipantLLMAssignment` tests for five mandatory exact references, forbidden extras, invalid identity grammar, and no whitespace/case repair.
+- [ ] T012 [P] [TEST] Add failing `RawLLMRuntimeConfig` tests for at least one profile, exact profile-name grammar, forbidden top-level extras, complete assignments, exact cross-reference resolution, and declared-but-unselected profiles.
+- [ ] T013 [P] [TEST] Add failing JSON-loader tests for absent/blank path, unreadable file, non-UTF-8, malformed/non-object JSON, duplicate keys at every nesting level, and safe errors.
+- [ ] T014 [P] [TEST] Add failing fixed-message and inheritance tests for all approved adapter error classes, including `LLMRuntimeClosedError`.
+- [ ] T015 [TEST] Run the Phase 2 tests and confirm failure is caused only by missing Slice 7 contracts.
+
+### 3.2 Minimal implementation
+
+- [ ] T016 Add the constrained `httpx>=0.28,<1` runtime dependency to `pyproject.toml`.
+- [ ] T017 Create infrastructure package initializers under `src/agentic_review_board/infrastructure/llm/`.
+- [ ] T018 Implement the closed safe error family and exact messages in `src/agentic_review_board/infrastructure/llm/errors.py`.
+- [ ] T019 Implement `StructuredOutputMode`, `LLMRole`, and strict raw profile models in `src/agentic_review_board/infrastructure/llm/config.py`.
+- [ ] T020 Implement exact five-field assignment and top-level configuration cross-validation.
+- [ ] T021 Implement UTF-8 JSON loading with duplicate-key rejection at all nesting levels and `ARB_LLM_CONFIG_PATH` boundary validation.
+- [ ] T022 Map every public loader/validation failure to exact safe `LLMConfigurationError` without dynamic detail.
+- [ ] T023 Run focused Phase 2 tests to green.
+- [ ] T024 Run full pytest, Ruff, mypy strict, and `pip check`.
+- [ ] T025 [GATE] Review configuration scope, exact identity behavior, URL policy, error safety, dependency diff, and regression results; stop before secret resolution.
+
+---
+
+## 4. Phase 3 — Selected Profiles, Secret Resolution, and Assignments
+
+**Goal:** Resolve only selected profiles into safe immutable runtime values.
+
+### 4.1 Tests first
+
+- [ ] T026 [TEST] Add failing tests that determine the exact selected profile-name set from five assignments while structurally retaining unselected profiles.
+- [ ] T027 [P] [TEST] Add failing tests for unauthenticated selected profiles and selected profiles using an explicit in-memory environment mapping.
+- [ ] T028 [P] [TEST] Add failing tests for missing, blank, leading-space, and trailing-space credentials referenced by selected profiles.
+- [ ] T029 [P] [TEST] Add failing tests proving credentials referenced only by unselected profiles are never read and do not block resolution.
+- [ ] T030 [P] [TEST] Add failing tests proving credential values never appear in repr, safe errors, or configuration serialization.
+- [ ] T031 [P] [TEST] Add failing tests for scalar timeout expansion into equal connect/read/write/pool HTTPX phases.
+- [ ] T032 [P] [TEST] Add failing identity tests proving repeated assignments reuse the exact resolved profile object while different profile names produce distinct resolved objects.
+- [ ] T033 [TEST] Run Phase 3 tests and confirm the intended red state.
+
+### 4.2 Minimal implementation
+
+- [ ] T034 Implement immutable `ResolvedLLMProfile` with protected `SecretStr`, normalized base URL, exact model, `httpx.Timeout`, and output mode.
+- [ ] T035 Implement selected-profile discovery and credential resolution from an explicit read-only environment mapping.
+- [ ] T036 Reject selected-profile credentials with missing, blank, or boundary-whitespace values without repair.
+- [ ] T037 Implement immutable `ResolvedParticipantLLMAssignment` with exact resolved-object reuse.
+- [ ] T038 Ensure resolved runtime values provide no ordinary secret-bearing serialization or repr.
+- [ ] T039 Run focused Phase 3 tests to green.
+- [ ] T040 Run full pytest, Ruff, mypy strict, and `pip check`.
+- [ ] T041 [GATE] Review selected/unselected semantics, secret handling, timeout construction, identity reuse, and regressions; stop before prompts.
+
+---
+
+## 5. Phase 4 — Role Semantics and Authoritative Output Schemas
+
+**Goal:** Build five explicit prompt definitions without duplicating structural domain contracts.
+
+### 5.1 Tests first
+
+- [ ] T042 [TEST] Add failing tests for the closed role-to-output-model mapping: Analyst/ProblemAnalysis, Solution Architect/SolutionAlternatives, Risk Reviewer/RiskAssessment, Critic/CriticalReview, and Coordinator/FinalReview.
+- [ ] T043 [P] [TEST] Add failing tests that each role has distinct non-blank semantic instructions preserving its approved responsibility and prohibitions.
+- [ ] T044 [P] [TEST] Add failing tests for shared requirements: payload as untrusted data, direct JSON object, no Markdown/prose, no private chain-of-thought request, and no external action.
+- [ ] T045 [P] [TEST] Add failing tests proving JSON Schema is generated from the exact existing Pydantic model and deterministically serialized once per role definition.
+- [ ] T046 [P] [TEST] Add failing tests proving cached prompt/schema definitions contain no Review data, model endpoint, credential, or provider response.
+- [ ] T047 [P] [TEST] Add failing unknown-role tests proving failure occurs before payload serialization.
+- [ ] T048 [TEST] Run Phase 4 tests and confirm the intended red state.
+
+### 5.2 Minimal implementation
+
+- [ ] T049 Implement immutable `RolePromptDefinition` and the closed role/model mapping in `src/agentic_review_board/infrastructure/llm/prompts.py`.
+- [ ] T050 Implement five explicit semantic instruction constants with only approved role behavior.
+- [ ] T051 Generate and deterministically serialize each output model's `model_json_schema()` once when prompt definitions are constructed.
+- [ ] T052 Implement exact role lookup raising `UnsupportedLLMRoleError`.
+- [ ] T053 Run focused Phase 4 tests to green.
+- [ ] T054 Run full pytest, Ruff, mypy strict, and `pip check`.
+- [ ] T055 [GATE] Review role separation, schema source of truth, prompt-injection boundary, absence of duplicate model hierarchy, and regressions; stop before HTTP requests.
+
+---
+
+## 6. Phase 5 — HTTP Request Construction
+
+**Goal:** Implement one exact synchronous request per adapter call with no network-dependent tests.
+
+### 6.1 Tests first
+
+- [ ] T056 [TEST] Add failing MockTransport tests for POST target construction from base URLs with and without normalized trailing slash.
+- [ ] T057 [P] [TEST] Add failing tests for exact `Content-Type`, `Accept`, and conditional `Authorization` headers, including absence of an empty bearer.
+- [ ] T058 [P] [TEST] Add failing tests for the exact two-message order separating system-controlled instruction/schema from serialized untrusted payload.
+- [ ] T059 [P] [TEST] Add failing tests for exact configured model and `n: 1`.
+- [ ] T060 [P] [TEST] Add failing tests for exact `response_format: {"type": "json_object"}` in `JSON_OBJECT`.
+- [ ] T061 [P] [TEST] Add failing tests proving `response_format` is absent in `PROMPT_ONLY`.
+- [ ] T062 [P] [TEST] Add failing tests for one explicit per-request timeout with equal connect/read/write/pool extension values.
+- [ ] T063 [P] [TEST] Add failing tests for Unicode payload serialization and deterministic separation/delimiting.
+- [ ] T064 [P] [TEST] Add failing tests for non-serializable payload mapping to exact `LLMPayloadSerializationError` before any request.
+- [ ] T065 [P] [TEST] Add failing tests proving no temperature, max tokens, tools, streaming, seed, retry metadata, cookies, or provider-specific options are sent.
+- [ ] T066 [TEST] Run Phase 5 tests and confirm the intended red state and zero accidental live requests.
+
+### 6.2 Minimal implementation
+
+- [ ] T067 Implement `OpenAICompatibleLLMAdapter` construction with one resolved profile, shared HTTPX client, and immutable prompt definitions.
+- [ ] T068 Implement exact role-first validation and deterministic payload/schema rendering.
+- [ ] T069 Implement headers, target, two-message body, model, and `n=1`.
+- [ ] T070 Implement exact structured-output-mode request branching without probing, fallback, or retry.
+- [ ] T071 Issue exactly one synchronous client POST with the resolved profile timeout.
+- [ ] T072 Map payload serialization failures safely before network activity.
+- [ ] T073 Run focused Phase 5 tests to green.
+- [ ] T074 Run full pytest, Ruff, mypy strict, and `pip check`.
+- [ ] T075 [GATE] Review captured requests, authentication isolation, schema/payload separation, timeout, forbidden fields, request count, and regressions; stop before response processing.
+
+---
+
+## 7. Phase 6 — Provider Response and Safe Failure Processing
+
+**Goal:** Return only one directly parsed JSON object while preserving existing participant validation ownership.
+
+### 7.1 Tests first
+
+- [ ] T076 [TEST] Add failing success tests for the accepted minimum envelope and ignored unrelated provider-envelope extras.
+- [ ] T077 [P] [TEST] Add failing tests for timeout subclasses mapping to exact `LLMRequestTimeoutError`.
+- [ ] T078 [P] [TEST] Add failing tests for connection, proxy, protocol, decoding, and other request failures mapping to exact `LLMTransportError`.
+- [ ] T079 [P] [TEST] Add failing tests for 3xx/4xx/5xx statuses mapping to exact `LLMHTTPStatusError` with redirects disabled.
+- [ ] T080 [P] [TEST] Add failing envelope tests for non-JSON/non-object body, absent/wrong `choices`, zero/multiple choices, wrong choice/message, and absent/blank/non-string content.
+- [ ] T081 [P] [TEST] Add failing structured-content tests for malformed JSON, array, string, number, boolean, null, fenced JSON, and prefix/suffix prose.
+- [ ] T082 [P] [TEST] Add failing sanitization tests using secret, endpoint, model, payload, prompt, response-body, and provider-error markers.
+- [ ] T083 [P] [TEST] Add failing tests proving exactly one attempted request and no JSON repair, second request, mode downgrade, or fallback.
+- [ ] T084 [P] [TEST] Add failing tests proving a valid JSON object is returned unchanged for participant validation even when semantically invalid.
+- [ ] T085 [TEST] Run Phase 6 tests and confirm the intended red state.
+
+### 7.2 Minimal implementation
+
+- [ ] T086 Implement ordered timeout, transport, and HTTP-status exception mapping without copying nested text.
+- [ ] T087 Implement strict provider-envelope shape validation with tolerated unrelated envelope extras.
+- [ ] T088 Implement one direct JSON parse and top-level object requirement.
+- [ ] T089 Preserve valid mapping content unchanged and retain no call-specific state.
+- [ ] T090 Ensure adapter errors use only fixed safe messages while optionally chaining causes.
+- [ ] T091 Run focused Phase 6 tests to green.
+- [ ] T092 Run full pytest, Ruff, mypy strict, and `pip check`.
+- [ ] T093 [GATE] Review failure taxonomy, sanitization, direct parsing, no-repair behavior, state retention, and regressions; stop before composition.
+
+---
+
+## 8. Phase 7 — Runtime Composition and Lifecycle
+
+**Goal:** Wire selected profiles into the existing five participants behind one resource-safe execution gate.
+
+### 8.1 Tests first
+
+- [ ] T094 [TEST] Add failing tests that runtime construction uses one client with `trust_env=True`, `follow_redirects=False`, no global auth/base URL/cookies, and optional injected MockTransport.
+- [ ] T095 [P] [TEST] Add failing tests for one adapter per selected profile and exact adapter reuse across repeated participant assignments.
+- [ ] T096 [P] [TEST] Add failing tests for all-five-shared, five-distinct, and mixed local/no-key plus remote/key compositions.
+- [ ] T097 [P] [TEST] Add failing tests matching the actual five-argument `ReviewOrchestrator` constructor without modifying it.
+- [ ] T098 [P] [TEST] Add failing atomic-construction tests proving client closure if a post-client construction step fails.
+- [ ] T099 [P] [TEST] Add failing `OPEN` context-entry, idempotent close, automatic context exit, and `CLOSED.__enter__` tests.
+- [ ] T100 [P] [TEST] Add failing tests proving `runtime.execute(review)` is the only public execution path and the orchestrator/client/adapters are not exposed.
+- [ ] T101 [P] [TEST] Add failing tests proving closed-runtime execution raises exact `LLMRuntimeClosedError` before Review transition or request.
+- [ ] T102 [P] [TEST] Add failing sequential-Review tests proving fixed assignments and no retained Review/prompt/response data.
+- [ ] T103 [P] [TEST] Add failing safe-public-surface tests for profile names, participant/profile mapping, lifecycle state, and absence of credentials.
+- [ ] T104 [TEST] Run Phase 7 tests and confirm the intended red state.
+
+### 8.2 Minimal implementation
+
+- [ ] T105 Implement `ConfiguredReviewRuntime.from_config` with atomic validation, selected-profile secret resolution, and exact assignment.
+- [ ] T106 Create the policy-controlled shared client and close it on any later construction failure.
+- [ ] T107 Construct/reuse selected-profile adapters and inject them into the five existing participant classes.
+- [ ] T108 Construct and retain the existing `ReviewOrchestrator` privately.
+- [ ] T109 Implement `OPEN/CLOSED`, context management, idempotent `close`, and safe public metadata.
+- [ ] T110 Implement `execute(review)` state guard and private orchestrator delegation.
+- [ ] T111 Prevent public exposure of credential-bearing profiles, client, adapter mapping, mutable assignment, and orchestrator.
+- [ ] T112 Run focused Phase 7 tests to green.
+- [ ] T113 Run full pytest, Ruff, mypy strict, and `pip check`.
+- [ ] T114 [GATE] Review construction atomicity, resource ownership, mixed composition, execution gating, statelessness, public surface, and regressions; stop before integration/architecture tests.
+
+---
+
+## 9. Phase 8 — Port, Participant, and Architecture Verification
+
+**Goal:** Prove that the production adapter integrates without leaking infrastructure into core layers.
+
+### 9.1 Tests first
+
+- [ ] T115 [TEST] Add a production-adapter structural contract test against unchanged `LLMPort` in `tests/contract/test_production_llm_adapter_contract.py`.
+- [ ] T116 [P] [TEST] Add one deterministic adapter-to-participant success test for each of the five existing participants.
+- [ ] T117 [P] [TEST] Add deterministic tests proving adapter-valid but semantically invalid JSON is rejected by each existing participant's output boundary.
+- [ ] T118 [P] [TEST] Add orchestrator tests using different MockTransport-backed profiles for local/remote mixed success and a selected-provider failure.
+- [ ] T119 [P] [TEST] Extend architecture tests proving domain, application, and participants do not import HTTPX or infrastructure.
+- [ ] T120 [P] [TEST] Extend architecture tests proving only infrastructure owns endpoint/auth/envelope behavior and production code never imports `tests/`.
+- [ ] T121 [P] [TEST] Add absence checks for provider SDKs, retry/fallback/router/registry, native provider adapters, persistence, RAG, tools, and UI additions.
+- [ ] T122 [TEST] Run Phase 8 tests and confirm any red state reflects missing verification support only.
+
+### 9.2 Minimal completion
+
+- [ ] T123 Add only the smallest exports/type annotations required for the approved contract and architecture tests.
+- [ ] T124 Correct any infrastructure-to-core leakage without changing existing domain/application/participant semantics.
+- [ ] T125 Run focused Phase 8 tests to green.
+- [ ] T126 Run full pytest, Ruff, mypy strict, and `pip check`.
+- [ ] T127 [GATE] Review unchanged core boundaries, mixed orchestration behavior, failure mapping, dependency direction, and regressions; stop before smoke/documentation.
+
+---
+
+## 10. Phase 9 — Opt-In Live Smoke Path and Operator Documentation
+
+**Goal:** Make real local/remote profile verification explicit, safe, and impossible to trigger in default CI.
+
+### 10.1 Tests/documentation first
+
+- [ ] T128 [TEST] Add failing tests for registered `live_llm` marker, default exclusion, explicit selection, and safe skip without `ARB_LLM_CONFIG_PATH`.
+- [ ] T129 [P] [TEST] Add failing smoke-runner tests proving only selected profiles are checked once each with synthetic data.
+- [ ] T130 [P] [TEST] Add failing tests for safe profile-name diagnostics, no credential/endpoint/body leakage, and runtime closure after success or failure.
+- [ ] T131 [P] [TEST] Add failing checks proving smoke verification does not run a complete Review or assert latency/model quality.
+- [ ] T132 [DOC] Draft `config/llm.example.json` with local and remote placeholders, exact assignments, and credential-variable names only.
+- [ ] T133 [DOC] Draft README sections for one-model, mixed local/remote, environment credentials, proxy/certificate variables, default tests, and explicit smoke command.
+- [ ] T134 [TEST] Run Phase 9 non-live tests and confirm the intended red state without any real request.
+
+### 10.2 Minimal implementation
+
+- [ ] T135 Register `live_llm` and configure default `-m "not live_llm"` exclusion in `pyproject.toml`.
+- [ ] T136 Implement the opt-in per-selected-profile smoke test/runner using synthetic non-sensitive payloads and the configured role/schema path.
+- [ ] T137 Ensure smoke execution closes the runtime on every path and reports only safe profile identities.
+- [ ] T138 Finalize the non-secret example configuration and README commands.
+- [ ] T139 Run default pytest and prove live tests are not selected.
+- [ ] T140 Run the smoke tests only if an operator explicitly supplies suitable local/remote configuration; record skipped as acceptable when unavailable.
+- [ ] T141 Run Ruff, mypy strict, and `pip check`.
+- [ ] T142 [GATE] Review opt-in behavior, example hygiene, operator instructions, diagnostic safety, and regressions; stop before final closure.
+
+---
+
+## 11. Phase 10 — Final Quality, CI, and Architectural Review
+
+**Goal:** Close Slice 7 with deterministic evidence and no prohibited expansion.
+
+- [ ] T143 Run the complete default pytest suite on the supported local Python version with no credentials or live endpoints.
+- [ ] T144 Run `ruff check .`.
+- [ ] T145 Run strict `mypy`.
+- [ ] T146 Run `pip check`.
+- [ ] T147 Verify GitHub Actions passes on all configured Python versions without secrets.
+- [ ] T148 Review dependency diff and confirm HTTPX is the only new justified runtime dependency.
+- [ ] T149 Search production code for credentials, placeholder secrets, full prompt/response logging, raw provider-error interpolation, retries, sleeps, fallback, routing, provider SDKs, and test imports.
+- [ ] T150 Verify every adapter error message exactly matches the approved safe table.
+- [ ] T151 Verify all declared profiles validate structurally while only selected profiles resolve secrets, instantiate adapters, and smoke-test.
+- [ ] T152 Verify one-model and mixed-model deterministic end-to-end paths preserve existing participant validation and Review failure semantics.
+- [ ] T153 Verify runtime construction/close/use-after-close behavior and absence of retained Review data.
+- [ ] T154 Verify no modification to `LLMPort`, participant signatures, domain outputs, lifecycle shapes, or orchestrator execution order.
+- [ ] T155 Update completed task checkboxes and reconcile implementation against spec, plan, data model, ADR-0002, and actual changed files.
+- [ ] T156 [GATE] Perform final architectural review and stop for explicit approval before PR readiness or merge.
+
+---
+
+## 12. Block Review Evidence
+
+At every `[GATE]`, record:
+
+1. tasks completed in the block;
+2. initial red-test evidence;
+3. focused green-test result;
+4. full regression result;
+5. Ruff result;
+6. mypy result;
+7. `pip check` result after dependency introduction;
+8. files changed;
+9. architecture/scope observations;
+10. unresolved decisions or blockers.
+
+A block is not complete merely because tests pass. It must remain consistent with all approved artifacts and introduce no prohibited architecture.
+
+---
+
+## 13. Dependency Order
+
+```text
+Phase 1  ADR and baseline
+    ↓
+Phase 2  errors + raw configuration
+    ↓
+Phase 3  selected profiles + secrets
+    ↓
+Phase 4  role prompts + generated schemas
+    ↓
+Phase 5  request construction
+    ↓
+Phase 6  response/failure processing
+    ↓
+Phase 7  runtime composition/lifecycle
+    ↓
+Phase 8  port/participant/architecture verification
+    ↓
+Phase 9  opt-in smoke + documentation
+    ↓
+Phase 10 final gates
+```
+
+No phase may bypass an earlier review gate.
+
+---
+
+## 14. Completion Criteria
+
+Slice 7 implementation is complete only when:
+
+- T001–T156 are checked;
+- ADR-0002 is present and consistent;
+- deterministic tests cover every approved configuration, request, response, error, composition, and lifecycle invariant;
+- default CI requires no secrets or live model;
+- local, remote, and mixed assignments are representable and deterministically verified;
+- optional live smoke checks only selected profiles;
+- all tests, Ruff, mypy strict, `pip check`, and CI pass;
+- final architecture review finds no blocking issue;
+- the user explicitly approves PR readiness/merge.
+
+No implementation starts until this task list is reviewed, corrected where necessary, and explicitly approved.
