@@ -3,10 +3,10 @@ from __future__ import annotations
 import json
 import math
 import re
+from collections.abc import Mapping
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
-from collections.abc import Mapping
 from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -59,7 +59,7 @@ class RawLLMProfile(BaseModel):
         ):
             raise ValueError("invalid base URL")
 
-        normalized = value[:-1] if value.endswith("/") else value
+        normalized = value.removesuffix("/")
         if normalized.endswith(_CHAT_COMPLETIONS_SUFFIX):
             raise ValueError("invalid base URL")
         return normalized
