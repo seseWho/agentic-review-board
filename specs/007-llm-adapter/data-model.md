@@ -78,6 +78,7 @@ ConfiguredReviewRuntime
 ```text
 LLMAdapterError
 ├── LLMConfigurationError
+├── LLMRuntimeClosedError
 ├── UnsupportedLLMRoleError
 ├── LLMPayloadSerializationError
 ├── LLMRequestTimeoutError
@@ -243,8 +244,8 @@ The final request target is always:
 
 When `api_key_env` is present:
 
-- strip boundary whitespace once;
-- result must match `[A-Za-z_][A-Za-z0-9_]*`;
+- preserve and validate the supplied identity exactly with no stripping;
+- value must match `[A-Za-z_][A-Za-z0-9_]*`;
 - it identifies a process environment variable, not a credential value.
 
 Absent `api_key_env` means unauthenticated profile.
@@ -290,8 +291,8 @@ Extra fields are forbidden.
 
 Each value:
 
-- is stripped at its boundary once;
-- must remain non-blank;
+- is not stripped, normalized, or rewritten;
+- must match the same profile-name grammar `[A-Za-z][A-Za-z0-9_-]*` exactly;
 - resolves by exact equality against one key in `RawLLMRuntimeConfig.profiles`;
 - receives no alias, case folding, fuzzy match, or default.
 
@@ -328,7 +329,7 @@ Profile identity is exact. Names differing only in case remain distinct, though 
 
 ### 8.4 Cross-reference invariant
 
-After intrinsic parsing, every assignment value must belong to the exact set of profile names.
+After intrinsic parsing, every assignment value must belong to the exact set of profile names. The set of selected profile names is the exact set referenced by the five assignments. Declared but unselected profiles remain structurally validated but are not credential-resolved, instantiated, or smoke-tested for this runtime.
 
 Failure rejects the complete configuration before:
 
@@ -454,10 +455,11 @@ If present:
 1. look up exact variable name in the supplied environment mapping;
 2. require the variable to exist;
 3. require a non-blank value;
-4. preserve the credential value exactly rather than stripping internal or boundary characters;
-5. wrap it in `SecretStr`.
+4. require `value == value.strip()` so accidental leading/trailing whitespace fails rather than being repaired or transmitted;
+5. preserve permitted internal characters exactly;
+6. wrap it in `SecretStr`.
 
-A referenced missing or blank credential rejects complete runtime resolution. There is no partially composed runtime.
+A referenced missing, blank, or boundary-whitespace credential for any selected profile rejects complete runtime resolution. Credentials named only by unselected profiles are not read. There is no partially composed runtime.
 
 ### 10.4 Secret representation
 
@@ -484,7 +486,7 @@ No phase may be `None`.
 
 Profile name is the composition identity. Two independently resolved profiles with equal fields are equivalent configuration values but need not share object identity.
 
-Composition creates one adapter per referenced profile name and reuses that adapter for every participant assigned to the name.
+Composition creates one adapter per selected profile name and reuses that adapter for every participant assigned to the name. Unselected profiles create no resolved value or adapter.
 
 ---
 
@@ -543,21 +545,22 @@ Pairs explicit semantic instructions with the authoritative existing output cont
 
 ### 12.4 Schema generation
 
-For each call, or from an immutable cached application definition independent of Review data:
+At role-definition construction, exactly once per role:
 
 ```python
-output_model.model_json_schema()
+schema = output_model.model_json_schema()
+serialized_schema = deterministic_json(schema)
 ```
 
-The result is serialized deterministically and included as output-shape guidance.
+The immutable serialized result is stored with the definition and reused for every call as output-shape guidance.
 
-Permitted caching:
+The cached value:
 
-- schema derived only from the fixed model class;
-- no Review content;
-- no provider response;
-- no credential;
-- immutable for the running process.
+- derives only from the fixed model class;
+- contains no Review content;
+- contains no provider response;
+- contains no credential;
+- is immutable for the running process.
 
 ### 12.5 Semantic instruction invariants
 
@@ -717,6 +720,7 @@ All adapter/configuration public failures inherit from it.
 | Error | Safe public message | Trigger |
 |---|---|---|
 | `LLMConfigurationError` | `LLM configuration invalid` | File, JSON, profile, assignment, URL, timeout, credential resolution |
+| `LLMRuntimeClosedError` | `LLM runtime is closed` | Entering or executing through a closed runtime |
 | `UnsupportedLLMRoleError` | `LLM role unsupported` | Unknown/non-exact role |
 | `LLMPayloadSerializationError` | `LLM payload serialization failed` | Payload cannot serialize directly |
 | `LLMRequestTimeoutError` | `LLM request timed out` | Any HTTPX timeout |
@@ -838,10 +842,10 @@ The optional transport exists for deterministic tests. Production leaves it abse
 | Field | Purpose |
 |---|---|
 | shared `httpx.Client` | One owned synchronous connection pool |
-| resolved profiles | Exact immutable profile objects by name |
-| adapters | One adapter per referenced profile name |
+| resolved profiles | Exact immutable selected profile objects by name |
+| adapters | One adapter per selected profile name |
 | resolved assignment | Exact five-profile assignment |
-| orchestrator | Existing fully wired `ReviewOrchestrator` |
+| private orchestrator | Existing fully wired `ReviewOrchestrator`, never exposed directly |
 | closed state | Prevent use after closure |
 
 Credentials are not exposed through a public runtime representation.
@@ -869,14 +873,15 @@ The client has:
 
 Runtime construction is all-or-nothing:
 
-1. validate raw configuration;
-2. resolve all credentials;
-3. resolve all five assignments;
-4. create client;
-5. create referenced adapters;
-6. create five participants;
-7. create orchestrator;
-8. expose runtime.
+1. validate every declared raw profile and the complete assignment;
+2. determine the exact selected profile-name set;
+3. resolve credentials only for selected profiles;
+4. resolve all five assignments to selected profile objects;
+5. create client;
+6. create selected-profile adapters;
+7. create five participants;
+8. create and retain the private orchestrator;
+9. expose runtime.
 
 If any step fails after client construction, close the client before propagating the safe failure.
 
@@ -908,9 +913,11 @@ with ConfiguredReviewRuntime.from_config(...) as runtime:
     completed_review = runtime.orchestrator.execute(review)
 ```
 
-- `__enter__` requires/open returns the runtime;
+- `OPEN.__enter__()` returns the runtime;
+- `CLOSED.__enter__()` raises `LLMRuntimeClosedError` before network activity;
 - `__exit__` always closes the client;
-- use after closure fails with a safe explicit runtime/configuration error before network activity.
+- `execute(review)` checks `OPEN` and only then delegates to the private orchestrator;
+- `CLOSED.execute(review)` raises `LLMRuntimeClosedError` before Review transition or network activity.
 
 ### 17.8 Assignment immutability
 
@@ -920,8 +927,8 @@ The runtime assignment cannot change while open. A different assignment requires
 
 May expose:
 
-- orchestrator;
-- non-secret profile names;
+- `execute(review)` as the only Review execution method;
+- non-secret selected profile names;
 - participant-to-profile-name mapping;
 - open/closed status.
 
@@ -931,7 +938,8 @@ Must not expose:
 - Authorization headers;
 - mutable adapter mapping;
 - mutable assignment;
-- HTTP client for arbitrary external use.
+- HTTP client for arbitrary external use;
+- the private `ReviewOrchestrator` reference.
 
 ---
 
@@ -947,7 +955,7 @@ Given resolved profiles and assignment:
 | `critic` | `Critic(adapter_for(profile))` |
 | `coordinator` | `Coordinator(adapter_for(profile))` |
 
-Then:
+Then construct and retain privately:
 
 ```python
 ReviewOrchestrator(
@@ -959,7 +967,7 @@ ReviewOrchestrator(
 )
 ```
 
-This matches the actual existing constructor and requires no orchestrator modification.
+`ConfiguredReviewRuntime.execute(review)` checks the runtime state and delegates to this private instance. This matches the actual existing constructor and requires no orchestrator modification.
 
 ---
 
@@ -975,7 +983,8 @@ This matches the actual existing constructor and requires no orchestrator modifi
 | Invalid profile name | Configuration | No |
 | Invalid URL/model/mode/timeout | Configuration | No |
 | Invalid `api_key_env` name | Configuration | No |
-| Missing/blank referenced credential | Configuration | No |
+| Missing/blank/boundary-whitespace credential referenced by a selected profile | Configuration | No |
+| Missing credential referenced only by an unselected profile | No failure; not resolved | No |
 | Missing assignment field | Configuration | No |
 | Unknown assigned profile | Configuration | No |
 | Unsupported runtime role | Unsupported role | No |
@@ -987,7 +996,7 @@ This matches the actual existing constructor and requires no orchestrator modifi
 | Zero/multiple choices | Response envelope | Attempted once |
 | Invalid/non-object content JSON | Structured content | Attempted once |
 | Valid JSON object violating role contract | Existing participant output error | Attempted once |
-| Runtime used after close | Configuration/runtime | No |
+| Runtime entered or executed after close | Runtime closed | No |
 
 ---
 
@@ -1024,7 +1033,7 @@ Tests inspect captured HTTPX requests for exact:
 
 ### 20.4 Runtime identity expectations
 
-For a repeated profile assignment:
+For a repeated selected-profile assignment:
 
 ```python
 resolved.analyst is resolved.risk_reviewer
@@ -1095,12 +1104,15 @@ This draft proposes:
 6. `SecretStr` only in resolved runtime profiles;
 7. one scalar timeout expanded into all four HTTPX phases;
 8. role prompts paired with existing Pydantic output model classes;
-9. a closed safe adapter-error family with fixed messages;
-10. one adapter per referenced profile name;
-11. one context-managed runtime owning one shared HTTP client;
-12. idempotent close and no use after close;
-13. tolerant external envelope extras but strict expected path/content;
-14. no trusted domain or Review-model changes.
+9. a closed safe adapter-error family with fixed messages, including runtime-closed state;
+10. structural validation for every declared profile but credential resolution/adapters only for selected profiles;
+11. one adapter per selected profile name;
+12. one context-managed runtime owning one shared HTTP client and a private orchestrator;
+13. `runtime.execute(review)` as the only execution gate;
+14. idempotent close and deterministic rejection of enter/execute after close;
+15. role schemas generated and serialized once at definition construction;
+16. tolerant external envelope extras but strict expected path/content;
+17. no trusted domain or Review-model changes.
 
 ---
 
@@ -1109,14 +1121,15 @@ This draft proposes:
 Data-model review shall confirm:
 
 1. whether profile names should remain case-sensitive while examples prefer lowercase;
-2. whether stripping model/profile-reference boundary whitespace is acceptable while profile mapping keys remain unmodified;
-3. whether a missing referenced credential must invalidate the complete runtime rather than only the affected profile;
-4. whether `SecretStr` plus a non-serializable resolved dataclass is sufficient for secret safety;
-5. whether exact fixed safe error messages are appropriately separated;
-6. whether external provider-envelope extra fields should remain tolerated;
-7. whether duplicate JSON object keys must fail at every nesting level;
-8. whether runtime use-after-close belongs under `LLMConfigurationError` or needs a dedicated safe runtime-state error;
-9. whether schema generation may be cached by role;
-10. whether one shared client for all profiles remains correct when all request-specific auth and timeout values are supplied per call.
+2. whether model text alone may strip boundary whitespace while all configuration identities remain exact;
+3. whether validating all declared profiles but resolving credentials only for selected profiles is the correct balance;
+4. whether a missing referenced credential for any selected profile must invalidate the complete runtime;
+5. whether `SecretStr` plus a non-serializable resolved dataclass is sufficient for secret safety;
+6. whether exact fixed safe error messages, including `LLM runtime is closed`, are appropriately separated;
+7. whether external provider-envelope extra fields should remain tolerated;
+8. whether duplicate JSON object keys must fail at every nesting level;
+9. whether schema generation and deterministic serialization once per role is sufficient;
+10. whether one shared client for all selected profiles remains correct when all request-specific auth and timeout values are supplied per call;
+11. whether keeping the orchestrator private and exposing only `runtime.execute(review)` is the correct lifecycle boundary.
 
 No `tasks.md`, ADR, configuration example, dependency change, test, or implementation shall be created until this data model is reviewed, corrected where necessary, and explicitly approved.
