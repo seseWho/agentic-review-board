@@ -1,4 +1,4 @@
-# Slice 7 — OpenAI-Compatible LLM Adapter v0.1
+# Slice 7 — Configurable OpenAI-Compatible LLM Adapter v0.1
 
 **Status:** Draft  
 **Branch:** `007-llm-adapter`  
@@ -9,7 +9,7 @@
 
 Slice 7 introduces the first production LLM adapter for Agentic Review Board.
 
-The adapter SHALL allow the existing five-participant pipeline to call one OpenAI-compatible Chat Completions endpoint through the existing provider-neutral `LLMPort`. It SHALL convert application-controlled roles and payloads into provider requests and return only an untrusted JSON object for the existing participant boundaries to validate.
+The adapter SHALL allow the existing five-participant pipeline to call configured local or remote OpenAI-compatible Chat Completions endpoints through the existing provider-neutral `LLMPort`. One adapter instance SHALL represent one immutable endpoint/model profile. Composition SHALL be able to inject the same instance, equivalent instances, or differently configured instances into the five participants, allowing one model or an explicit local/remote combination without introducing a runtime router. Each adapter SHALL convert application-controlled roles and payloads into provider requests and return only an untrusted JSON object for the existing participant boundaries to validate.
 
 This slice connects the completed domain/application workflow to a real model. It does not change participant responsibilities, trusted domain contracts, contextual validation, lifecycle rules, or human decision authority.
 
@@ -34,8 +34,8 @@ No production adapter, runtime LLM configuration, provider HTTP dependency, or l
 Slice 7 SHALL:
 
 1. implement one synchronous infrastructure adapter satisfying the existing `LLMPort`;
-2. target one OpenAI-compatible `/chat/completions` HTTP contract;
-3. obtain endpoint, API key, model name, and finite request timeout from explicit runtime configuration;
+2. target one OpenAI-compatible `/chat/completions` HTTP contract usable through local or remote endpoints;
+3. represent each endpoint/model choice as an immutable named configuration profile containing base URL, model name, optional API key, finite request timeout, and explicit structured-output mode;
 4. build application-controlled instructions for exactly the five approved roles;
 5. serialize each current participant payload as untrusted review data;
 6. request a JSON-object response without requesting or exposing private chain-of-thought;
@@ -44,8 +44,9 @@ Slice 7 SHALL:
 9. reject unknown roles, malformed responses, non-object JSON, transport failures, HTTP failures, and invalid configuration;
 10. expose provider-neutral adapter/configuration errors without secrets, authorization headers, full prompts, or full responses;
 11. preserve deterministic unit and contract tests without live network access;
-12. provide an explicitly opt-in smoke-test path for a configured live endpoint;
-13. document the minimum environment variables required to run the adapter.
+12. allow explicit composition-time assignment of one configured adapter instance to each of the five participants;
+13. provide an explicitly opt-in smoke-test path for every selected configuration profile;
+14. document the minimum runtime configuration required to run one-model and mixed-model compositions.
 
 ### 3.2 Out of Scope
 
@@ -53,8 +54,8 @@ Slice 7 SHALL NOT introduce:
 
 - changes to `LLMPort`, participant method signatures, domain models, contextual validators, Review lifecycle, or orchestration order;
 - UI, CLI product workflow, public API, persistence, review history, RAG, browsing, tools, or external actions;
-- automatic retries, backoff, fallback providers, model routing, load balancing, concurrency, async execution, streaming, or response caching;
-- provider discovery, a generic provider registry, a generic prompt framework, or an agent framework;
+- automatic retries, backoff, fallback providers, dynamic model routing, load balancing, concurrency, async execution, streaming, or response caching;
+- provider discovery, automatic capability detection, a generic provider registry, a generic prompt framework, or an agent framework;
 - model-quality scoring, latency service-level guarantees, token-budget optimization, or cost accounting;
 - automatic connection checks or network calls during configuration or adapter construction;
 - silent JSON repair, Markdown-fence stripping, substring extraction, fuzzy parsing, or provider-response normalization;
@@ -72,7 +73,7 @@ As a demonstrator operator, I want the existing participants to use a configured
 
 1. The adapter satisfies the existing `LLMPort` structurally.
 2. All five approved role values are supported.
-3. Each call uses the configured endpoint, model, API key, and timeout.
+3. Each call uses its adapter instance's configured endpoint, model, optional API key, timeout, and structured-output mode.
 4. The adapter returns one parsed JSON object to the calling participant.
 5. The participant remains responsible for structural and contextual validation of that object.
 6. No provider-specific response type crosses the adapter boundary.
@@ -97,13 +98,16 @@ As an operator, I want runtime configuration to be explicit and validated so tha
 
 #### Acceptance criteria
 
-1. API key, base URL, and model name have no secret-bearing source defaults.
+1. Base URL and model name have no misleading usable defaults; API key has no source default.
 2. Missing or blank required values fail with a provider-neutral configuration error.
-3. The timeout is finite and positive.
-4. Base URL composition produces exactly one `/chat/completions` target without accidental duplicate separators.
-5. Constructing configuration or the adapter performs no network request.
-6. Error text and object representations do not reveal the API key.
-7. Example configuration contains placeholders only.
+3. API key is optional so that unauthenticated local endpoints are supported.
+4. Bearer authentication is sent only when a non-empty API key is configured.
+5. The timeout is finite and positive.
+6. Structured-output mode is selected explicitly per profile and is never detected automatically.
+7. Base URL composition produces exactly one `/chat/completions` target without accidental duplicate separators.
+8. Constructing configuration or the adapter performs no network request.
+9. Error text and object representations do not reveal the API key.
+10. Example configuration contains placeholders only.
 
 ### US4 — Fail closed on malformed provider output
 
@@ -132,7 +136,23 @@ As a maintainer, I want adapter behavior tested without a live provider so that 
 4. Tests cover success, configuration failure, transport failure, HTTP failure, malformed envelopes, malformed content JSON, and non-object JSON.
 5. Tests assert that secrets and full payloads do not appear in sanitized errors.
 6. Existing fake-`LLMPort` orchestration tests remain valid.
-7. Live smoke tests are opt-in, credential-dependent, excluded from normal CI, and assert connectivity/contract shape rather than subjective answer quality or fixed latency.
+7. Live smoke tests are opt-in, excluded from normal CI, and assert connectivity/contract shape rather than subjective answer quality or fixed latency.
+8. Smoke verification covers each selected profile independently, including profiles without credentials.
+
+### US6 — Combine local and remote models explicitly
+
+As a demonstrator operator, I want to assign a configured model endpoint to each logical participant so that I can run all participants on one model or combine local and remote models within the same Review.
+
+#### Acceptance criteria
+
+1. One immutable adapter configuration represents one endpoint/model profile.
+2. Every participant receives exactly one `LLMPort` instance at composition time.
+3. The same adapter instance or configuration MAY be reused by multiple participants.
+4. Different participants MAY receive differently configured adapter instances.
+5. Local and remote profiles MAY coexist in one Review execution.
+6. Assignments are complete and validated before the Review starts.
+7. An assignment does not change silently during the execution.
+8. Selection is explicit composition, not dynamic routing, automatic fallback, or participant-controlled model choice.
 
 ## 5. Functional Requirements
 
@@ -180,12 +200,12 @@ The adapter SHALL serialize the supplied payload as JSON data. User and upstream
 
 Each generation call SHALL issue one synchronous POST request to the configured Chat Completions endpoint with conceptually:
 
-- bearer authentication;
+- optional bearer authentication, included only when a non-empty API key is configured;
 - JSON content type;
 - configured model;
 - application-controlled instruction message;
 - one user/data message containing the serialized payload;
-- a request for JSON-object output where supported by the target contract.
+- a JSON-object response-format request only when the profile explicitly selects `JSON_OBJECT`; no response-format field when it selects `PROMPT_ONLY`.
 
 The exact infrastructure representation is deferred to plan review.
 
@@ -238,20 +258,22 @@ The adapter SHALL NOT log full instructions, payloads, assistant content, author
 
 ### LLM-FR-014 — Runtime Configuration
 
-Runtime configuration SHALL support conceptually:
+Each immutable named runtime configuration profile SHALL support conceptually:
 
-- API key;
+- profile name;
 - base URL;
 - model;
-- finite timeout.
+- optional API key;
+- finite timeout;
+- structured-output mode.
 
-The approved environment-variable names and default policy SHALL be fixed during data-model/design review. A local `.env` loader is not required and SHALL NOT be introduced merely because the supplied prototype uses one.
+Base URL and model are required. API key is optional. The approved external representation, environment-variable strategy, and default policy SHALL be fixed during data-model/design review. A local `.env` loader is not required and SHALL NOT be introduced merely because the supplied prototype uses one.
 
 ### LLM-FR-015 — One Endpoint Contract
 
-Slice 7 SHALL support one OpenAI-compatible Chat Completions contract. Differences among providers that require branching request/response semantics are outside scope.
+Slice 7 SHALL support one OpenAI-compatible Chat Completions contract. A profile MAY point to OpenAI or another remote compatible service, or to a local server such as Ollama, vLLM, or LM Studio when that server exposes the required compatible contract. Native non-compatible provider APIs and differences requiring provider-specific request/response branches are outside scope.
 
-Compatibility means contract compatibility; it does not imply dependency on the OpenAI Python SDK or endorsement of a particular hosted provider.
+Compatibility means contract compatibility; it does not imply dependency on the OpenAI Python SDK or endorsement of a particular hosted or local provider.
 
 ### LLM-FR-016 — Deterministic Test Boundary
 
@@ -264,10 +286,34 @@ A live smoke test MAY be provided only when explicitly selected by the operator.
 - require runtime configuration;
 - remain outside default unit/contract/CI execution;
 - use non-sensitive synthetic input;
+- verify every selected profile independently;
+- identify the failing profile safely without exposing credentials or sensitive endpoint data;
 - verify request success and returned JSON-object shape;
+- avoid executing a complete Review merely to establish connectivity;
 - avoid subjective checks for intelligence, multilingual quality, code quality, reasoning style, temperature variation, or a hard-coded response-time threshold.
 
-### LLM-FR-018 — Core Behavior Is Unchanged
+### LLM-FR-018 — Explicit Participant Assignment
+
+Composition SHALL assign exactly one `LLMPort` instance to each approved participant before Review execution. It SHALL support reuse of one adapter and explicit mixtures of differently configured adapter instances. The assignment SHALL not be selected by ReviewInput, generated content, or a participant.
+
+### LLM-FR-019 — Immutable Execution Selection
+
+Endpoint/model assignments SHALL remain fixed for the duration of one Review. Slice 7 SHALL NOT perform automatic fallback, capability detection, load-based selection, or mid-review replacement.
+
+### LLM-FR-020 — Structured-Output Modes
+
+Each profile SHALL choose exactly one mode:
+
+- `JSON_OBJECT`: include the compatible JSON-object response-format request;
+- `PROMPT_ONLY`: omit the response-format property and rely on the same explicit role instruction requiring direct JSON.
+
+The adapter SHALL NOT probe capabilities, retry in another mode, or silently downgrade. Both modes remain subject to the same direct JSON-object parsing and participant validation.
+
+### LLM-FR-021 — Provider-Neutral Prompt Definitions
+
+The five explicit role instructions SHALL remain shared across local and remote profiles and separate from HTTP transport mechanics within infrastructure. This separation SHALL remain small and role-specific and SHALL NOT become a generic prompt framework.
+
+### LLM-FR-022 — Core Behavior Is Unchanged
 
 All existing participant structural/contextual validation, same-execution provenance, stage transitions, safe lifecycle messages, and Review completion rules SHALL remain authoritative and unchanged.
 
@@ -278,9 +324,9 @@ The Slice 7 flow SHALL preserve these separate boundaries:
 ```text
 Runtime environment
         ↓ untrusted configuration input
-validated adapter configuration
-        ↓
-LLMPort role + payload
+validated named adapter profiles
+        ↓ explicit immutable participant assignment
+configured LLMPort instance + role + payload
         ↓ untrusted review data
 OpenAI-compatible HTTP endpoint
         ↓ untrusted provider envelope/content
@@ -318,25 +364,31 @@ The implementation SHALL define and test at least:
 4. empty payload mapping where mechanically permitted by the port;
 5. payload serialization failure;
 6. missing, blank, or whitespace-only required configuration;
-7. zero, negative, non-finite, or wrong-typed timeout;
-8. base URL with and without a trailing slash;
-9. transport connection failure;
-10. request timeout;
-11. HTTP authentication failure without credential disclosure;
-12. another non-success HTTP status with a non-JSON body;
-13. success status with malformed envelope JSON;
-14. missing `choices`;
-15. zero choices;
-16. multiple choices;
-17. missing message or content;
-18. empty or non-string content;
-19. direct valid JSON object;
-20. JSON array, scalar, or null;
-21. fenced JSON;
-22. prose followed by JSON;
-23. valid JSON object that later fails participant validation;
-24. adapter reuse across sequential calls without retained review data;
-25. constructor/configuration creation without network activity.
+7. absent API key for a local unauthenticated profile;
+8. blank API key normalized only to absence and never sent as a bearer credential;
+9. zero, negative, non-finite, or wrong-typed timeout;
+10. each structured-output mode and an unknown mode;
+11. base URL with and without a trailing slash;
+12. transport connection failure;
+13. request timeout;
+14. HTTP authentication failure without credential disclosure;
+15. another non-success HTTP status with a non-JSON body;
+16. success status with malformed envelope JSON;
+17. missing `choices`;
+18. zero choices;
+19. multiple choices;
+20. missing message or content;
+21. empty or non-string content;
+22. direct valid JSON object;
+23. JSON array, scalar, or null;
+24. fenced JSON;
+25. prose followed by JSON;
+26. valid JSON object that later fails participant validation;
+27. all participants sharing one adapter;
+28. explicit local/remote mixed assignment;
+29. incomplete participant assignment rejected before Review start;
+30. adapter reuse across sequential calls without retained review data;
+31. constructor/configuration creation without network activity.
 
 ## 9. Supplied Prototype Assessment
 
@@ -344,7 +396,7 @@ The supplied `llm_client.py`, `config.py`, and test files are reference material
 
 Useful inputs retained by this specification:
 
-- environment-based endpoint, key, and model configuration;
+- externally supplied endpoint, optional key, and model configuration;
 - bearer-authenticated Chat Completions requests;
 - JSON response handling;
 - an explicit live connectivity check as an optional operator action.
@@ -365,29 +417,32 @@ Behavior intentionally not adopted:
 Slice 7 is complete when:
 
 1. one infrastructure adapter conforms to the unchanged `LLMPort`;
-2. all five existing participants can use it without participant/domain/application provider coupling;
-3. supported role requests are explicit and payloads remain data;
-4. successful provider content returns exactly one JSON object for existing participant validation;
-5. malformed or ambiguous responses fail closed without repair;
-6. runtime secrets remain external and absent from source, errors, fixtures, and default logs;
-7. constructor/configuration creation performs no network call;
-8. one finite timeout is applied and no retries occur;
-9. deterministic tests cover request construction and all material failure classes with no live network;
-10. optional smoke verification is separated from CI and subjective quality assertions;
-11. the entire Slice 1–7 suite, Ruff, mypy strict, and dependency checks pass;
-12. no UI, persistence, generic provider framework, agent framework, or other prohibited expansion is introduced.
+2. one or more immutable profiles can configure compatible local and remote endpoint/model pairs;
+3. all five existing participants can use one shared model or an explicit mixed assignment without participant/domain/application provider coupling;
+4. supported role requests are explicit and payloads remain data;
+5. optional authentication and both explicit structured-output modes behave deterministically;
+6. successful provider content returns exactly one JSON object for existing participant validation;
+7. malformed or ambiguous responses fail closed without repair;
+8. runtime secrets remain external and absent from source, errors, fixtures, and default logs;
+9. constructor/configuration creation performs no network call;
+10. one finite timeout is applied and no retries occur;
+11. deterministic tests cover request construction, profile assignment, and all material failure classes with no live network;
+12. optional per-profile smoke verification is separated from CI and subjective quality assertions;
+13. the entire Slice 1–7 suite, Ruff, mypy strict, and dependency checks pass;
+14. no UI, persistence, dynamic router, generic provider framework, agent framework, or other prohibited expansion is introduced.
 
 ## 11. Decisions Requiring Review Before Approval
 
 Specification review SHALL confirm:
 
-1. whether OpenAI-compatible Chat Completions is the correct single v0.1 endpoint contract;
-2. whether the adapter should use a small direct HTTP dependency or a provider SDK, while preserving infrastructure isolation;
-3. the exact environment-variable names and whether any non-secret setting receives a default;
+1. whether OpenAI-compatible Chat Completions is the correct single v0.1 contract for both remote and compatible local servers;
+2. whether the adapter should use a small direct HTTP dependency or a provider SDK, while preserving infrastructure isolation and broad compatibility;
+3. the exact external representation of named profiles and participant-to-profile assignments;
 4. the timeout representation and default policy;
-5. whether JSON-object response mode is mandatory for the selected compatible endpoint;
+5. the exact enum/type names for `JSON_OBJECT` and `PROMPT_ONLY`;
 6. the smallest testable HTTP boundary;
-7. whether the five role instructions belong entirely inside the adapter package or in a neighboring infrastructure prompt module;
-8. whether this material provider/SDK decision requires an ADR during planning.
+7. the exact infrastructure module boundary between the five shared role instructions and HTTP transport;
+8. whether profile construction and participant assignment require a small composition factory in this slice;
+9. whether this material provider/SDK and multi-profile composition decision requires an ADR during planning.
 
 No `plan.md`, `data-model.md`, `tasks.md`, or implementation SHALL be created until this specification is reviewed, corrected where necessary, and explicitly approved.
