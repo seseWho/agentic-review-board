@@ -14,6 +14,7 @@ SMOKE_MODULE = (
 FORBIDDEN_IMPORT_PREFIXES = (
     "agentic_review_board.application.orchestrator",
     "agentic_review_board.domain.execution",
+    "agentic_review_board.infrastructure.llm.composition",
     "agentic_review_board.participants",
     "statistics",
     "time",
