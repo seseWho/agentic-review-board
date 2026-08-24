@@ -343,16 +343,31 @@ Task notation:
 
 ### 8.2 Minimal implementation
 
-- [ ] T105 Implement `ConfiguredReviewRuntime.from_config` with atomic validation, selected-profile secret resolution, and exact assignment.
-- [ ] T106 Create the policy-controlled shared client and close it on any later construction failure.
-- [ ] T107 Construct/reuse selected-profile adapters and inject them into the five existing participant classes.
-- [ ] T108 Construct and retain the existing `ReviewOrchestrator` privately.
-- [ ] T109 Implement `OPEN/CLOSED`, context management, idempotent `close`, and safe public metadata.
-- [ ] T110 Implement `execute(review)` state guard and private orchestrator delegation.
-- [ ] T111 Prevent public exposure of credential-bearing profiles, client, adapter mapping, mutable assignment, and orchestrator.
-- [ ] T112 Run focused Phase 7 tests to green.
-- [ ] T113 Run full pytest, Ruff, mypy strict, and `pip check`.
+- [X] T105 Implement `ConfiguredReviewRuntime.from_config` with atomic validation, selected-profile secret resolution, and exact assignment.
+- [X] T106 Create the policy-controlled shared client and close it on any later construction failure.
+- [X] T107 Construct/reuse selected-profile adapters and inject them into the five existing participant classes.
+- [X] T108 Construct and retain the existing `ReviewOrchestrator` privately.
+- [X] T109 Implement `OPEN/CLOSED`, context management, idempotent `close`, and safe public metadata.
+- [X] T110 Implement `execute(review)` state guard and private orchestrator delegation.
+- [X] T111 Prevent public exposure of credential-bearing profiles, client, adapter mapping, mutable assignment, and orchestrator.
+- [X] T112 Run focused Phase 7 tests to green.
+- [X] T113 Run full pytest, Ruff, mypy strict, and `pip check`.
 - [ ] T114 [GATE] Review construction atomicity, resource ownership, mixed composition, execution gating, statelessness, public surface, and regressions; stop before integration/architecture tests.
+
+### Phase 7 implementation evidence
+
+- Hermetic-test correction commit: `4671626f90224325eedfe9ff8476bab3d391ebbb`; every runtime test supplies MockTransport while production retains `trust_env=True`.
+- Production composition commit: `2c7cfb1d53f00e376e71a465c7c8a36c74cf4f42`.
+- Focused composition suite: **20 passed**.
+- Full repository suite: **963 passed**.
+- Ruff: **passed**.
+- Strict mypy: **passed** over 47 source files.
+- `pip check`: **passed**, no broken requirements.
+- One client is created after complete selected-profile resolution, one adapter per selected profile name is reused across fixed participant assignments, and the existing five-argument orchestrator is retained privately.
+- Construction closes the client on every later exception; lifecycle is exactly OPEN/CLOSED with idempotent close, guarded enter/execute, and context-exit cleanup.
+- Public runtime operations are limited to `from_config`, `execute`, and `close`; safe immutable metadata exposes only selected names, participant/name mapping, and lifecycle state.
+- Sequential execution retains fixed composition but no Review, prompt, or response objects.
+- T114 remains pending for explicit block review.
 
 ---
 
