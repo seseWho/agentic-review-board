@@ -419,7 +419,7 @@ Task notation:
 - [X] T128 [TEST] Add failing tests for registered `live_llm` marker and dual authorization: skip before configuration/network unless both explicit `--run-live-llm` and exact `ARB_RUN_LIVE_LLM=1` are present; also skip safely when the opt-in is enabled but `ARB_LLM_CONFIG_PATH` is absent.
 - [X] T129 [P] [TEST] Add failing smoke-runner tests proving only selected profiles are checked once each with one documented canonical synthetic role/payload contract and no complete Review.
 - [X] T130 [P] [TEST] Add failing tests for safe profile-name diagnostics, no credential/endpoint/body leakage, runtime closure after success or failure, selected-profile missing/invalid credential failure, and irrelevance of unselected-profile credentials.
-- [ ] T131 [P] [TEST] Add failing checks proving smoke verification does not run a complete Review or assert latency/model quality.
+- [X] T131 [P] [TEST] Add failing checks proving smoke verification does not run a complete Review or assert latency/model quality.
 - [ ] T132 [DOC] Draft `config/llm.example.json` with local and remote placeholders, exact assignments, and credential-variable names only.
 - [ ] T133 [DOC] Draft README sections for one-model, mixed local/remote, environment credentials, proxy/certificate variables, default tests, and explicit smoke command.
 - [ ] T134 [TEST] Add a test loading `config/llm.example.json` through the real parser with a synthetic environment mapping, asserting valid mixed composition and absence of credential values; then run Phase 9 non-live tests and confirm the intended red state without any real request.
@@ -437,6 +437,9 @@ Task notation:
 - T130 contract commit: `39266b975f87069e8e839eaf63c11f9729394e7b`.
 - T130 adds safe-name reporting separate from fixed adapter errors, client/transport closure assertions for success and provider failure, selected-credential fail-closed cases, and proof that an unselected missing credential is irrelevant.
 - Focused collection remains at the same expected missing-runner error; no test body, configuration resolution, or request executes before T136.
+- T131 architecture-contract commit: `ff0849ddba7460892ab7b937bcb9621b8367c19b`.
+- The T131 check fails only because `smoke.py` is intentionally absent; it forbids full Review/orchestrator/participant dependencies and timing, scoring, reasoning, or quality-measurement capabilities.
+- The new architecture test passes Ruff and strict mypy.
 
 ### 10.2 Minimal implementation
 
