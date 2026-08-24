@@ -4,7 +4,7 @@
 **Specification**: `specs/007-llm-adapter/spec.md` — Approved  
 **Plan**: `specs/007-llm-adapter/plan.md` — Approved  
 **Data model**: `specs/007-llm-adapter/data-model.md` — Approved  
-**Status**: Draft — pending review and approval before implementation
+**Status**: Approved — reviewed against specification, plan, and data model; implementation authorized by reviewed blocks
 
 ## 1. Execution Rules
 
