@@ -416,13 +416,21 @@ Task notation:
 
 ### 10.1 Tests/documentation first
 
-- [ ] T128 [TEST] Add failing tests for registered `live_llm` marker and dual authorization: skip before configuration/network unless both explicit `--run-live-llm` and exact `ARB_RUN_LIVE_LLM=1` are present; also skip safely when the opt-in is enabled but `ARB_LLM_CONFIG_PATH` is absent.
+- [X] T128 [TEST] Add failing tests for registered `live_llm` marker and dual authorization: skip before configuration/network unless both explicit `--run-live-llm` and exact `ARB_RUN_LIVE_LLM=1` are present; also skip safely when the opt-in is enabled but `ARB_LLM_CONFIG_PATH` is absent.
 - [ ] T129 [P] [TEST] Add failing smoke-runner tests proving only selected profiles are checked once each with one documented canonical synthetic role/payload contract and no complete Review.
 - [ ] T130 [P] [TEST] Add failing tests for safe profile-name diagnostics, no credential/endpoint/body leakage, runtime closure after success or failure, selected-profile missing/invalid credential failure, and irrelevance of unselected-profile credentials.
 - [ ] T131 [P] [TEST] Add failing checks proving smoke verification does not run a complete Review or assert latency/model quality.
 - [ ] T132 [DOC] Draft `config/llm.example.json` with local and remote placeholders, exact assignments, and credential-variable names only.
 - [ ] T133 [DOC] Draft README sections for one-model, mixed local/remote, environment credentials, proxy/certificate variables, default tests, and explicit smoke command.
 - [ ] T134 [TEST] Add a test loading `config/llm.example.json` through the real parser with a synthetic environment mapping, asserting valid mixed composition and absence of credential values; then run Phase 9 non-live tests and confirm the intended red state without any real request.
+
+#### Phase 9 T128 red evidence
+
+- Contract commits: `cec7a018c5e5bd0605ae9b642745b2ac8517c8a0`, `b19939ba6163d6b3b2e17e092aa5d96e7213b2a0`.
+- Focused result: **6 failed**, all caused by the intentionally absent `live_llm` marker registration, `--run-live-llm` option, and collection-time authorization gate.
+- The probe body executes when authorization is absent, the explicit option is currently rejected, and the marker is unregistered; these are the exact missing T135 behaviors.
+- The probe uses only a temporary sentinel file. No LLM configuration is loaded and no network request is made.
+- Ruff and strict mypy pass for both new test files.
 
 ### 10.2 Minimal implementation
 
