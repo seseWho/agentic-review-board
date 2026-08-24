@@ -301,7 +301,7 @@ def test_immutable_runtime_config_remains_serializable() -> None:
 
     dumped = config.model_dump(mode="json")
 
-    assert dumped["profiles"] == {"local": profile_data()}
+    assert dumped["profiles"] == {"local": profile_data(api_key_env=None)}
     assert dumped["assignments"] == assignment_data()
     assert RawLLMRuntimeConfig.model_validate_json(config.model_dump_json()) == config
 
