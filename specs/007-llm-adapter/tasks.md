@@ -381,7 +381,7 @@ Task notation:
 - [X] T116 [P] [TEST] Add one deterministic adapter-to-participant success test for each of the five existing participants.
 - [X] T117 [P] [TEST] Add deterministic tests proving adapter-valid but semantically invalid JSON is rejected by each existing participant's output boundary.
 - [X] T118 [P] [TEST] Add orchestrator tests using different MockTransport-backed profiles for local/remote mixed success and a selected-provider failure.
-- [ ] T119 [P] [TEST] Extend architecture tests proving domain, application, and participants do not import HTTPX or infrastructure.
+- [X] T119 [P] [TEST] Extend architecture tests proving domain, application, and participants do not import HTTPX or infrastructure.
 - [ ] T120 [P] [TEST] Extend architecture tests proving only infrastructure owns endpoint/auth/envelope behavior and production code never imports `tests/`.
 - [ ] T121 [P] [TEST] Add scoped production checks over `src/`, runtime dependencies, and new executable modules for provider SDKs, retry/fallback/router/registry, native provider adapters, persistence, RAG, external-action tools, and UI additions; exclude canonical documentation and legitimate test vocabulary.
 - [ ] T122 [TEST] Run Phase 8 tests and confirm any red state reflects missing verification support only.
