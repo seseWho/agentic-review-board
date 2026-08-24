@@ -115,14 +115,21 @@ Task notation:
 
 ### 4.1 Tests first
 
-- [ ] T026 [TEST] Add failing tests that determine the exact selected profile-name set from five assignments while structurally retaining unselected profiles.
-- [ ] T027 [P] [TEST] Add failing tests for unauthenticated selected profiles and selected profiles using an explicit in-memory environment mapping.
-- [ ] T028 [P] [TEST] Add failing tests for missing, blank, leading-space, and trailing-space credentials referenced by selected profiles.
-- [ ] T029 [P] [TEST] Add failing tests proving credentials referenced only by unselected profiles are never read and do not block resolution.
-- [ ] T030 [P] [TEST] Add failing tests proving credential values never appear in repr, safe errors, or configuration serialization.
-- [ ] T031 [P] [TEST] Add failing tests for scalar timeout expansion into equal connect/read/write/pool HTTPX phases.
-- [ ] T032 [P] [TEST] Add failing identity tests proving repeated assignments reuse the exact resolved profile object while different profile names produce distinct resolved objects.
-- [ ] T033 [TEST] Run Phase 3 tests and confirm the intended red state.
+- [X] T026 [TEST] Add failing tests that determine the exact selected profile-name set from five assignments while structurally retaining unselected profiles.
+- [X] T027 [P] [TEST] Add failing tests for unauthenticated selected profiles and selected profiles using an explicit in-memory environment mapping.
+- [X] T028 [P] [TEST] Add failing tests for missing, blank, leading-space, and trailing-space credentials referenced by selected profiles.
+- [X] T029 [P] [TEST] Add failing tests proving credentials referenced only by unselected profiles are never read and do not block resolution.
+- [X] T030 [P] [TEST] Add failing tests proving credential values never appear in repr, safe errors, or configuration serialization.
+- [X] T031 [P] [TEST] Add failing tests for scalar timeout expansion into equal connect/read/write/pool HTTPX phases.
+- [X] T032 [P] [TEST] Add failing identity tests proving repeated assignments reuse the exact resolved profile object while different profile names produce distinct resolved objects.
+- [X] T033 [TEST] Run Phase 3 tests and confirm the intended red state.
+
+#### Phase 3 red evidence
+
+- Contract-test commit: `c6f24aa5fc3f5c354da74d62fc911f0c9b63b796`.
+- Focused collection stops with the expected missing contract: `ImportError: cannot import name 'ResolvedLLMProfile'`.
+- The red state is caused exclusively by the intentionally absent Phase 3 resolved-profile and resolution contracts.
+- No secret resolution, HTTP timeout object, resolved assignment, adapter, or network behavior has been added.
 
 ### 4.2 Minimal implementation
 
