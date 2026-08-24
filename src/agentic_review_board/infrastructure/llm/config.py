@@ -4,12 +4,14 @@ import json
 import math
 import re
 from collections.abc import Mapping
+from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 from urllib.parse import urlsplit
 
+import httpx
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -18,6 +20,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+from pydantic.types import SecretStr
 
 from agentic_review_board.infrastructure.llm.errors import LLMConfigurationError
 
@@ -180,6 +183,87 @@ class RawLLMRuntimeConfig(BaseModel):
         if any(name not in self.profiles for name in assigned_names):
             raise ValueError("unknown profile reference")
         return self
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedLLMProfile:
+    name: str
+    base_url: str
+    model: str
+    api_key: SecretStr | None
+    timeout: httpx.Timeout
+    structured_output_mode: StructuredOutputMode
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedParticipantLLMAssignment:
+    analyst: ResolvedLLMProfile
+    solution_architect: ResolvedLLMProfile
+    risk_reviewer: ResolvedLLMProfile
+    critic: ResolvedLLMProfile
+    coordinator: ResolvedLLMProfile
+
+
+def _resolve_api_key(
+    raw_profile: RawLLMProfile,
+    environment: Mapping[str, str],
+) -> SecretStr | None:
+    if raw_profile.api_key_env is None:
+        return None
+
+    try:
+        value = environment[raw_profile.api_key_env]
+    except KeyError as error:
+        raise LLMConfigurationError() from error
+
+    if (
+        not isinstance(value, str)
+        or not value.strip()
+        or value != value.strip()
+    ):
+        raise LLMConfigurationError()
+    return SecretStr(value)
+
+
+def _resolve_profile(
+    name: str,
+    raw_profile: RawLLMProfile,
+    environment: Mapping[str, str],
+) -> ResolvedLLMProfile:
+    timeout = raw_profile.timeout_seconds
+    return ResolvedLLMProfile(
+        name=name,
+        base_url=raw_profile.base_url,
+        model=raw_profile.model,
+        api_key=_resolve_api_key(raw_profile, environment),
+        timeout=httpx.Timeout(
+            connect=timeout,
+            read=timeout,
+            write=timeout,
+            pool=timeout,
+        ),
+        structured_output_mode=raw_profile.structured_output_mode,
+    )
+
+
+def resolve_llm_runtime_config(
+    config: RawLLMRuntimeConfig,
+    environment: Mapping[str, str],
+) -> ResolvedParticipantLLMAssignment:
+    selected_names = frozenset(config.assignments.model_dump().values())
+    resolved_by_name = {
+        name: _resolve_profile(name, raw_profile, environment)
+        for name, raw_profile in config.profiles.items()
+        if name in selected_names
+    }
+
+    return ResolvedParticipantLLMAssignment(
+        analyst=resolved_by_name[config.assignments.analyst],
+        solution_architect=resolved_by_name[config.assignments.solution_architect],
+        risk_reviewer=resolved_by_name[config.assignments.risk_reviewer],
+        critic=resolved_by_name[config.assignments.critic],
+        coordinator=resolved_by_name[config.assignments.coordinator],
+    )
 
 
 def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
