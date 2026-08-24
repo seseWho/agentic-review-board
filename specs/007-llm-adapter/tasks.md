@@ -296,7 +296,7 @@ Task notation:
 - [X] T090 Ensure adapter errors use only fixed safe messages while optionally chaining causes.
 - [X] T091 Run focused Phase 6 tests to green.
 - [X] T092 Run full pytest, Ruff, mypy strict, and `pip check`.
-- [ ] T093 [GATE] Review failure taxonomy, sanitization, direct parsing, no-repair behavior, state retention, and regressions; stop before composition.
+- [X] T093 [GATE] Review failure taxonomy, sanitization, direct parsing, no-repair behavior, state retention, and regressions; stop before composition.
 
 ### Phase 6 implementation evidence
 
@@ -310,7 +310,7 @@ Task notation:
 - Envelope extras are ignored while the required one-choice/message/content path remains strict.
 - Content receives one direct `json.loads`; fences, prose, arrays, scalars, booleans, and null fail without repair or a second request.
 - A valid top-level object is returned unchanged and remains untrusted for existing participant validation; the adapter retains no call-specific state.
-- T093 remains pending for explicit block review.
+- T093 review correction rejects non-standard `NaN`, `Infinity`, and `-Infinity` at both request serialization and structured-content parsing boundaries.\n- Review tests commits: `10d5e8eb0044b0ac6680df22322ea31c217c5903`, `bece17f51433f1e561baf1fa61a3159ba61201a4`.\n- Review production commit: `56d80760fa564decfed4eeeeef41bf5794c51858`.\n- Final focused request/response suites: **71 passed**; full repository suite: **943 passed**.\n- Ruff, strict mypy over 45 source files, and `pip check`: **passed**.\n- T093 approved on 2026-08-24; Phase 7 tests-first work authorized.
 
 ---
 
