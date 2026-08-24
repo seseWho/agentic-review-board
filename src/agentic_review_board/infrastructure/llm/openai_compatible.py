@@ -11,8 +11,12 @@ from agentic_review_board.infrastructure.llm.config import (
     StructuredOutputMode,
 )
 from agentic_review_board.infrastructure.llm.errors import (
+    LLMHTTPStatusError,
     LLMPayloadSerializationError,
+    LLMRequestTimeoutError,
     LLMResponseEnvelopeError,
+    LLMStructuredContentError,
+    LLMTransportError,
 )
 from agentic_review_board.infrastructure.llm.prompts import (
     get_role_prompt_definition,
@@ -66,16 +70,61 @@ class OpenAICompatibleLLMAdapter:
                 f"Bearer {self.profile.api_key.get_secret_value()}"
             )
 
-        self.client.post(
-            f"{self.profile.base_url}/chat/completions",
-            headers=headers,
-            json=request_body,
-            timeout=self.profile.timeout,
-        )
+        try:
+            response = self.client.post(
+                f"{self.profile.base_url}/chat/completions",
+                headers=headers,
+                json=request_body,
+                timeout=self.profile.timeout,
+            )
+        except httpx.TimeoutException as error:
+            raise LLMRequestTimeoutError() from error
+        except httpx.RequestError as error:
+            raise LLMTransportError() from error
 
-        # Phase 6 replaces this fail-closed boundary with strict envelope and
-        # structured-content processing.
-        raise LLMResponseEnvelopeError()
+        if not 200 <= response.status_code < 300:
+            raise LLMHTTPStatusError()
+
+        content = self._extract_content(response)
+        return self._parse_structured_content(content)
+
+    @staticmethod
+    def _extract_content(response: httpx.Response) -> str:
+        try:
+            envelope = response.json()
+        except (json.JSONDecodeError, UnicodeDecodeError) as error:
+            raise LLMResponseEnvelopeError() from error
+
+        if not isinstance(envelope, dict):
+            raise LLMResponseEnvelopeError()
+
+        choices = envelope.get("choices")
+        if not isinstance(choices, list) or len(choices) != 1:
+            raise LLMResponseEnvelopeError()
+
+        choice = choices[0]
+        if not isinstance(choice, dict):
+            raise LLMResponseEnvelopeError()
+
+        message = choice.get("message")
+        if not isinstance(message, dict):
+            raise LLMResponseEnvelopeError()
+
+        content = message.get("content")
+        if not isinstance(content, str) or not content.strip():
+            raise LLMResponseEnvelopeError()
+        return content
+
+    @staticmethod
+    def _parse_structured_content(content: str) -> dict[str, object]:
+        try:
+            parsed = json.loads(content)
+        except json.JSONDecodeError as error:
+            raise LLMStructuredContentError() from error
+
+        if not isinstance(parsed, dict):
+            raise LLMStructuredContentError()
+        return parsed
 
     @staticmethod
     def _serialize_payload(payload: Mapping[str, object]) -> str:
