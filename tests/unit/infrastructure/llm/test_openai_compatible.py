@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Iterator, Mapping
 from typing import Any
 
@@ -320,6 +321,32 @@ def test_non_serializable_payload_fails_before_any_request() -> None:
             adapter.generate_structured(
                 role="analyst",
                 payload={"not_json": {object()}},
+            )
+
+    assert request_count == 0
+
+
+@pytest.mark.parametrize("value", [math.nan, math.inf, -math.inf])
+def test_non_json_numeric_constant_fails_before_any_request(value: float) -> None:
+    request_count = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal request_count
+        request_count += 1
+        return httpx.Response(200, json={})
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        adapter = OpenAICompatibleLLMAdapter(
+            profile=resolved_profile(),
+            client=client,
+        )
+        with pytest.raises(
+            LLMPayloadSerializationError,
+            match=r"^LLM payload serialization failed$",
+        ):
+            adapter.generate_structured(
+                role="analyst",
+                payload={"value": value},
             )
 
     assert request_count == 0
