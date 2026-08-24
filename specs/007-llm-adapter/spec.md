@@ -1,6 +1,6 @@
 # Slice 7 — Configurable OpenAI-Compatible LLM Adapter v0.1
 
-**Status:** Draft  
+**Status:** Approved  
 **Branch:** `007-llm-adapter`  
 **Depends on:** Slices 1–6  
 **Canonical sources:** `docs/01-product-vision.md`, `docs/02-requirements.md`, `docs/03-architecture.md`, `docs/04-agent-model.md`, `docs/05-quality-security.md`
