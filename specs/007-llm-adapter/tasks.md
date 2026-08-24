@@ -95,13 +95,16 @@ Task notation:
 
 - Runtime dependency: `httpx>=0.28,<0.29`; HTTPX is not imported outside infrastructure.
 - Production contracts: `infrastructure/llm/errors.py` and `infrastructure/llm/config.py`, plus package initializers.
-- Focused configuration suite: **121 passed**.
-- Full repository suite: **803 passed**.
+- Focused configuration suite after gate corrections: **132 passed**.
+- Full repository suite after gate corrections: **814 passed**.
 - Ruff: **passed**.
 - Strict mypy: **passed** over 39 source files.
 - `pip check`: **passed**, no broken requirements.
 - Configuration loading performs file/UTF-8/JSON/Pydantic validation only; no network, credential resolution, adapter construction, retry, routing, or provider SDK behavior exists.
 - Every public loader failure maps to fixed `LLM configuration invalid`; the other approved error classes also expose only their fixed message.
+- T025 review corrections: immutable copied profile mapping with explicit safe serialization; rejection of invalid/out-of-range ports, whitespace, backslashes, malformed percent escapes, and multiple trailing slashes; deterministic unreadable-file error coverage.
+- Review-correction tests commit: `f4f49920f4b644e709b79fc727fdd2cae47ae4f9`.
+- Final correction head: `55615ec53546f3efcdad151da2a4399a371f306a`.
 - T025 remains pending for explicit block review.
 
 ---
