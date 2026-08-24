@@ -166,9 +166,9 @@ Task notation:
 
 - [ ] T076 [TEST] Add failing success tests for the accepted minimum envelope and ignored unrelated provider-envelope extras.
 - [ ] T077 [P] [TEST] Add failing tests for timeout subclasses mapping to exact `LLMRequestTimeoutError`.
-- [ ] T078 [P] [TEST] Add failing tests for connection, proxy, protocol, decoding, and other request failures mapping to exact `LLMTransportError`.
+- [ ] T078 [P] [TEST] Add failing tests proving HTTPX `RequestError` failures—including connection, proxy, protocol, and HTTP content-decoding failures—map to exact `LLMTransportError`; keep response-body `json.JSONDecodeError` under T080.
 - [ ] T079 [P] [TEST] Add failing tests for 3xx/4xx/5xx statuses mapping to exact `LLMHTTPStatusError` with redirects disabled.
-- [ ] T080 [P] [TEST] Add failing envelope tests for non-JSON/non-object body, absent/wrong `choices`, zero/multiple choices, wrong choice/message, and absent/blank/non-string content.
+- [ ] T080 [P] [TEST] Add failing envelope tests for response-body `json.JSONDecodeError`, non-object envelope JSON, absent/wrong `choices`, zero/multiple choices, wrong choice/message, and absent/blank/non-string content.
 - [ ] T081 [P] [TEST] Add failing structured-content tests for malformed JSON, array, string, number, boolean, null, fenced JSON, and prefix/suffix prose.
 - [ ] T082 [P] [TEST] Add failing sanitization tests using secret, endpoint, model, payload, prompt, response-body, and provider-error markers.
 - [ ] T083 [P] [TEST] Add failing tests proving exactly one attempted request and no JSON repair, second request, mode downgrade, or fallback.
@@ -194,13 +194,13 @@ Task notation:
 
 ### 8.1 Tests first
 
-- [ ] T094 [TEST] Add failing tests that runtime construction uses one client with `trust_env=True`, `follow_redirects=False`, no global auth/base URL/cookies, and optional injected MockTransport.
+- [ ] T094 [TEST] Add failing tests for the small HTTP-client constructor's explicit arguments (`trust_env=True`, `follow_redirects=False`, optional MockTransport, no global auth/base URL/cookies) plus observable redirect behavior; do not inspect private HTTPX attributes.
 - [ ] T095 [P] [TEST] Add failing tests for one adapter per selected profile and exact adapter reuse across repeated participant assignments.
 - [ ] T096 [P] [TEST] Add failing tests for all-five-shared, five-distinct, and mixed local/no-key plus remote/key compositions.
 - [ ] T097 [P] [TEST] Add failing tests matching the actual five-argument `ReviewOrchestrator` constructor without modifying it.
-- [ ] T098 [P] [TEST] Add failing atomic-construction tests proving client closure if a post-client construction step fails.
+- [ ] T098 [P] [TEST] Add failing ordering tests proving every naturally fallible configuration, credential, and assignment step completes before client creation; verify the implementation closes the client defensively on an unexpected later exception without adding an injectable participant/orchestrator factory solely for this test.
 - [ ] T099 [P] [TEST] Add failing `OPEN` context-entry, idempotent close, automatic context exit, and `CLOSED.__enter__` tests.
-- [ ] T100 [P] [TEST] Add failing tests proving `runtime.execute(review)` is the only public execution path and the orchestrator/client/adapters are not exposed.
+- [ ] T100 [P] [TEST] Add failing public-API tests proving `runtime.execute(review)` is the only documented/public execution path and that no public properties or exports expose the orchestrator, client, or adapters; do not claim absolute inaccessibility of underscore-prefixed Python internals.
 - [ ] T101 [P] [TEST] Add failing tests proving closed-runtime execution raises exact `LLMRuntimeClosedError` before Review transition or request.
 - [ ] T102 [P] [TEST] Add failing sequential-Review tests proving fixed assignments and no retained Review/prompt/response data.
 - [ ] T103 [P] [TEST] Add failing safe-public-surface tests for profile names, participant/profile mapping, lifecycle state, and absence of credentials.
@@ -233,7 +233,7 @@ Task notation:
 - [ ] T118 [P] [TEST] Add orchestrator tests using different MockTransport-backed profiles for local/remote mixed success and a selected-provider failure.
 - [ ] T119 [P] [TEST] Extend architecture tests proving domain, application, and participants do not import HTTPX or infrastructure.
 - [ ] T120 [P] [TEST] Extend architecture tests proving only infrastructure owns endpoint/auth/envelope behavior and production code never imports `tests/`.
-- [ ] T121 [P] [TEST] Add absence checks for provider SDKs, retry/fallback/router/registry, native provider adapters, persistence, RAG, tools, and UI additions.
+- [ ] T121 [P] [TEST] Add scoped production checks over `src/`, runtime dependencies, and new executable modules for provider SDKs, retry/fallback/router/registry, native provider adapters, persistence, RAG, external-action tools, and UI additions; exclude canonical documentation and legitimate test vocabulary.
 - [ ] T122 [TEST] Run Phase 8 tests and confirm any red state reflects missing verification support only.
 
 ### 9.2 Minimal completion
@@ -252,22 +252,22 @@ Task notation:
 
 ### 10.1 Tests/documentation first
 
-- [ ] T128 [TEST] Add failing tests for registered `live_llm` marker, default exclusion, explicit selection, and safe skip without `ARB_LLM_CONFIG_PATH`.
-- [ ] T129 [P] [TEST] Add failing smoke-runner tests proving only selected profiles are checked once each with synthetic data.
-- [ ] T130 [P] [TEST] Add failing tests for safe profile-name diagnostics, no credential/endpoint/body leakage, and runtime closure after success or failure.
+- [ ] T128 [TEST] Add failing tests for registered `live_llm` marker and dual activation: skip before configuration/network unless both `-m live_llm` selection and exact `ARB_RUN_LIVE_LLM=1` are present; also skip safely when the opt-in is enabled but `ARB_LLM_CONFIG_PATH` is absent.
+- [ ] T129 [P] [TEST] Add failing smoke-runner tests proving only selected profiles are checked once each with one documented canonical synthetic role/payload contract and no complete Review.
+- [ ] T130 [P] [TEST] Add failing tests for safe profile-name diagnostics, no credential/endpoint/body leakage, runtime closure after success or failure, selected-profile missing/invalid credential failure, and irrelevance of unselected-profile credentials.
 - [ ] T131 [P] [TEST] Add failing checks proving smoke verification does not run a complete Review or assert latency/model quality.
 - [ ] T132 [DOC] Draft `config/llm.example.json` with local and remote placeholders, exact assignments, and credential-variable names only.
 - [ ] T133 [DOC] Draft README sections for one-model, mixed local/remote, environment credentials, proxy/certificate variables, default tests, and explicit smoke command.
-- [ ] T134 [TEST] Run Phase 9 non-live tests and confirm the intended red state without any real request.
+- [ ] T134 [TEST] Add a test loading `config/llm.example.json` through the real parser with a synthetic environment mapping, asserting valid mixed composition and absence of credential values; then run Phase 9 non-live tests and confirm the intended red state without any real request.
 
 ### 10.2 Minimal implementation
 
-- [ ] T135 Register `live_llm` and configure default `-m "not live_llm"` exclusion in `pyproject.toml`.
-- [ ] T136 Implement the opt-in per-selected-profile smoke test/runner using synthetic non-sensitive payloads and the configured role/schema path.
+- [ ] T135 Register the `live_llm` marker and implement the exact `ARB_RUN_LIVE_LLM=1` network gate; do not depend on ambiguous marker expressions in global `addopts`.
+- [ ] T136 Implement the dual-gated per-selected-profile smoke test/runner using the documented canonical synthetic role/payload, failing on invalid selected-profile configuration once explicitly enabled.
 - [ ] T137 Ensure smoke execution closes the runtime on every path and reports only safe profile identities.
 - [ ] T138 Finalize the non-secret example configuration and README commands.
-- [ ] T139 Run default pytest and prove live tests are not selected.
-- [ ] T140 Run the smoke tests only if an operator explicitly supplies suitable local/remote configuration; record skipped as acceptable when unavailable.
+- [ ] T139 Run default pytest and prove live tests perform no configuration loading or network access and report skipped.
+- [ ] T140 Run live smoke only with both `ARB_RUN_LIVE_LLM=1` and explicit suitable configuration; absence of the opt-in or config path may skip, but invalid selected-profile credentials after activation must fail.
 - [ ] T141 Run Ruff, mypy strict, and `pip check`.
 - [ ] T142 [GATE] Review opt-in behavior, example hygiene, operator instructions, diagnostic safety, and regressions; stop before final closure.
 
@@ -283,9 +283,9 @@ Task notation:
 - [ ] T146 Run `pip check`.
 - [ ] T147 Verify GitHub Actions passes on all configured Python versions without secrets.
 - [ ] T148 Review dependency diff and confirm HTTPX is the only new justified runtime dependency.
-- [ ] T149 Search production code for credentials, placeholder secrets, full prompt/response logging, raw provider-error interpolation, retries, sleeps, fallback, routing, provider SDKs, and test imports.
+- [ ] T149 Search changed production code, runtime dependencies, and executable modules—not canonical docs—for credentials, secret values, full prompt/response logging, raw provider-error interpolation, retries, sleeps, fallback, routing, provider SDKs, and test imports.
 - [ ] T150 Verify every adapter error message exactly matches the approved safe table.
-- [ ] T151 Verify all declared profiles validate structurally while only selected profiles resolve secrets, instantiate adapters, and smoke-test.
+- [ ] T151 Verify all declared profiles validate structurally while only selected profiles resolve secrets, instantiate adapters, and smoke-test; verify the committed example through the real loader.
 - [ ] T152 Verify one-model and mixed-model deterministic end-to-end paths preserve existing participant validation and Review failure semantics.
 - [ ] T153 Verify runtime construction/close/use-after-close behavior and absence of retained Review data.
 - [ ] T154 Verify no modification to `LLMPort`, participant signatures, domain outputs, lifecycle shapes, or orchestrator execution order.
