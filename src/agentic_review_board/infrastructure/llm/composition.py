@@ -114,7 +114,10 @@ class ConfiguredReviewRuntime:
                 participant_profile_names=participant_profile_names,
             )
         except BaseException:
-            client.close()
+            try:
+                client.close()
+            except BaseException:
+                pass
             raise
 
     @property
