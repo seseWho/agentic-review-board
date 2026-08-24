@@ -127,7 +127,7 @@ The plan requires two separate concepts:
 1. **profile definitions** — how to reach one endpoint/model;
 2. **participant assignments** — which named profile each of the five roles uses.
 
-The external representation is one optional non-secret JSON configuration file selected through `ARB_LLM_CONFIG_PATH`. It contains named profile metadata, five participant assignments, and—where authentication is needed—the name of an environment variable holding the API key. It never contains the key itself. Tests and embedding code may construct the same configuration objects programmatically without a file. No YAML, `.env` loader, configuration framework, provider discovery, or committed secret file is introduced.
+The external representation is one optional non-secret JSON configuration file selected through `ARB_LLM_CONFIG_PATH`. It contains named profile metadata, five participant assignments, and—where authentication is needed for a selected profile—the name of an environment variable holding the API key. It never contains the key itself. Tests and embedding code may construct the same configuration objects programmatically without a file. No YAML, `.env` loader, configuration framework, provider discovery, or committed secret file is introduced.
 
 ### 3.3 Optional authentication
 
@@ -498,17 +498,18 @@ A valid JSON object is returned even if it later violates `ProblemAnalysis`, `So
 
 ### 9.1 Runtime ownership and resolution before Review execution
 
-`ConfiguredReviewRuntime` is the composition result and context-managed resource boundary. It exposes the ready `ReviewOrchestrator` and safe non-secret profile identities needed by smoke verification; it does not expose credentials or mutable assignment state.
+`ConfiguredReviewRuntime` is the composition result, context-managed resource boundary, and only public execution gate. It keeps the ready `ReviewOrchestrator` private, exposes `execute(review)`, and exposes only safe non-secret profile identities needed by smoke verification; it does not expose credentials or mutable assignment state.
 
 Composition shall:
 
-1. validate all profiles;
-2. resolve all five exact participant assignments;
-3. create the single policy-controlled `httpx.Client`;
-4. construct one adapter per referenced profile and reuse it for repeated assignments;
-5. inject one `LLMPort` into each existing participant;
-6. construct the existing `ReviewOrchestrator`;
-7. return a ready, stateless `ConfiguredReviewRuntime` that owns and closes the client.
+1. validate all declared profiles structurally;
+2. resolve all five exact participant assignments and determine the selected profile-name set;
+3. resolve credentials only for selected profiles;
+4. create the single policy-controlled `httpx.Client`;
+5. construct one adapter per selected profile and reuse it for repeated assignments;
+6. inject one `LLMPort` into each existing participant;
+7. construct and retain the private existing `ReviewOrchestrator`;
+8. return a ready, stateless `ConfiguredReviewRuntime` that owns and closes the client and rejects `execute` after closure.
 
 Failure in profile or assignment resolution prevents Review start.
 
@@ -584,7 +585,7 @@ At least one valid JSON object that is semantically invalid shall demonstrate th
 
 ### 10.5 Live smoke tests
 
-Register the `live_llm` pytest marker and exclude it in default project pytest configuration with `-m "not live_llm"`. Document an explicit command using `-m live_llm`; CI never supplies live configuration or overrides the default exclusion. A live test also skips safely when `ARB_LLM_CONFIG_PATH` or a referenced credential is absent.
+Register the `live_llm` pytest marker and exclude it in default project pytest configuration with `-m "not live_llm"`. Document an explicit command using `-m live_llm`; CI never supplies live configuration or overrides the default exclusion. A live test also skips safely when `ARB_LLM_CONFIG_PATH` or a credential referenced by a selected profile is absent.
 
 Live tests are opt-in and excluded from default pytest and CI. They verify each selected profile independently using synthetic non-sensitive content and assert only:
 
