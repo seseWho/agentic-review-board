@@ -9,6 +9,7 @@ import pytest
 
 from agentic_review_board.infrastructure.llm.config import (
     RawLLMRuntimeConfig,
+    ResolvedLLMProfile,
     resolve_llm_runtime_config,
 )
 from agentic_review_board.infrastructure.llm.errors import (
@@ -66,7 +67,7 @@ def resolved_profile(
     api_key: str | None = None,
     timeout_seconds: float = 17.5,
     structured_output_mode: str = "PROMPT_ONLY",
-):
+) -> ResolvedLLMProfile:
     profile_name = "selected"
     assignment = {
         "analyst": profile_name,
@@ -89,7 +90,9 @@ def resolved_profile(
             "assignments": assignment,
         }
     )
-    environment = {api_key_env: api_key} if api_key_env and api_key else {}
+    environment: dict[str, str] = {}
+    if api_key_env is not None and api_key is not None:
+        environment[api_key_env] = api_key
     return resolve_llm_runtime_config(config, environment).analyst
 
 
