@@ -378,7 +378,7 @@ Task notation:
 ### 9.1 Tests first
 
 - [X] T115 [TEST] Add a production-adapter structural contract test against unchanged `LLMPort` in `tests/contract/test_production_llm_adapter_contract.py`.
-- [ ] T116 [P] [TEST] Add one deterministic adapter-to-participant success test for each of the five existing participants.
+- [X] T116 [P] [TEST] Add one deterministic adapter-to-participant success test for each of the five existing participants.
 - [ ] T117 [P] [TEST] Add deterministic tests proving adapter-valid but semantically invalid JSON is rejected by each existing participant's output boundary.
 - [ ] T118 [P] [TEST] Add orchestrator tests using different MockTransport-backed profiles for local/remote mixed success and a selected-provider failure.
 - [ ] T119 [P] [TEST] Extend architecture tests proving domain, application, and participants do not import HTTPX or infrastructure.
