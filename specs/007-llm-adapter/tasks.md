@@ -89,7 +89,7 @@ Task notation:
 - [X] T022 Map every public loader/validation failure to exact safe `LLMConfigurationError` without dynamic detail.
 - [X] T023 Run focused Phase 2 tests to green.
 - [X] T024 Run full pytest, Ruff, mypy strict, and `pip check`.
-- [ ] T025 [GATE] Review configuration scope, exact identity behavior, URL policy, error safety, dependency diff, and regression results; stop before secret resolution.
+- [X] T025 [GATE] Review configuration scope, exact identity behavior, URL policy, error safety, dependency diff, and regression results; stop before secret resolution.
 
 ### Phase 2 implementation evidence
 
@@ -105,7 +105,7 @@ Task notation:
 - T025 review corrections: immutable copied profile mapping with explicit safe serialization; rejection of invalid/out-of-range ports, whitespace, backslashes, malformed percent escapes, and multiple trailing slashes; deterministic unreadable-file error coverage.
 - Review-correction tests commit: `f4f49920f4b644e709b79fc727fdd2cae47ae4f9`.
 - Final correction head: `55615ec53546f3efcdad151da2a4399a371f306a`.
-- T025 remains pending for explicit block review.
+- T025 approved on 2026-08-24; Phase 3 tests-first work authorized.
 
 ---
 
