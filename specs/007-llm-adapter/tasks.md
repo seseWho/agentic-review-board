@@ -450,10 +450,14 @@ Task notation:
 - The real loader/resolver test passes and proves exact mixed assignments, resolved-object reuse, local/remote distinction, and absence of the synthetic credential from the committed file and reprs.
 - Combined Phase 9 non-live red run: **1 passed, 7 failed, 1 collection error**. All red outcomes are the approved missing T135 gate or T136 runner; no unexpected failure or real HTTP request occurred.
 - The T134 file passes Ruff and strict mypy when checked with `src`.
+- T135 test-harness correction commit: `281c0e07d3f5c8707d17570d275364daa968a159`; it makes subprocess result assertions stable under the repository's quiet pytest configuration without weakening the contract.
+- T135 gate commits: `721fb19febc96abadf34898b88d6c9dd3c817ceb`, `2ae5fbffec6093673cc72ed45db21d4815a901ea`.
+- Focused opt-in suite: **6 passed**. Live-marked items skip during collection unless the explicit option, exact environment value, and configuration-path presence all hold; collection reads no file and performs no request.
+- Ruff and strict mypy pass for the gate and its tests.
 
 ### 10.2 Minimal implementation
 
-- [ ] T135 Register the `live_llm` marker and `--run-live-llm` through `pytest_addoption`; require both the explicit option and exact `ARB_RUN_LIVE_LLM=1`, without treating marker expressions or global `addopts` as authorization.
+- [X] T135 Register the `live_llm` marker and `--run-live-llm` through `pytest_addoption`; require both the explicit option and exact `ARB_RUN_LIVE_LLM=1`, without treating marker expressions or global `addopts` as authorization.
 - [ ] T136 Implement the dual-authorized per-selected-profile smoke test/runner using the documented canonical synthetic role/payload, failing on invalid selected-profile configuration once explicitly enabled.
 - [ ] T137 Ensure smoke execution closes the runtime on every path and reports only safe profile identities.
 - [ ] T138 Finalize the non-secret example configuration and README commands.
