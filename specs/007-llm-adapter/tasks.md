@@ -321,7 +321,7 @@ Task notation:
 ### 8.1 Tests first
 
 - [X] T094 [TEST] Add failing tests for the small HTTP-client constructor's explicit arguments (`trust_env=True`, `follow_redirects=False`, optional MockTransport, no global auth/base URL/cookies) plus observable redirect behavior; do not inspect private HTTPX attributes.
-- [ ] T095 [P] [TEST] Add failing tests for one adapter per selected profile and exact adapter reuse across repeated participant assignments.
+- [X] T095 [P] [TEST] Add failing tests for one adapter per selected profile and exact adapter reuse across repeated participant assignments.
 - [ ] T096 [P] [TEST] Add failing tests for all-five-shared, five-distinct, and mixed local/no-key plus remote/key compositions.
 - [ ] T097 [P] [TEST] Add failing tests matching the actual five-argument `ReviewOrchestrator` constructor without modifying it.
 - [ ] T098 [P] [TEST] Add failing ordering tests proving every naturally fallible configuration, credential, and assignment step completes before client creation; verify the implementation closes the client defensively on an unexpected later exception without adding an injectable participant/orchestrator factory solely for this test.
