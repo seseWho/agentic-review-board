@@ -140,7 +140,7 @@ Task notation:
 - [X] T038 Ensure resolved runtime values provide no ordinary secret-bearing serialization or repr.
 - [X] T039 Run focused Phase 3 tests to green.
 - [X] T040 Run full pytest, Ruff, mypy strict, and `pip check`.
-- [ ] T041 [GATE] Review selected/unselected semantics, secret handling, timeout construction, identity reuse, and regressions; stop before prompts.
+- [X] T041 [GATE] Review selected/unselected semantics, secret handling, timeout construction, identity reuse, and regressions; stop before prompts.
 
 ### Phase 3 implementation evidence
 
@@ -157,7 +157,7 @@ Task notation:
 - T041 review corrections: timeout is reconstructed from a private immutable scalar on every access, preventing nested mutation from degrading the profile; all environment-mapping read failures map to fixed `LLMConfigurationError`.
 - Review-correction tests commit: `c254c659a95a3aeec82b5d61f72e3b0f8aef73ad`.
 - Review-correction production commit: `fb183a6440109ca14cefbf4f77af2cf1025de750`.
-- T041 remains pending for explicit block review.
+- T041 approved on 2026-08-24; Phase 4 tests-first work authorized.
 
 ---
 
