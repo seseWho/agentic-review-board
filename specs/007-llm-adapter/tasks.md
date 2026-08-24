@@ -467,6 +467,11 @@ Task notation:
 - The example has exactly local/remote profiles and five assignments, references only `REMOTE_LLM_API_KEY`, and contains no bearer token or credential-shaped value; no document change was required.
 - T139 default suite with `ARB_RUN_LIVE_LLM` and `ARB_LLM_CONFIG_PATH` explicitly unset: **1007 passed, 1 skipped**.
 - The sole skip is `tests/live/test_llm_smoke.py`, applied during collection before its loader or runner call; therefore default execution reads no live configuration and creates no live HTTP client or request.
+- T140 safe-diagnostic regression commit: `0befa8c92e6422369dfb717141a38217a8bb1e2a`; live failure-boundary correction commit: `8bcb830463038c026c13a34a9eb365f91805a811`.
+- Live command without authorization: **1 skipped, 1007 deselected**. Exact environment authorization without a configuration path: **1 skipped, 1007 deselected**.
+- Fully activated command against the non-secret example with its selected remote credential deliberately absent: **1 failed, 1008 deselected**, before client construction, with public output limited to `LLM configuration invalid`.
+- The first activated run exposed pytest's chained exception context (endpoint/model/environment metadata); the permanent regression test drove removal of that context via a fixed-message, `pytrace=False` boundary outside the caught exception context.
+- No suitable real endpoint/configuration was supplied, so no positive live network call was attempted and no placeholder endpoint was contacted.
 
 ### 10.2 Minimal implementation
 
@@ -475,7 +480,7 @@ Task notation:
 - [X] T137 Ensure smoke execution closes the runtime on every path and reports only safe profile identities.
 - [X] T138 Finalize the non-secret example configuration and README commands.
 - [X] T139 Run default pytest and prove live tests perform no configuration loading or network access and report skipped.
-- [ ] T140 Run live smoke only with `ARB_RUN_LIVE_LLM=1 pytest -m live_llm --run-live-llm` and explicit suitable configuration; absence of the opt-in or config path may skip, but invalid selected-profile credentials after activation must fail.
+- [X] T140 Run live smoke only with `ARB_RUN_LIVE_LLM=1 pytest -m live_llm --run-live-llm` and explicit suitable configuration; absence of the opt-in or config path may skip, but invalid selected-profile credentials after activation must fail.
 - [ ] T141 Run Ruff, mypy strict, and `pip check`.
 - [ ] T142 [GATE] Review opt-in behavior, example hygiene, operator instructions, diagnostic safety, and regressions; stop before final closure.
 
