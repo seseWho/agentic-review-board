@@ -212,17 +212,24 @@ Task notation:
 
 ### 6.1 Tests first
 
-- [ ] T056 [TEST] Add failing MockTransport tests for POST target construction from base URLs with and without normalized trailing slash.
-- [ ] T057 [P] [TEST] Add failing tests for exact `Content-Type`, `Accept`, and conditional `Authorization` headers, including absence of an empty bearer.
-- [ ] T058 [P] [TEST] Add failing tests for the exact two-message order separating system-controlled instruction/schema from serialized untrusted payload.
-- [ ] T059 [P] [TEST] Add failing tests for exact configured model and `n: 1`.
-- [ ] T060 [P] [TEST] Add failing tests for exact `response_format: {"type": "json_object"}` in `JSON_OBJECT`.
-- [ ] T061 [P] [TEST] Add failing tests proving `response_format` is absent in `PROMPT_ONLY`.
-- [ ] T062 [P] [TEST] Add failing tests for one explicit per-request timeout with equal connect/read/write/pool extension values.
-- [ ] T063 [P] [TEST] Add failing tests for Unicode payload serialization and deterministic separation/delimiting.
-- [ ] T064 [P] [TEST] Add failing tests for non-serializable payload mapping to exact `LLMPayloadSerializationError` before any request.
-- [ ] T065 [P] [TEST] Add failing tests proving no temperature, max tokens, tools, streaming, seed, retry metadata, cookies, or provider-specific options are sent.
-- [ ] T066 [TEST] Run Phase 5 tests and confirm the intended red state and zero accidental live requests.
+- [X] T056 [TEST] Add failing MockTransport tests for POST target construction from base URLs with and without normalized trailing slash.
+- [X] T057 [P] [TEST] Add failing tests for exact `Content-Type`, `Accept`, and conditional `Authorization` headers, including absence of an empty bearer.
+- [X] T058 [P] [TEST] Add failing tests for the exact two-message order separating system-controlled instruction/schema from serialized untrusted payload.
+- [X] T059 [P] [TEST] Add failing tests for exact configured model and `n: 1`.
+- [X] T060 [P] [TEST] Add failing tests for exact `response_format: {"type": "json_object"}` in `JSON_OBJECT`.
+- [X] T061 [P] [TEST] Add failing tests proving `response_format` is absent in `PROMPT_ONLY`.
+- [X] T062 [P] [TEST] Add failing tests for one explicit per-request timeout with equal connect/read/write/pool extension values.
+- [X] T063 [P] [TEST] Add failing tests for Unicode payload serialization and deterministic separation/delimiting.
+- [X] T064 [P] [TEST] Add failing tests for non-serializable payload mapping to exact `LLMPayloadSerializationError` before any request.
+- [X] T065 [P] [TEST] Add failing tests proving no temperature, max tokens, tools, streaming, seed, retry metadata, cookies, or provider-specific options are sent.
+- [X] T066 [TEST] Run Phase 5 tests and confirm the intended red state and zero accidental live requests.
+
+#### Phase 5 red evidence
+
+- Request-contract commits: `df9d05887a4ed2dea2d0aa0b2a38b447a439c689`, `261730731775f70556979f6dcfef29eb2349d062`.
+- Focused collection stops with the expected missing module: `ModuleNotFoundError: No module named 'agentic_review_board.infrastructure.llm.openai_compatible'`.
+- MockTransport handlers are the only HTTP boundary in the tests; no live request, endpoint, credential, or installed model is used.
+- Response processing remains intentionally outside this block: successful request capture stops inside the mock handler before any Phase 6 behavior.
 
 ### 6.2 Minimal implementation
 
