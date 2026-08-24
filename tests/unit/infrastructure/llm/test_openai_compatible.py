@@ -29,6 +29,31 @@ class RequestCaptured(Exception):
         self.request = request
 
 
+class ReadOnlyPayload(Mapping[str, object]):
+    def __init__(self, values: dict[str, object]) -> None:
+        self._values = values
+
+    def __getitem__(self, key: str) -> object:
+        return self._values[key]
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._values)
+
+    def __len__(self) -> int:
+        return len(self._values)
+
+
+class FailingPayload(Mapping[str, object]):
+    def __getitem__(self, key: str) -> object:
+        raise RuntimeError("sensitive payload detail")
+
+    def __iter__(self) -> Iterator[str]:
+        raise RuntimeError("sensitive payload detail")
+
+    def __len__(self) -> int:
+        return 1
+
+
 class ExplodingPayload(Mapping[str, object]):
     def __getitem__(self, key: str) -> object:
         raise AssertionError("payload must not be read")
@@ -233,6 +258,46 @@ def test_serializes_unicode_payload_deterministically_with_delimiters() -> None:
         '{"a":"東京","z":"niño"}'
         "\nUNTRUSTED_PAYLOAD_JSON_END"
     )
+
+
+def test_serializes_any_valid_mapping_contract() -> None:
+    payload = ReadOnlyPayload({"z": "last", "a": "first"})
+
+    request = capture_request(payload=payload)
+    body = json.loads(request.content)
+
+    assert body["messages"][1]["content"] == (
+        "UNTRUSTED_PAYLOAD_JSON_BEGIN\n"
+        '{"a":"first","z":"last"}'
+        "\nUNTRUSTED_PAYLOAD_JSON_END"
+    )
+
+
+def test_mapping_snapshot_failure_is_safe_and_precedes_request() -> None:
+    request_count = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal request_count
+        request_count += 1
+        return httpx.Response(200, json={})
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        adapter = OpenAICompatibleLLMAdapter(
+            profile=resolved_profile(),
+            client=client,
+        )
+        with pytest.raises(
+            LLMPayloadSerializationError,
+            match=r"^LLM payload serialization failed$",
+        ) as caught:
+            adapter.generate_structured(
+                role="analyst",
+                payload=FailingPayload(),
+            )
+
+    assert "sensitive payload detail" not in str(caught.value)
+    assert "sensitive payload detail" not in repr(caught.value)
+    assert request_count == 0
 
 
 def test_non_serializable_payload_fails_before_any_request() -> None:
