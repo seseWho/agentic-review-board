@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import NoReturn
 
@@ -12,6 +13,8 @@ from agentic_review_board.domain.analysis import (
     ProblemAnalysis,
 )
 from agentic_review_board.domain.critics import (
+    CriticalReview,
+    CriticReference,
     CriticReferenceKind,
     CriticReferenceSource,
 )
@@ -22,6 +25,7 @@ from agentic_review_board.domain.solutions import (
     SolutionAlternatives,
 )
 from agentic_review_board.infrastructure.llm.errors import LLMRequestSchemaError
+from agentic_review_board.infrastructure.llm.prompts import RolePromptDefinition
 
 _CRITIC_PAYLOAD_KEYS = frozenset(
     {
@@ -60,6 +64,40 @@ class AllowedCriticReference:
         self,
     ) -> tuple[CriticReferenceSource, CriticReferenceKind, str | None, str | None]:
         return (self.source, self.kind, self.item_id, self.value)
+
+    def as_wire_object(self) -> dict[str, object]:
+        result: dict[str, object] = {
+            "source": self.source.value,
+            "kind": self.kind.value,
+        }
+        if self.item_id is not None:
+            result["item_id"] = self.item_id
+        if self.value is not None:
+            result["value"] = self.value
+        return result
+
+
+@dataclass(frozen=True, slots=True)
+class AllowedContradictionSide:
+    reference: AllowedCriticReference
+    statement: str
+
+
+@dataclass(frozen=True, slots=True)
+class RequestOutputSchema:
+    serialized: str
+
+    def new_document(self) -> dict[str, object]:
+        try:
+            document = json.loads(
+                self.serialized,
+                parse_constant=_reject_non_json_constant,
+            )
+            if not isinstance(document, dict):
+                raise TypeError("request output schema must be an object")
+            return document
+        except Exception as error:
+            raise LLMRequestSchemaError() from error
 
 
 def build_critic_payload_snapshot(
@@ -362,6 +400,175 @@ def build_allowed_critic_references(
             *_risk_assessment_references(snapshot),
         )
         return normalize_allowed_critic_references(candidates)
+    except LLMRequestSchemaError:
+        raise
+    except Exception as error:
+        raise LLMRequestSchemaError() from error
+
+
+def _validate_allowed_reference(reference: AllowedCriticReference) -> None:
+    if not reference.visible_value or not reference.target_key:
+        raise ValueError("allowed reference invariant failed")
+    if any(not component for component in reference.target_key):
+        raise ValueError("allowed reference target key is invalid")
+    validated = CriticReference.model_validate(reference.as_wire_object())
+    if validated.source is not reference.source or validated.kind is not reference.kind:
+        raise ValueError("allowed reference identity changed during validation")
+    if validated.item_id != reference.item_id or validated.value != reference.value:
+        raise ValueError("allowed reference text changed during validation")
+
+
+def build_reference_schema_branch(
+    reference: AllowedCriticReference,
+) -> dict[str, object]:
+    try:
+        _validate_allowed_reference(reference)
+        wire_object = reference.as_wire_object()
+        properties = {key: {"const": value} for key, value in wire_object.items()}
+        return {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": properties,
+            "required": list(properties),
+        }
+    except LLMRequestSchemaError:
+        raise
+    except Exception as error:
+        raise LLMRequestSchemaError() from error
+
+
+def build_allowed_contradiction_sides(
+    references: Iterable[AllowedCriticReference],
+) -> tuple[AllowedContradictionSide, ...]:
+    try:
+        return tuple(
+            AllowedContradictionSide(
+                reference=reference,
+                statement=reference.visible_value,
+            )
+            for reference in references
+        )
+    except Exception as error:
+        raise LLMRequestSchemaError() from error
+
+
+def build_contradiction_side_schema_branch(
+    side: AllowedContradictionSide,
+) -> dict[str, object]:
+    try:
+        if not side.statement or side.statement != side.reference.visible_value:
+            raise ValueError("contradiction side invariant failed")
+        return {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "reference": build_reference_schema_branch(side.reference),
+                "statement": {"const": side.statement},
+            },
+            "required": ["reference", "statement"],
+        }
+    except LLMRequestSchemaError:
+        raise
+    except Exception as error:
+        raise LLMRequestSchemaError() from error
+
+
+def _strict_json_schema_document(schema: Mapping[str, object]) -> dict[str, object]:
+    result = deepcopy(dict(schema))
+
+    def require_properties(node: object) -> None:
+        if isinstance(node, dict):
+            properties = node.get("properties")
+            if isinstance(properties, dict):
+                node["required"] = list(properties)
+            if node.get("type") == "array":
+                node["maxItems"] = 10
+            for value in node.values():
+                require_properties(value)
+        elif isinstance(node, list):
+            for value in node:
+                require_properties(value)
+
+    require_properties(result)
+    return result
+
+
+def narrow_critic_schema(
+    base_schema: Mapping[str, object],
+    references: Iterable[AllowedCriticReference],
+) -> dict[str, object]:
+    try:
+        owned_references = tuple(references)
+        if not owned_references:
+            raise ValueError("allowed reference catalog is empty")
+        result = deepcopy(dict(base_schema))
+        definitions = result.get("$defs")
+        if not isinstance(definitions, dict):
+            raise TypeError("CriticalReview definitions are absent")
+        if not isinstance(definitions.get("CriticReference"), dict):
+            raise TypeError("CriticReference definition is invalid")
+        if not isinstance(definitions.get("ContradictionSide"), dict):
+            raise TypeError("ContradictionSide definition is invalid")
+        reference_branches = [
+            build_reference_schema_branch(reference) for reference in owned_references
+        ]
+        side_branches = [
+            build_contradiction_side_schema_branch(side)
+            for side in build_allowed_contradiction_sides(owned_references)
+        ]
+        definitions["CriticReference"] = {"oneOf": reference_branches}
+        definitions["ContradictionSide"] = {"oneOf": side_branches}
+        return _strict_json_schema_document(result)
+    except LLMRequestSchemaError:
+        raise
+    except Exception as error:
+        raise LLMRequestSchemaError() from error
+
+
+def build_dynamic_critic_schema(
+    snapshot: CriticPayloadSnapshot,
+) -> dict[str, object]:
+    try:
+        references = build_allowed_critic_references(snapshot)
+        return narrow_critic_schema(CriticalReview.model_json_schema(), references)
+    except LLMRequestSchemaError:
+        raise
+    except Exception as error:
+        raise LLMRequestSchemaError() from error
+
+
+def _serialize_request_schema(document: Mapping[str, object]) -> RequestOutputSchema:
+    try:
+        serialized = json.dumps(
+            dict(document),
+            allow_nan=False,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+        result = RequestOutputSchema(serialized=serialized)
+        result.new_document()
+        return result
+    except LLMRequestSchemaError:
+        raise
+    except Exception as error:
+        raise LLMRequestSchemaError() from error
+
+
+def build_request_output_schema(
+    *,
+    definition: RolePromptDefinition,
+    payload: Mapping[str, object],
+) -> RequestOutputSchema:
+    try:
+        if definition.role.value == "critic":
+            snapshot = build_critic_payload_snapshot(payload)
+            document = build_dynamic_critic_schema(snapshot)
+        else:
+            document = _strict_json_schema_document(
+                definition.output_model.model_json_schema()
+            )
+        return _serialize_request_schema(document)
     except LLMRequestSchemaError:
         raise
     except Exception as error:

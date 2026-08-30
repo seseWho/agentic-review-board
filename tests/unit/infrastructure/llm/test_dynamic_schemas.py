@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import Iterator, Mapping
 from copy import deepcopy
+from typing import Any, cast
 
 import pytest
 
@@ -15,19 +16,24 @@ from agentic_review_board.domain.critics import (
 from agentic_review_board.domain.review import ReviewInput
 from agentic_review_board.domain.risks import RiskAssessment
 from agentic_review_board.domain.solutions import SolutionAlternatives
+from agentic_review_board.infrastructure.llm.config import LLMRole
 from agentic_review_board.infrastructure.llm.dynamic_schemas import (
     AllowedContradictionSide,
     AllowedCriticReference,
+    RequestOutputSchema,
     build_allowed_contradiction_sides,
     build_allowed_critic_references,
     build_contradiction_side_schema_branch,
     build_critic_payload_snapshot,
     build_dynamic_critic_schema,
     build_reference_schema_branch,
+    build_request_output_schema,
+    narrow_critic_schema,
     normalize_allowed_critic_references,
 )
 from agentic_review_board.infrastructure.llm.errors import LLMRequestSchemaError
 from agentic_review_board.infrastructure.llm.openai_compatible import _strict_json_schema
+from agentic_review_board.infrastructure.llm.prompts import get_role_prompt_definition
 
 CRITIC_PAYLOAD_KEYS = {
     "review_input",
@@ -35,6 +41,16 @@ CRITIC_PAYLOAD_KEYS = {
     "solution_alternatives",
     "risk_assessment",
 }
+
+
+def as_json_object(value: object) -> dict[str, Any]:
+    assert isinstance(value, dict)
+    return cast(dict[str, Any], value)
+
+
+def as_json_array(value: object) -> list[Any]:
+    assert isinstance(value, list)
+    return value
 
 
 def minimal_critic_payload() -> dict[str, object]:
@@ -660,9 +676,10 @@ def test_reference_schema_branch_is_exact_closed_and_fresh() -> None:
         target_key=("REVIEW_INPUT", "CONTEXT", "0"),
     )
     value_only_branch = build_reference_schema_branch(value_only)
-    assert list(value_only_branch["properties"]) == ["source", "kind", "value"]
+    value_only_properties = as_json_object(value_only_branch["properties"])
+    assert list(value_only_properties) == ["source", "kind", "value"]
     assert value_only_branch["required"] == ["source", "kind", "value"]
-    assert "item_id" not in value_only_branch["properties"]
+    assert "item_id" not in value_only_properties
 
 
 def test_dynamic_reference_definition_is_exact_catalog_one_of() -> None:
@@ -670,7 +687,8 @@ def test_dynamic_reference_definition_is_exact_catalog_one_of() -> None:
     references = build_allowed_critic_references(snapshot)
 
     schema = build_dynamic_critic_schema(snapshot)
-    definition = schema["$defs"]["CriticReference"]
+    definitions = as_json_object(schema["$defs"])
+    definition = as_json_object(definitions["CriticReference"])
 
     assert definition == {
         "oneOf": [build_reference_schema_branch(reference) for reference in references]
@@ -678,7 +696,7 @@ def test_dynamic_reference_definition_is_exact_catalog_one_of() -> None:
     serialized_definition = json.dumps(definition, sort_keys=True)
     assert '"enum"' not in serialized_definition
     assert '"source": {"type": "string"}' not in serialized_definition
-    assert len(definition["oneOf"]) == len(references)
+    assert len(as_json_array(definition["oneOf"])) == len(references)
 
 
 def test_allowed_contradiction_sides_pair_each_reference_with_visible_value() -> None:
@@ -714,12 +732,10 @@ def test_contradiction_side_branch_correlates_exact_reference_and_statement() ->
         },
         "required": ["reference", "statement"],
     }
-    assert first_branch["properties"]["statement"] != second_branch["properties"][
-        "statement"
-    ]
-    assert first_branch["properties"]["reference"] != second_branch["properties"][
-        "reference"
-    ]
+    first_properties = as_json_object(first_branch["properties"])
+    second_properties = as_json_object(second_branch["properties"])
+    assert first_properties["statement"] != second_properties["statement"]
+    assert first_properties["reference"] != second_properties["reference"]
 
 
 def test_dynamic_schema_preserves_strict_outer_critical_review_contract() -> None:
@@ -733,15 +749,23 @@ def test_dynamic_schema_preserves_strict_outer_critical_review_contract() -> Non
     assert schema["properties"] == strict_base["properties"]
     assert schema["required"] == strict_base["required"]
     assert schema["additionalProperties"] is False
-    assert set(schema["$defs"]) == set(strict_base["$defs"])
-    for name, definition in strict_base["$defs"].items():
+    definitions = as_json_object(schema["$defs"])
+    strict_definitions = as_json_object(strict_base["$defs"])
+    assert set(definitions) == set(strict_definitions)
+    for name, definition in strict_definitions.items():
         if name not in {"CriticReference", "ContradictionSide"}:
-            assert schema["$defs"][name] == definition
+            assert definitions[name] == definition
 
-    criticism = schema["$defs"]["Criticism"]
-    target_reference = criticism["properties"]["target_reference"]
-    assert {branch.get("type") for branch in target_reference["anyOf"]} >= {None, "null"}
-    assert all("minItems" not in collection for collection in schema["properties"].values())
+    criticism = as_json_object(definitions["Criticism"])
+    criticism_properties = as_json_object(criticism["properties"])
+    target_reference = as_json_object(criticism_properties["target_reference"])
+    target_branches = [as_json_object(branch) for branch in as_json_array(target_reference["anyOf"])]
+    assert {branch.get("type") for branch in target_branches} >= {None, "null"}
+    root_properties = as_json_object(schema["properties"])
+    assert all(
+        "minItems" not in as_json_object(collection)
+        for collection in root_properties.values()
+    )
     assert CriticalReview.model_validate(
         {
             "criticisms": [],
@@ -751,3 +775,198 @@ def test_dynamic_schema_preserves_strict_outer_critical_review_contract() -> Non
             "unresolved_issues": [],
         }
     ) == CriticalReview()
+
+
+@pytest.mark.parametrize(
+    "role",
+    [
+        LLMRole.ANALYST,
+        LLMRole.SOLUTION_ARCHITECT,
+        LLMRole.RISK_REVIEWER,
+        LLMRole.COORDINATOR,
+    ],
+)
+def test_static_roles_bypass_critic_payload_and_keep_current_strict_schema(
+    role: LLMRole,
+) -> None:
+    definition = get_role_prompt_definition(role.value)
+
+    request_schema = build_request_output_schema(
+        definition=definition,
+        payload={"not": "a Critic payload"},
+    )
+
+    assert isinstance(request_schema, RequestOutputSchema)
+    assert request_schema.new_document() == _strict_json_schema(
+        definition.output_model.model_json_schema()
+    )
+
+
+def test_request_output_schema_is_deterministic_and_has_no_mutable_alias() -> None:
+    definition = get_role_prompt_definition(LLMRole.CRITIC.value)
+    payload = full_critic_payload()
+    reverse_key_payload = dict(reversed(tuple(payload.items())))
+
+    first = build_request_output_schema(definition=definition, payload=payload)
+    second = build_request_output_schema(
+        definition=definition,
+        payload=reverse_key_payload,
+    )
+    first_document = first.new_document()
+    other_document = first.new_document()
+
+    assert first.serialized == second.serialized
+    assert first.serialized == json.dumps(
+        first_document,
+        allow_nan=False,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    assert first_document == other_document
+    assert first_document is not other_document
+    first_document.clear()
+    assert first.new_document() == other_document
+
+
+@pytest.mark.parametrize(
+    "mutate_schema",
+    [
+        lambda schema: schema.pop("$defs"),
+        lambda schema: schema["$defs"].pop("CriticReference"),
+        lambda schema: schema["$defs"].update({"CriticReference": []}),
+        lambda schema: schema["$defs"].update({"ContradictionSide": "invalid"}),
+    ],
+)
+def test_narrowing_rejects_unexpected_authoritative_definitions(
+    mutate_schema: object,
+) -> None:
+    assert callable(mutate_schema)
+    base_schema = CriticalReview.model_json_schema()
+    mutate_schema(base_schema)
+    references = build_allowed_critic_references(
+        build_critic_payload_snapshot(minimal_critic_payload())
+    )
+
+    with pytest.raises(LLMRequestSchemaError):
+        narrow_critic_schema(base_schema, references)
+
+
+def test_internal_branch_invariant_failure_is_safe_and_has_no_fallback() -> None:
+    invalid_reference = AllowedCriticReference(
+        source=CriticReferenceSource.REVIEW_INPUT,
+        kind=CriticReferenceKind.CONTEXT,
+        item_id="forbidden-id",
+        value=None,
+        visible_value="Exact context.",
+        target_key=("REVIEW_INPUT", "CONTEXT", "0"),
+    )
+
+    with pytest.raises(
+        LLMRequestSchemaError,
+        match="^LLM request schema construction failed$",
+    ):
+        narrow_critic_schema(CriticalReview.model_json_schema(), (invalid_reference,))
+
+
+def test_schema_construction_owns_every_mutable_document() -> None:
+    definition = get_role_prompt_definition(LLMRole.CRITIC.value)
+    payload = full_critic_payload()
+    base_schema = CriticalReview.model_json_schema()
+    base_before = deepcopy(base_schema)
+    static_schema_before = definition.serialized_schema
+    snapshot = build_critic_payload_snapshot(payload)
+    references = build_allowed_critic_references(snapshot)
+    references_before = tuple(references)
+
+    first = narrow_critic_schema(base_schema, references)
+    as_json_object(first["$defs"])["CriticReference"] = {"mutated": True}
+    second = narrow_critic_schema(base_schema, references)
+
+    assert base_schema == base_before
+    assert definition.serialized_schema == static_schema_before
+    assert references == references_before
+    assert as_json_object(second["$defs"])["CriticReference"] != {"mutated": True}
+
+
+def high_cardinality_critic_payload() -> dict[str, object]:
+    payload = full_critic_payload()
+    review_input = as_json_object(payload["review_input"])
+    review_input["constraints"] = [
+        f"Input constraint {index}." for index in range(25)
+    ]
+    review_input["context"] = [f"Context value {index}." for index in range(25)]
+    review_input["stated_facts"] = [
+        f"Stated fact {index}." for index in range(25)
+    ]
+    problem_analysis = as_json_object(payload["problem_analysis"])
+    for field, prefix in (
+        ("facts", "FACT"),
+        ("constraints", "CON"),
+        ("assumptions", "ASM"),
+        ("missing_information", "MISS"),
+        ("uncertainties", "UNC"),
+    ):
+        problem_analysis[field] = [
+            {
+                "id": f"{prefix}-{index:03d}",
+                "text": f"{field} value {index}.",
+                **({"source_ref": "description"} if field == "facts" else {}),
+            }
+            for index in range(1, 21)
+        ]
+    solution_alternatives = as_json_object(payload["solution_alternatives"])
+    alternatives = as_json_array(solution_alternatives["alternatives"])
+    third = deepcopy(as_json_object(alternatives[0]))
+    third["id"] = "ALT-003"
+    third["name"] = "Third alternative"
+    alternatives.append(third)
+    for alternative_index, alternative in enumerate(alternatives, start=1):
+        for field in ("advantages", "disadvantages", "assumptions"):
+            alternative[field] = [
+                f"ALT-{alternative_index:03d} {field} {index}." for index in range(15)
+            ]
+    notes = as_json_object(solution_alternatives["generation_notes"])
+    notes["blocking_missing_information"] = [
+        {"id": f"BMISS-{index:03d}", "text": f"Blocking missing {index}."}
+        for index in range(20)
+    ]
+    notes["blocking_uncertainties"] = [
+        {"id": f"BUNC-{index:03d}", "text": f"Blocking uncertainty {index}."}
+        for index in range(20)
+    ]
+    risk_assessment = as_json_object(payload["risk_assessment"])
+    risk_template = as_json_object(as_json_array(risk_assessment["risks"])[0])
+    risk_assessment["risks"] = [
+        {
+            **deepcopy(risk_template),
+            "id": f"RISK-{index:03d}",
+            "description": f"Risk description {index}.",
+        }
+        for index in range(1, 21)
+    ]
+    risk_assessment["overall_observations"] = [
+        f"Overall observation {index}." for index in range(25)
+    ]
+    return payload
+
+
+def test_high_cardinality_schema_has_exact_branch_counts_without_truncation() -> None:
+    snapshot = build_critic_payload_snapshot(high_cardinality_critic_payload())
+    references = build_allowed_critic_references(snapshot)
+
+    request_schema = build_request_output_schema(
+        definition=get_role_prompt_definition(LLMRole.CRITIC.value),
+        payload=json.loads(snapshot.serialized_payload),
+    )
+    document = request_schema.new_document()
+    definitions = as_json_object(document["$defs"])
+    reference_definition = as_json_object(definitions["CriticReference"])
+    side_definition = as_json_object(definitions["ContradictionSide"])
+    reference_branches = as_json_array(reference_definition["oneOf"])
+    side_branches = as_json_array(side_definition["oneOf"])
+
+    assert len(references) == 512
+    assert len(reference_branches) == 512
+    assert len(side_branches) == 512
+    assert len(request_schema.serialized.encode("utf-8")) == 338_537

@@ -99,19 +99,19 @@ and contradiction paraphrases are not generatable under compatible guided decodi
 - [X] T021 [US2] Test one AllowedContradictionSide exists per catalog reference and always has `statement == visible_value`.
 - [X] T022 [US2] Test each ContradictionSide branch correlates one exact reference branch with one exact statement const; cross-paired and paraphrased statements match no branch.
 - [X] T023 [US1] Test schema transformation starts from `CriticalReview.model_json_schema()`, changes only the approved CriticReference and ContradictionSide definitions plus existing strict normalization, and preserves fully empty CriticalReview output, empty individual collections, nullable legitimate `target_reference`, unrelated enums, requiredness, and cardinality.
-- [ ] T024 [US3] Test all four non-Critic roles bypass Critic snapshot/catalog behavior, keep current payload errors and schemas, and do not require Critic payload keys.
-- [ ] T025 [US5] Test deterministic serialization: equivalent payloads produce byte-identical compact Unicode-preserving JSON text; strict parsing yields a fresh document deeply equal to the schema on every call and mutation of one parsed document cannot affect later calls.
-- [ ] T026 [US4] Test missing/renamed/unexpected authoritative `$defs`, empty catalog, or internal branch invariant failure raises safe schema error with no fallback to unconstrained static Critic schema.
-- [ ] T027 [US1] Test schema construction does not mutate `RolePromptDefinition`, cached serialized schema, Pydantic schema objects, catalog branches, or prior call results.
-- [ ] T028 [US5] Document that ReviewInput, analysis findings, alternative characteristics, blockers, risks, and observations have no finite contract maximum; build a deterministic high-cardinality stress fixture with explicit counts, use every real bounded maximum (including three alternatives), assert the exact expected reference/side branch formulas with no truncation, and record fixture counts, byte size, and branch counts in this phase's evidence without turning the chosen stress counts into product limits.
+- [X] T024 [US3] Test all four non-Critic roles bypass Critic snapshot/catalog behavior, keep current payload errors and schemas, and do not require Critic payload keys.
+- [X] T025 [US5] Test deterministic serialization: equivalent payloads produce byte-identical compact Unicode-preserving JSON text; strict parsing yields a fresh document deeply equal to the schema on every call and mutation of one parsed document cannot affect later calls.
+- [X] T026 [US4] Test missing/renamed/unexpected authoritative `$defs`, empty catalog, or internal branch invariant failure raises safe schema error with no fallback to unconstrained static Critic schema.
+- [X] T027 [US1] Test schema construction does not mutate `RolePromptDefinition`, cached serialized schema, Pydantic schema objects, catalog branches, or prior call results.
+- [X] T028 [US5] Document that ReviewInput, analysis findings, alternative characteristics, blockers, risks, and observations have no finite contract maximum; build a deterministic high-cardinality stress fixture with explicit counts, use every real bounded maximum (including three alternatives), assert the exact expected reference/side branch formulas with no truncation, and record fixture counts, byte size, and branch counts in this phase's evidence without turning the chosen stress counts into product limits.
 
 ### Implementation
 
-- [ ] T029 [US1] Implement exact closed reference-branch construction with deep ownership and canonical property/required ordering.
-- [ ] T030 [US2] Implement frozen AllowedContradictionSide and exact correlated side-branch construction.
-- [ ] T031 [US1] Implement Critic schema deep-copy/narrowing with explicit expected-definition checks and no generic traversal framework.
-- [ ] T032 [US3] Implement serialized-only `RequestOutputSchema` with strict fresh-document parsing and closed Critic/static role dispatch without forcing non-Critic requests through the Critic snapshot path.
-- [ ] T033 [US5] Apply existing strict required/maxItems normalization to an independent final schema and deterministic serialization without mutable aliases.
+- [X] T029 [US1] Implement exact closed reference-branch construction with deep ownership and canonical property/required ordering.
+- [X] T030 [US2] Implement frozen AllowedContradictionSide and exact correlated side-branch construction.
+- [X] T031 [US1] Implement Critic schema deep-copy/narrowing with explicit expected-definition checks and no generic traversal framework.
+- [X] T032 [US3] Implement serialized-only `RequestOutputSchema` with strict fresh-document parsing and closed Critic/static role dispatch without forcing non-Critic requests through the Critic snapshot path.
+- [X] T033 [US5] Apply existing strict required/maxItems normalization to an independent final schema and deterministic serialization without mutable aliases.
 
 **Checkpoint:** dynamic schema deterministically excludes every observed invalid pattern; adapter still unchanged.
 
@@ -122,6 +122,32 @@ and contradiction paraphrases are not generatable under compatible guided decodi
 - The focused suite fails during collection only because `AllowedContradictionSide` and the
   Phase 2 schema constructors are intentionally not implemented yet.
 - Ruff passes for the expanded test module; no production schema or adapter change was made.
+
+### T024–T028 red evidence
+
+- Added static-role bypass, deterministic serialized-only schema, fresh-document ownership,
+  malformed-authoritative-definition failure, no-fallback, source-object immutability, and
+  high-cardinality no-truncation contracts.
+- The stress fixture deliberately uses 25 values in each ReviewInput collection, 20 in each
+  analysis finding collection, the real maximum of three alternatives with 15 values per
+  characteristic collection, 20 blockers per family, 20 risks, and 25 observations. These
+  are test stress counts, not new product limits.
+- Focused collection remains red only for the intentionally absent Phase 2 constructors;
+  Ruff passes.
+
+### T029–T033 implementation evidence
+
+- Added exact closed const branches, frozen contradiction sides, deep-copy narrowing of only
+  `CriticReference`/`ContradictionSide`, serialized-only request schemas, strict fresh parsing,
+  static-role bypass, and deterministic strict normalization without mutable aliases.
+- Focused Phase 1–2 dynamic-schema suite: **37 passed**.
+- High-cardinality fixture: **512** reference branches, **512** contradiction-side branches,
+  and **338,537 UTF-8 bytes**, with no truncation. Unbounded input collections remain
+  unbounded; fixture counts are test-only stress values.
+- Full deterministic pytest suite: **passed** with the existing live test skipped.
+- Focused Ruff and strict mypy: **passed**.
+- Adapter request construction remains unchanged; no network, dependency, participant,
+  domain, orchestration, or configuration behavior changed.
 
 ## Phase 3: Adapter Integration and Safe Failure
 
