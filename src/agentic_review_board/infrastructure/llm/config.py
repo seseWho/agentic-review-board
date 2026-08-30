@@ -32,6 +32,7 @@ _INVALID_PERCENT_ESCAPE = re.compile(r"%(?![0-9A-Fa-f]{2})")
 
 class StructuredOutputMode(StrEnum):
     JSON_OBJECT = "JSON_OBJECT"
+    JSON_SCHEMA = "JSON_SCHEMA"
     PROMPT_ONLY = "PROMPT_ONLY"
 
 
@@ -50,6 +51,9 @@ class RawLLMProfile(BaseModel):
     model: str
     api_key_env: str | None = None
     timeout_seconds: float
+    max_output_tokens: int | None = None
+    temperature: float | None = None
+    seed: int | None = None
     structured_output_mode: StructuredOutputMode
 
     @field_validator("base_url", mode="before")
@@ -120,6 +124,36 @@ class RawLLMProfile(BaseModel):
         if not math.isfinite(result) or result <= 0:
             raise ValueError("invalid timeout")
         return result
+
+    @field_validator("max_output_tokens", mode="before")
+    @classmethod
+    def validate_max_output_tokens(cls, value: object) -> int | None:
+        if value is None:
+            return None
+        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+            raise ValueError("invalid maximum output tokens")
+        return value
+
+    @field_validator("temperature", mode="before")
+    @classmethod
+    def validate_temperature(cls, value: object) -> float | None:
+        if value is None:
+            return None
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError("invalid temperature")
+        result = float(value)
+        if not math.isfinite(result) or not 0 <= result <= 2:
+            raise ValueError("invalid temperature")
+        return result
+
+    @field_validator("seed", mode="before")
+    @classmethod
+    def validate_seed(cls, value: object) -> int | None:
+        if value is None:
+            return None
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise ValueError("invalid seed")
+        return value
 
 
 class ParticipantLLMAssignment(BaseModel):
@@ -192,6 +226,9 @@ class ResolvedLLMProfile:
     model: str
     api_key: SecretStr | None
     _timeout_seconds: float = field(repr=False)
+    max_output_tokens: int | None
+    temperature: float | None
+    seed: int | None
     structured_output_mode: StructuredOutputMode
 
     @property
@@ -246,6 +283,9 @@ def _resolve_profile(
         model=raw_profile.model,
         api_key=_resolve_api_key(raw_profile, environment),
         _timeout_seconds=timeout,
+        max_output_tokens=raw_profile.max_output_tokens,
+        temperature=raw_profile.temperature,
+        seed=raw_profile.seed,
         structured_output_mode=raw_profile.structured_output_mode,
     )
 

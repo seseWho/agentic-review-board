@@ -1,0 +1,33 @@
+{
+  "title": "Migración de una aplicación crítica de escritorio",
+  "description": "La organización utiliza una aplicación WPF basada en .NET Framework 4.8 para gestionar operaciones técnicas en aproximadamente 500 tabletas Windows. La aplicación debe seguir funcionando sin conexión durante varias horas y sincronizar los datos cuando recupera conectividad. La solución actual utiliza Oracle XE como base de datos local y presenta problemas de instalación, mantenimiento, consumo de recursos y soporte en dispositivos ARM64. Se debe decidir una estrategia de modernización para los próximos cuatro años.",
+  "objective": "Seleccionar una arquitectura que reduzca el coste operativo y facilite el mantenimiento sin comprometer el funcionamiento offline, la integridad de los datos ni el despliegue progresivo.",
+  "constraints": [
+    "La aplicación debe funcionar completamente offline durante al menos 8 horas.",
+    "Debe ejecutarse de forma nativa en Windows 11 ARM64.",
+    "El despliegue afecta a aproximadamente 500 dispositivos.",
+    "La migración debe ser incremental.",
+    "No se puede interrumpir el servicio durante la transición.",
+    "El equipo domina principalmente C# y .NET.",
+    "No se permite depender de servicios cloud durante la operación normal.",
+    "Los datos almacenados localmente pueden contener información sensible.",
+    "El presupuesto y el equipo son limitados.",
+    "La primera versión operativa debe estar disponible en 9 meses."
+  ],
+  "context": [
+    "La aplicación actual está desarrollada con WPF y .NET Framework 4.8.",
+    "Utiliza Oracle XE como base de datos local.",
+    "La capa de persistencia utiliza NHibernate.",
+    "Existe una suite de pruebas funcionales parcialmente automatizada.",
+    "Los dispositivos se conectan periódicamente a la red corporativa.",
+    "El servidor central seguirá disponible durante la migración.",
+    "Se están evaluando tres enfoques iniciales: migrar a .NET 8 WPF y sustituir Oracle XE por SQLite; construir una aplicación web local ejecutada en cada dispositivo; desarrollar una aplicación multiplataforma con .NET MAUI."
+  ],
+  "stated_facts": [
+    "WPF sobre .NET 8 puede ejecutarse en Windows ARM64.",
+    "SQLite puede ejecutarse embebido y sin un servicio independiente.",
+    "Una aplicación web puramente remota no satisface el requisito offline.",
+    "El equipo ya dispone de experiencia significativa con WPF.",
+    "No todas las funciones actuales están cubiertas por pruebas automatizadas."
+  ]
+}

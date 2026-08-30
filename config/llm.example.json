@@ -4,6 +4,9 @@
       "base_url": "http://localhost:11434/v1",
       "model": "local-model-name",
       "timeout_seconds": 30.0,
+      "max_output_tokens": 4096,
+      "temperature": 0,
+      "seed": 0,
       "structured_output_mode": "PROMPT_ONLY"
     },
     "remote": {
@@ -11,6 +14,9 @@
       "model": "remote-model-name",
       "api_key_env": "REMOTE_LLM_API_KEY",
       "timeout_seconds": 30.0,
+      "max_output_tokens": 4096,
+      "temperature": 0,
+      "seed": 0,
       "structured_output_mode": "JSON_OBJECT"
     }
   },

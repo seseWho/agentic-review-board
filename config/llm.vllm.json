@@ -1,0 +1,20 @@
+{
+  "profiles": {
+    "local-qwen3": {
+      "base_url": "http://localhost:8000/v1",
+      "model": "qwen3-8b-awq",
+      "timeout_seconds": 180.0,
+      "max_output_tokens": 4096,
+      "temperature": 0,
+      "seed": 0,
+      "structured_output_mode": "JSON_SCHEMA"
+    }
+  },
+  "assignments": {
+    "analyst": "local-qwen3",
+    "solution_architect": "local-qwen3",
+    "risk_reviewer": "local-qwen3",
+    "critic": "local-qwen3",
+    "coordinator": "local-qwen3"
+  }
+}

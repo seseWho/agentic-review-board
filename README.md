@@ -83,6 +83,9 @@ Do not place proxy credentials, API keys, or certificate contents in the LLM JSO
 
 ## Tests and optional live smoke
 
+For a reusable local Docker/vLLM setup and its validation log, see
+[`docs/vllm-local-docker-guide.md`](docs/vllm-local-docker-guide.md).
+
 The default suite is deterministic and requires no configuration file, credential, installed
 local model, hosted API, or network access:
 

@@ -20,6 +20,8 @@ htmlcov/
 .env
 .env.*
 !.env.example
+config/*.local.json
+artifacts/
 
 # IDE / OS
 .idea/

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from types import MappingProxyType
 from typing import Self
 
@@ -64,6 +64,7 @@ class ConfiguredReviewRuntime:
         config: RawLLMRuntimeConfig,
         environ: Mapping[str, str],
         transport: httpx.BaseTransport | None = None,
+        output_observer: Callable[[str, Mapping[str, object]], None] | None = None,
     ) -> Self:
         assignment = resolve_llm_runtime_config(config, environ)
         profiles_by_role = {
@@ -82,13 +83,20 @@ class ConfiguredReviewRuntime:
         }
         client = _create_http_client(transport)
         try:
-            adapters = {
-                name: OpenAICompatibleLLMAdapter(
-                    profile=profile,
-                    client=client,
-                )
-                for name, profile in resolved_by_name.items()
-            }
+            if output_observer is None:
+                adapters = {
+                    name: OpenAICompatibleLLMAdapter(profile=profile, client=client)
+                    for name, profile in resolved_by_name.items()
+                }
+            else:
+                adapters = {
+                    name: OpenAICompatibleLLMAdapter(
+                        profile=profile,
+                        client=client,
+                        output_observer=output_observer,
+                    )
+                    for name, profile in resolved_by_name.items()
+                }
             analyst = Analyst(adapters[assignment.analyst.name])
             solution_architect = SolutionArchitect(adapters[assignment.solution_architect.name])
             risk_reviewer = RiskReviewer(adapters[assignment.risk_reviewer.name])
