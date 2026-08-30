@@ -94,11 +94,11 @@ and contradiction paraphrases are not generatable under compatible guided decodi
 
 ### Tests first
 
-- [ ] T019 [US1] Test each AllowedCriticReference becomes one closed object branch whose exact present fields use `const`, whose forbidden fields are absent, and whose required list equals its properties.
-- [ ] T020 [US1] Test the dynamic CriticReference definition contains exactly the normalized catalog branches and no free source/kind/item/value Cartesian-product schema.
-- [ ] T021 [US2] Test one AllowedContradictionSide exists per catalog reference and always has `statement == visible_value`.
-- [ ] T022 [US2] Test each ContradictionSide branch correlates one exact reference branch with one exact statement const; cross-paired and paraphrased statements match no branch.
-- [ ] T023 [US1] Test schema transformation starts from `CriticalReview.model_json_schema()`, changes only the approved CriticReference and ContradictionSide definitions plus existing strict normalization, and preserves fully empty CriticalReview output, empty individual collections, nullable legitimate `target_reference`, unrelated enums, requiredness, and cardinality.
+- [X] T019 [US1] Test each AllowedCriticReference becomes one closed object branch whose exact present fields use `const`, whose forbidden fields are absent, and whose required list equals its properties.
+- [X] T020 [US1] Test the dynamic CriticReference definition contains exactly the normalized catalog branches and no free source/kind/item/value Cartesian-product schema.
+- [X] T021 [US2] Test one AllowedContradictionSide exists per catalog reference and always has `statement == visible_value`.
+- [X] T022 [US2] Test each ContradictionSide branch correlates one exact reference branch with one exact statement const; cross-paired and paraphrased statements match no branch.
+- [X] T023 [US1] Test schema transformation starts from `CriticalReview.model_json_schema()`, changes only the approved CriticReference and ContradictionSide definitions plus existing strict normalization, and preserves fully empty CriticalReview output, empty individual collections, nullable legitimate `target_reference`, unrelated enums, requiredness, and cardinality.
 - [ ] T024 [US3] Test all four non-Critic roles bypass Critic snapshot/catalog behavior, keep current payload errors and schemas, and do not require Critic payload keys.
 - [ ] T025 [US5] Test deterministic serialization: equivalent payloads produce byte-identical compact Unicode-preserving JSON text; strict parsing yields a fresh document deeply equal to the schema on every call and mutation of one parsed document cannot affect later calls.
 - [ ] T026 [US4] Test missing/renamed/unexpected authoritative `$defs`, empty catalog, or internal branch invariant failure raises safe schema error with no fallback to unconstrained static Critic schema.
@@ -114,6 +114,14 @@ and contradiction paraphrases are not generatable under compatible guided decodi
 - [ ] T033 [US5] Apply existing strict required/maxItems normalization to an independent final schema and deterministic serialization without mutable aliases.
 
 **Checkpoint:** dynamic schema deterministically excludes every observed invalid pattern; adapter still unchanged.
+
+### T019–T023 red evidence
+
+- Added exact closed reference branches, catalog-correlated `oneOf`, immutable contradiction
+  side pairing, exact reference/statement branches, and authoritative outer-contract tests.
+- The focused suite fails during collection only because `AllowedContradictionSide` and the
+  Phase 2 schema constructors are intentionally not implemented yet.
+- Ruff passes for the expanded test module; no production schema or adapter change was made.
 
 ## Phase 3: Adapter Integration and Safe Failure
 

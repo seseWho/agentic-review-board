@@ -7,17 +7,27 @@ from copy import deepcopy
 import pytest
 
 from agentic_review_board.domain.analysis import ProblemAnalysis
-from agentic_review_board.domain.critics import CriticReferenceKind, CriticReferenceSource
+from agentic_review_board.domain.critics import (
+    CriticalReview,
+    CriticReferenceKind,
+    CriticReferenceSource,
+)
 from agentic_review_board.domain.review import ReviewInput
 from agentic_review_board.domain.risks import RiskAssessment
 from agentic_review_board.domain.solutions import SolutionAlternatives
 from agentic_review_board.infrastructure.llm.dynamic_schemas import (
+    AllowedContradictionSide,
     AllowedCriticReference,
+    build_allowed_contradiction_sides,
     build_allowed_critic_references,
+    build_contradiction_side_schema_branch,
     build_critic_payload_snapshot,
+    build_dynamic_critic_schema,
+    build_reference_schema_branch,
     normalize_allowed_critic_references,
 )
 from agentic_review_board.infrastructure.llm.errors import LLMRequestSchemaError
+from agentic_review_board.infrastructure.llm.openai_compatible import _strict_json_schema
 
 CRITIC_PAYLOAD_KEYS = {
     "review_input",
@@ -612,3 +622,132 @@ def test_catalog_never_contains_observed_illegal_reference_shapes() -> None:
         for reference in references
         if reference.kind in value_only_kinds
     )
+
+
+def test_reference_schema_branch_is_exact_closed_and_fresh() -> None:
+    reference = AllowedCriticReference(
+        source=CriticReferenceSource.PROBLEM_ANALYSIS,
+        kind=CriticReferenceKind.UNCERTAINTY,
+        item_id="UNC-004",
+        value="Exact uncertainty.",
+        visible_value="Exact uncertainty.",
+        target_key=("PROBLEM_ANALYSIS", "UNCERTAINTY", "0"),
+    )
+
+    first = build_reference_schema_branch(reference)
+    second = build_reference_schema_branch(reference)
+
+    assert first == {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "source": {"const": "PROBLEM_ANALYSIS"},
+            "kind": {"const": "UNCERTAINTY"},
+            "item_id": {"const": "UNC-004"},
+            "value": {"const": "Exact uncertainty."},
+        },
+        "required": ["source", "kind", "item_id", "value"],
+    }
+    assert first is not second
+    assert first["properties"] is not second["properties"]
+
+    value_only = AllowedCriticReference(
+        source=CriticReferenceSource.REVIEW_INPUT,
+        kind=CriticReferenceKind.CONTEXT,
+        item_id=None,
+        value="Exact context.",
+        visible_value="Exact context.",
+        target_key=("REVIEW_INPUT", "CONTEXT", "0"),
+    )
+    value_only_branch = build_reference_schema_branch(value_only)
+    assert list(value_only_branch["properties"]) == ["source", "kind", "value"]
+    assert value_only_branch["required"] == ["source", "kind", "value"]
+    assert "item_id" not in value_only_branch["properties"]
+
+
+def test_dynamic_reference_definition_is_exact_catalog_one_of() -> None:
+    snapshot = build_critic_payload_snapshot(full_critic_payload())
+    references = build_allowed_critic_references(snapshot)
+
+    schema = build_dynamic_critic_schema(snapshot)
+    definition = schema["$defs"]["CriticReference"]
+
+    assert definition == {
+        "oneOf": [build_reference_schema_branch(reference) for reference in references]
+    }
+    serialized_definition = json.dumps(definition, sort_keys=True)
+    assert '"enum"' not in serialized_definition
+    assert '"source": {"type": "string"}' not in serialized_definition
+    assert len(definition["oneOf"]) == len(references)
+
+
+def test_allowed_contradiction_sides_pair_each_reference_with_visible_value() -> None:
+    references = build_allowed_critic_references(
+        build_critic_payload_snapshot(full_critic_payload())
+    )
+
+    sides = build_allowed_contradiction_sides(references)
+
+    assert len(sides) == len(references)
+    assert all(isinstance(side, AllowedContradictionSide) for side in sides)
+    assert [side.reference for side in sides] == list(references)
+    assert [side.statement for side in sides] == [
+        reference.visible_value for reference in references
+    ]
+
+
+def test_contradiction_side_branch_correlates_exact_reference_and_statement() -> None:
+    references = build_allowed_critic_references(
+        build_critic_payload_snapshot(full_critic_payload())
+    )
+    first_side, second_side = build_allowed_contradiction_sides(references)[:2]
+
+    first_branch = build_contradiction_side_schema_branch(first_side)
+    second_branch = build_contradiction_side_schema_branch(second_side)
+
+    assert first_branch == {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "reference": build_reference_schema_branch(first_side.reference),
+            "statement": {"const": first_side.statement},
+        },
+        "required": ["reference", "statement"],
+    }
+    assert first_branch["properties"]["statement"] != second_branch["properties"][
+        "statement"
+    ]
+    assert first_branch["properties"]["reference"] != second_branch["properties"][
+        "reference"
+    ]
+
+
+def test_dynamic_schema_preserves_strict_outer_critical_review_contract() -> None:
+    snapshot = build_critic_payload_snapshot(full_critic_payload())
+    base = CriticalReview.model_json_schema()
+    strict_base = _strict_json_schema(base)
+
+    schema = build_dynamic_critic_schema(snapshot)
+
+    assert schema is not base
+    assert schema["properties"] == strict_base["properties"]
+    assert schema["required"] == strict_base["required"]
+    assert schema["additionalProperties"] is False
+    assert set(schema["$defs"]) == set(strict_base["$defs"])
+    for name, definition in strict_base["$defs"].items():
+        if name not in {"CriticReference", "ContradictionSide"}:
+            assert schema["$defs"][name] == definition
+
+    criticism = schema["$defs"]["Criticism"]
+    target_reference = criticism["properties"]["target_reference"]
+    assert {branch.get("type") for branch in target_reference["anyOf"]} >= {None, "null"}
+    assert all("minItems" not in collection for collection in schema["properties"].values())
+    assert CriticalReview.model_validate(
+        {
+            "criticisms": [],
+            "validated_points": [],
+            "missing_alternatives": [],
+            "contradictions": [],
+            "unresolved_issues": [],
+        }
+    ) == CriticalReview()
