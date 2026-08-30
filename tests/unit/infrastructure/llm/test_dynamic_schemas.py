@@ -292,6 +292,28 @@ def test_failed_snapshot_does_not_mutate_nested_caller_values() -> None:
     assert payload == before
 
 
+def test_critic_snapshot_remains_byte_equivalent_after_shared_detachment_refactor() -> None:
+    payload = full_critic_payload()
+    reverse_key_payload = dict(reversed(tuple(payload.items())))
+    expected = json.dumps(
+        payload,
+        allow_nan=False,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+
+    first = build_critic_payload_snapshot(SingleReadMapping(payload))
+    second = build_critic_payload_snapshot(reverse_key_payload)
+
+    assert first.serialized_payload == expected
+    assert second.serialized_payload == expected
+    assert first.review_input == second.review_input
+    assert first.problem_analysis == second.problem_analysis
+    assert first.solution_alternatives == second.solution_alternatives
+    assert first.risk_assessment == second.risk_assessment
+
+
 def reference_by_kind(
     references: tuple[AllowedCriticReference, ...],
     kind: CriticReferenceKind,
