@@ -309,6 +309,38 @@ def test_critic_owns_semantically_invalid_adapter_object_rejection() -> None:
     assert len(requests) == 1
 
 
+def test_critic_rejects_provider_output_that_ignores_dynamic_reference_guidance() -> None:
+    review_input, analysis, alternatives, assessment, _ = trusted_inputs()
+    invalid_critique = {
+        "criticisms": [],
+        "validated_points": [
+            {
+                "id": "VAL-001",
+                "target_reference": {
+                    "source": "PROBLEM_ANALYSIS",
+                    "kind": "STATED_FACT",
+                    "value": "Fabricated cross-family reference.",
+                },
+                "rationale": "This must remain untrusted.",
+            }
+        ],
+        "missing_alternatives": [],
+        "contradictions": [],
+        "unresolved_issues": [],
+    }
+
+    with adapter_returning(invalid_critique) as (adapter, requests):
+        with pytest.raises(CriticOutputError):
+            Critic(adapter).review(
+                review_input,
+                analysis,
+                alternatives,
+                assessment,
+            )
+
+    assert len(requests) == 1
+
+
 def test_coordinator_owns_semantically_invalid_adapter_object_rejection() -> None:
     review_input, analysis, alternatives, assessment, critique = trusted_inputs()
     invalid_final_review = {"situation_summary": 123}

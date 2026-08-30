@@ -156,24 +156,49 @@ request while preserving all Slice 7 modes and transport behavior.
 
 ### Tests first
 
-- [ ] T034 [TEST] [US3] Extend `tests/unit/infrastructure/llm/test_openai_compatible.py` to prove a Critic call keeps its system message static and payload-derived-value-free, while its user/data message contains independently delimited `CriticPayloadSnapshot.serialized_payload` and dynamic-schema JSON sections; prove newline- and delimiter-looking values remain inside parsed JSON and cannot create extra boundary lines.
-- [ ] T035 [US3] Test Critic `JSON_SCHEMA` parses the exact dynamic-schema text from the user/data section to a document deeply equal to `response_format.json_schema.schema`, while retaining name `critic_output`, strict flag, configured sampling fields, and one HTTP request.
-- [ ] T036 [US3] Test Critic `JSON_OBJECT` carries the dynamic schema only in untrusted user/data content and keeps exact `{type: json_object}` response format without claiming schema enforcement.
-- [ ] T037 [US3] Test Critic `PROMPT_ONLY` carries the dynamic schema only in untrusted user/data content and omits response format without claiming schema enforcement.
-- [ ] T038 [US3] Test Analyst, Solution Architect, Risk Reviewer, and Coordinator request bodies remain equivalent to Slice 7 behavior in all applicable modes.
-- [ ] T039 [US4] Test malformed Critic payload raises `LLMRequestSchemaError` before credential/header access, client invocation, and output observer invocation; non-Critic serialization failures retain `LLMPayloadSerializationError`.
-- [ ] T040 [US4] Test safe schema error string/repr and orchestrator mapping contain no payload text, exact reference values, schema fragments, endpoint details, credentials, or chained validation text.
-- [ ] T041 [US3] Test successful parsing and output observer still receive only the provider's parsed mapping; dynamic schema does not mark it trusted or alter returned content.
-- [ ] T042 [US3] Test provider ignoring guidance and returning an invalid Critic mapping still reaches unchanged participant structural/contextual rejection and fail-closed stage behavior.
+- [X] T034 [TEST] [US3] Extend `tests/unit/infrastructure/llm/test_openai_compatible.py` to prove a Critic call keeps its system message static and payload-derived-value-free, while its user/data message contains independently delimited `CriticPayloadSnapshot.serialized_payload` and dynamic-schema JSON sections; prove newline- and delimiter-looking values remain inside parsed JSON and cannot create extra boundary lines.
+- [X] T035 [US3] Test Critic `JSON_SCHEMA` parses the exact dynamic-schema text from the user/data section to a document deeply equal to `response_format.json_schema.schema`, while retaining name `critic_output`, strict flag, configured sampling fields, and one HTTP request.
+- [X] T036 [US3] Test Critic `JSON_OBJECT` carries the dynamic schema only in untrusted user/data content and keeps exact `{type: json_object}` response format without claiming schema enforcement.
+- [X] T037 [US3] Test Critic `PROMPT_ONLY` carries the dynamic schema only in untrusted user/data content and omits response format without claiming schema enforcement.
+- [X] T038 [US3] Test Analyst, Solution Architect, Risk Reviewer, and Coordinator request bodies remain equivalent to Slice 7 behavior in all applicable modes.
+- [X] T039 [US4] Test malformed Critic payload raises `LLMRequestSchemaError` before credential/header access, client invocation, and output observer invocation; non-Critic serialization failures retain `LLMPayloadSerializationError`.
+- [X] T040 [US4] Test safe schema error string/repr and orchestrator mapping contain no payload text, exact reference values, schema fragments, endpoint details, credentials, or chained validation text.
+- [X] T041 [US3] Test successful parsing and output observer still receive only the provider's parsed mapping; dynamic schema does not mark it trusted or alter returned content.
+- [X] T042 [US3] Test provider ignoring guidance and returning an invalid Critic mapping still reaches unchanged participant structural/contextual rejection and fail-closed stage behavior.
 
 ### Implementation
 
-- [ ] T043 [US3] Refactor adapter request construction after exact role resolution so Critic creates one detached `CriticPayloadSnapshot`, uses its stored payload text, and derives exactly one `RequestOutputSchema` from its four semantic artifacts; preserve the existing non-Critic path.
-- [ ] T044 [US3] Keep the trusted system message on the unchanged static role instruction/schema and append the serialized dynamic schema only inside the new delimited Critic user/data section for every mode.
-- [ ] T045 [US3] Parse a fresh independent document from the same `RequestOutputSchema.serialized` for Critic `JSON_SCHEMA` provider guidance; preserve `JSON_OBJECT`/`PROMPT_ONLY` behavior and prevent mutable aliases.
-- [ ] T046 [US4] Preserve existing HTTP/parsing/observer behavior and ensure schema failures occur before all network/output side effects.
+- [X] T043 [US3] Refactor adapter request construction after exact role resolution so Critic creates one detached `CriticPayloadSnapshot`, uses its stored payload text, and derives exactly one `RequestOutputSchema` from its four semantic artifacts; preserve the existing non-Critic path.
+- [X] T044 [US3] Keep the trusted system message on the unchanged static role instruction/schema and append the serialized dynamic schema only inside the new delimited Critic user/data section for every mode.
+- [X] T045 [US3] Parse a fresh independent document from the same `RequestOutputSchema.serialized` for Critic `JSON_SCHEMA` provider guidance; preserve `JSON_OBJECT`/`PROMPT_ONLY` behavior and prevent mutable aliases.
+- [X] T046 [US4] Preserve existing HTTP/parsing/observer behavior and ensure schema failures occur before all network/output side effects.
 
 **Checkpoint:** captured adapter requests prove one-snapshot dynamic Critic guidance; all other roles/modes regress unchanged.
+
+### T034–T042 red evidence
+
+- Added captured-request contracts for static trusted system content, two independently
+  delimited untrusted Critic data sections, exact logical schema reuse in `JSON_SCHEMA`, and
+  unchanged `JSON_OBJECT`/`PROMPT_ONLY` semantics.
+- Added four-role Slice 7 equivalence, pre-credential/pre-request/pre-observer failure,
+  fixed safe error rendering, existing orchestrator execution mapping, observer identity,
+  and provider-guidance-ignored participant rejection tests.
+- Focused adapter/integration run has exactly **6 expected failures**, all caused by the
+  not-yet-integrated dynamic Critic request path; all unchanged-boundary regressions pass.
+- Ruff passes; no production adapter change was made in this red block.
+
+### T043–T046 implementation evidence
+
+- Exact Critic role now creates one detached payload snapshot, builds one serialized dynamic
+  schema, reuses its stored payload text, and appends the schema only in a second delimited
+  untrusted user/data section.
+- `JSON_SCHEMA` receives a fresh parsed document from the same serialization;
+  `JSON_OBJECT`/`PROMPT_ONLY` and all four non-Critic request paths retain Slice 7 behavior.
+- Focused adapter/response/integration/orchestrator suites: **passed**.
+- Full deterministic pytest suite: **passed** with the existing live test skipped.
+- Full Ruff and strict mypy over **61 source files**: **passed**.
+- Invalid Critic schema input fails before credential access, HTTP, and observer invocation;
+  provider output remains parsed but untrusted and participant validation remains mandatory.
 
 ## Phase 4: Parity With Trusted Critic Validation
 

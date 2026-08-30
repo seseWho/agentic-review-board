@@ -21,6 +21,7 @@ from agentic_review_board.domain.final_reviews import FinalReview
 from agentic_review_board.domain.review import ReviewInput
 from agentic_review_board.domain.risks import RiskAssessment
 from agentic_review_board.domain.solutions import SolutionAlternatives
+from agentic_review_board.infrastructure.llm.errors import LLMRequestSchemaError
 from agentic_review_board.participants.analyst import Analyst
 from agentic_review_board.participants.coordinator import Coordinator
 from agentic_review_board.participants.critic import Critic, CriticOutputError
@@ -1013,6 +1014,24 @@ def test_critic_execution_failure_is_mapped_without_raw_exception_text() -> None
     assert critic.error.kind is ReviewErrorKind.EXECUTION
     assert critic.error.message == "Critic execution failed"
     assert "provider secret critic detail" not in critic.error.message
+    assert_coordinator_pending(result)
+
+
+def test_critic_schema_construction_failure_uses_existing_safe_execution_mapping() -> None:
+    llm = RecordingLLM(
+        successful_responses(),
+        failures={"critic": LLMRequestSchemaError()},
+    )
+
+    result = orchestrator_with(llm).execute(create_review())
+
+    critic = result.stage(StageIdentity.CRITIC)
+    assert result.status is ReviewStatus.INCOMPLETE
+    assert critic.status is StageStatus.FAILED
+    assert critic.error is not None
+    assert critic.error.kind is ReviewErrorKind.EXECUTION
+    assert critic.error.message == "Critic execution failed"
+    assert "schema" not in critic.error.message.lower()
     assert_coordinator_pending(result)
 
 

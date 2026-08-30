@@ -473,7 +473,7 @@ def build_contradiction_side_schema_branch(
         raise LLMRequestSchemaError() from error
 
 
-def _strict_json_schema_document(schema: Mapping[str, object]) -> dict[str, object]:
+def strict_json_schema_document(schema: Mapping[str, object]) -> dict[str, object]:
     result = deepcopy(dict(schema))
 
     def require_properties(node: object) -> None:
@@ -518,7 +518,7 @@ def narrow_critic_schema(
         ]
         definitions["CriticReference"] = {"oneOf": reference_branches}
         definitions["ContradictionSide"] = {"oneOf": side_branches}
-        return _strict_json_schema_document(result)
+        return strict_json_schema_document(result)
     except LLMRequestSchemaError:
         raise
     except Exception as error:
@@ -555,6 +555,17 @@ def _serialize_request_schema(document: Mapping[str, object]) -> RequestOutputSc
         raise LLMRequestSchemaError() from error
 
 
+def build_critic_request_output_schema(
+    snapshot: CriticPayloadSnapshot,
+) -> RequestOutputSchema:
+    try:
+        return _serialize_request_schema(build_dynamic_critic_schema(snapshot))
+    except LLMRequestSchemaError:
+        raise
+    except Exception as error:
+        raise LLMRequestSchemaError() from error
+
+
 def build_request_output_schema(
     *,
     definition: RolePromptDefinition,
@@ -563,9 +574,9 @@ def build_request_output_schema(
     try:
         if definition.role.value == "critic":
             snapshot = build_critic_payload_snapshot(payload)
-            document = build_dynamic_critic_schema(snapshot)
+            return build_critic_request_output_schema(snapshot)
         else:
-            document = _strict_json_schema_document(
+            document = strict_json_schema_document(
                 definition.output_model.model_json_schema()
             )
         return _serialize_request_schema(document)
