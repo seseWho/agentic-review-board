@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import Iterator, Mapping
 from copy import deepcopy
+from pathlib import Path
 from typing import Any, cast
 
 import pytest
@@ -10,6 +11,7 @@ import pytest
 from agentic_review_board.domain.analysis import ProblemAnalysis
 from agentic_review_board.domain.critics import (
     CriticalReview,
+    CriticReference,
     CriticReferenceKind,
     CriticReferenceSource,
 )
@@ -20,6 +22,7 @@ from agentic_review_board.infrastructure.llm.config import LLMRole
 from agentic_review_board.infrastructure.llm.dynamic_schemas import (
     AllowedContradictionSide,
     AllowedCriticReference,
+    CriticPayloadSnapshot,
     RequestOutputSchema,
     build_allowed_contradiction_sides,
     build_allowed_critic_references,
@@ -34,6 +37,7 @@ from agentic_review_board.infrastructure.llm.dynamic_schemas import (
 from agentic_review_board.infrastructure.llm.errors import LLMRequestSchemaError
 from agentic_review_board.infrastructure.llm.openai_compatible import _strict_json_schema
 from agentic_review_board.infrastructure.llm.prompts import get_role_prompt_definition
+from agentic_review_board.participants.critic import Critic, CriticOutputError
 
 CRITIC_PAYLOAD_KEYS = {
     "review_input",
@@ -588,6 +592,7 @@ def test_idless_duplicate_finding_is_excluded_but_unique_id_pair_remains() -> No
             ("PROBLEM_ANALYSIS", "UNCERTAINTY", "1"),
         )
     ]
+    assert_reference_parity(uncertainties[0], build_critic_payload_snapshot(payload))
 
 
 def test_catalog_preserves_json_significant_and_prompt_like_text_exactly() -> None:
@@ -970,3 +975,158 @@ def test_high_cardinality_schema_has_exact_branch_counts_without_truncation() ->
     assert len(reference_branches) == 512
     assert len(side_branches) == 512
     assert len(request_schema.serialized.encode("utf-8")) == 338_537
+
+
+def assert_reference_parity(
+    reference: AllowedCriticReference,
+    snapshot: CriticPayloadSnapshot,
+) -> None:
+    trusted_reference = CriticReference.model_validate(reference.as_wire_object())
+    resolved = Critic._resolve_reference(
+        trusted_reference,
+        snapshot.review_input,
+        snapshot.problem_analysis,
+        snapshot.solution_alternatives,
+        snapshot.risk_assessment,
+    )
+    assert resolved.target_key == reference.target_key
+    assert resolved.visible_value == reference.visible_value
+
+
+def test_every_review_input_catalog_reference_has_trusted_resolver_parity() -> None:
+    snapshot = build_critic_payload_snapshot(full_critic_payload())
+    references = build_allowed_critic_references(snapshot)
+
+    selected = tuple(
+        reference
+        for reference in references
+        if reference.source is CriticReferenceSource.REVIEW_INPUT
+    )
+
+    assert selected
+    for reference in selected:
+        assert_reference_parity(reference, snapshot)
+
+
+def test_every_problem_analysis_catalog_reference_has_trusted_resolver_parity() -> None:
+    payload = full_critic_payload()
+    payload["problem_analysis"]["assumptions"][0]["id"] = None  # type: ignore[index]
+    snapshot = build_critic_payload_snapshot(payload)
+    references = build_allowed_critic_references(snapshot)
+
+    selected = tuple(
+        reference
+        for reference in references
+        if reference.source is CriticReferenceSource.PROBLEM_ANALYSIS
+    )
+
+    assert selected
+    for reference in selected:
+        assert_reference_parity(reference, snapshot)
+
+
+def test_every_solution_catalog_reference_has_trusted_resolver_parity() -> None:
+    snapshot = build_critic_payload_snapshot(full_critic_payload())
+    references = build_allowed_critic_references(snapshot)
+
+    selected = tuple(
+        reference
+        for reference in references
+        if reference.source is CriticReferenceSource.SOLUTION_ALTERNATIVES
+    )
+
+    assert selected
+    for reference in selected:
+        assert_reference_parity(reference, snapshot)
+
+
+def test_every_risk_catalog_reference_has_trusted_resolver_parity() -> None:
+    snapshot = build_critic_payload_snapshot(full_critic_payload())
+    references = build_allowed_critic_references(snapshot)
+
+    selected = tuple(
+        reference
+        for reference in references
+        if reference.source is CriticReferenceSource.RISK_ASSESSMENT
+    )
+
+    assert selected
+    for reference in selected:
+        assert_reference_parity(reference, snapshot)
+
+
+def test_generated_contradiction_sides_have_exact_trusted_statement_parity() -> None:
+    snapshot = build_critic_payload_snapshot(full_critic_payload())
+    references = build_allowed_critic_references(snapshot)
+    first, second = build_allowed_contradiction_sides(references)[:2]
+    review_data = {
+        "criticisms": [],
+        "validated_points": [],
+        "missing_alternatives": [],
+        "contradictions": [
+            {
+                "id": "CONTR-001",
+                "side_a": {
+                    "reference": first.reference.as_wire_object(),
+                    "statement": first.statement,
+                },
+                "side_b": {
+                    "reference": second.reference.as_wire_object(),
+                    "statement": second.statement,
+                },
+                "rationale": "The exact propositions may conflict.",
+            }
+        ],
+        "unresolved_issues": [],
+    }
+
+    trusted_review = CriticalReview.model_validate(review_data)
+    Critic._validate_context(
+        trusted_review,
+        snapshot.review_input,
+        snapshot.problem_analysis,
+        snapshot.solution_alternatives,
+        snapshot.risk_assessment,
+    )
+
+    review_data["contradictions"][0]["side_a"]["statement"] = (  # type: ignore[index]
+        f"Paraphrased: {first.statement}"
+    )
+    paraphrased = CriticalReview.model_validate(review_data)
+    with pytest.raises(CriticOutputError):
+        Critic._validate_context(
+            paraphrased,
+            snapshot.review_input,
+            snapshot.problem_analysis,
+            snapshot.solution_alternatives,
+            snapshot.risk_assessment,
+        )
+
+
+def test_2026_08_29_invalid_reference_fixture_is_excluded_and_rejected() -> None:
+    fixture_path = (
+        Path(__file__).parents[3]
+        / "fixtures"
+        / "critic_2026-08-29_invalid_references.json"
+    )
+    fixture = as_json_object(json.loads(fixture_path.read_text(encoding="utf-8")))
+    payload = as_json_object(fixture["payload"])
+    critic_output = as_json_object(fixture["critic_output"])
+    snapshot = build_critic_payload_snapshot(payload)
+    references = build_allowed_critic_references(snapshot)
+    emitted = {reference.emitted_identity for reference in references}
+    validated_points = as_json_array(critic_output["validated_points"])
+
+    for point_value in validated_points:
+        point = as_json_object(point_value)
+        target = as_json_object(point["target_reference"])
+        identity = (
+            CriticReferenceSource(target["source"]),
+            CriticReferenceKind(target["kind"]),
+            cast(str | None, target.get("item_id")),
+            cast(str | None, target.get("value")),
+        )
+        assert identity not in emitted
+
+    with pytest.raises(CriticOutputError):
+        Critic._validate_structure(critic_output)

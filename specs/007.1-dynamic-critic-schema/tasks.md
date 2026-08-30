@@ -206,19 +206,35 @@ request while preserving all Slice 7 modes and transport behavior.
 
 ### Tests first
 
-- [ ] T047 [US1] Add parameterized parity tests showing every ReviewInput catalog reference resolves through current Critic contextual validation against the same artifacts.
-- [ ] T048 [US1] Add parity tests for every ProblemAnalysis reference family, including present/absent optional IDs and duplicate-text ambiguity behavior.
-- [ ] T049 [US1] Add parity tests for every SolutionAlternatives reference family, canonical ALTERNATIVE value, tuple characteristics, generation notes, and blockers.
-- [ ] T050 [US1] Add parity tests for every RiskAssessment reference family, canonical RISK value, optional residual uncertainty, and observations.
-- [ ] T051 [US2] Add parity tests showing every generated contradiction side passes exact statement resolution and all observed paraphrases fail existing participant validation.
-- [ ] T052 [US1] Add a checked-in deterministic regression fixture derived from the 2026-08-29 scenario, containing the four matching upstream artifacts and offending Critic mapping without depending on ignored local artifacts; prove its illegal references match no dynamic branches while participant rejection remains unchanged.
-- [ ] T053 [US3] Run existing Critic domain/participant/orchestration tests unchanged to prove no trusted contract, lifecycle, or failure-message change.
+- [X] T047 [US1] Add parameterized parity tests showing every ReviewInput catalog reference resolves through current Critic contextual validation against the same artifacts.
+- [X] T048 [US1] Add parity tests for every ProblemAnalysis reference family, including present/absent optional IDs and duplicate-text ambiguity behavior.
+- [X] T049 [US1] Add parity tests for every SolutionAlternatives reference family, canonical ALTERNATIVE value, tuple characteristics, generation notes, and blockers.
+- [X] T050 [US1] Add parity tests for every RiskAssessment reference family, canonical RISK value, optional residual uncertainty, and observations.
+- [X] T051 [US2] Add parity tests showing every generated contradiction side passes exact statement resolution and all observed paraphrases fail existing participant validation.
+- [X] T052 [US1] Add a checked-in deterministic regression fixture derived from the 2026-08-29 scenario, containing the four matching upstream artifacts and offending Critic mapping without depending on ignored local artifacts; prove its illegal references match no dynamic branches while participant rejection remains unchanged.
+- [X] T053 [US3] Run existing Critic domain/participant/orchestration tests unchanged to prove no trusted contract, lifecycle, or failure-message change.
 
 ### Implementation
 
-- [ ] T054 [US1] Make only parity-driven corrections to explicit catalog enumeration; do not alter participant/domain validation to make generated branches pass.
+- [X] T054 [US1] Make only parity-driven corrections to explicit catalog enumeration; do not alter participant/domain validation to make generated branches pass.
 
 **Checkpoint:** every allowed dynamic reference is accepted by trusted validation; the known rejected output remains rejected.
+
+### T047–T054 parity evidence
+
+- Every generated reference in all four source families is converted to the authoritative
+  `CriticReference` model and resolved by the existing `Critic._resolve_reference` against
+  the exact same snapshot; target keys and visible values match exactly.
+- Present/absent optional IDs, ID-less duplicate exclusion, canonical ALTERNATIVE/RISK,
+  owner-local tuple values, generation blockers, optional risk fields, and observations pass.
+- Every generated contradiction side passes existing context validation; a paraphrased
+  statement is rejected by the unchanged participant.
+- Added checked-in `tests/fixtures/critic_2026-08-29_invalid_references.json`; both observed
+  illegal source/kind references are absent from the catalog and the participant rejects the
+  offending mapping. No ignored local artifact is required.
+- No parity-driven production correction was necessary; participant/domain code is unchanged.
+- Full deterministic pytest, full Ruff, strict mypy over **61 source files**, and `pip check`:
+  **passed**. The existing live test remains skipped by default.
 
 ## Phase 5: Live Compatibility and Evaluation
 

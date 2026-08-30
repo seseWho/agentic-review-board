@@ -1,0 +1,76 @@
+{
+  "payload": {
+    "review_input": {
+      "description": "Review the critical desktop migration.",
+      "title": "Critical desktop migration",
+      "objective": "Select a safe ARM64 migration direction.",
+      "constraints": ["The application must operate offline."],
+      "context": ["The current application uses WPF and .NET Framework 4.8."],
+      "stated_facts": ["WPF on .NET 8 can run on Windows ARM64."]
+    },
+    "problem_analysis": {
+      "objective": "Assess the feasibility and risks of the desktop migration.",
+      "facts": [
+        {
+          "id": "FACT-001",
+          "text": "WPF on .NET 8 can run on Windows ARM64.",
+          "source_ref": "stated_facts"
+        }
+      ],
+      "constraints": [],
+      "assumptions": [],
+      "missing_information": [],
+      "uncertainties": [
+        {
+          "id": "UNC-004",
+          "text": "The potential performance degradation on ARM64 devices with .NET 8."
+        }
+      ]
+    },
+    "solution_alternatives": {
+      "alternatives": [],
+      "generation_notes": {
+        "explanation": "The available evidence is insufficient for grounded alternatives.",
+        "blocking_missing_information": [],
+        "blocking_uncertainties": [
+          {
+            "id": "UNC-004",
+            "text": "The potential performance degradation on ARM64 devices with .NET 8."
+          }
+        ]
+      }
+    },
+    "risk_assessment": {
+      "risks": [],
+      "overall_observations": []
+    }
+  },
+  "critic_output": {
+    "criticisms": [],
+    "validated_points": [
+      {
+        "id": "VAL-001",
+        "target_reference": {
+          "source": "PROBLEM_ANALYSIS",
+          "kind": "STATED_FACT",
+          "item_id": "FACT-001",
+          "value": "WPF on .NET 8 can run on Windows ARM64."
+        },
+        "rationale": "The statement appears relevant."
+      },
+      {
+        "id": "VAL-002",
+        "target_reference": {
+          "source": "PROBLEM_ANALYSIS",
+          "kind": "CONTEXT",
+          "item_id": "context",
+          "value": "The current application uses WPF and .NET Framework 4.8."
+        },
+        "rationale": "The context appears relevant."
+      }
+    ],
+    "missing_alternatives": [],
+    "contradictions": [],
+    "unresolved_issues": []
+  }
+}
