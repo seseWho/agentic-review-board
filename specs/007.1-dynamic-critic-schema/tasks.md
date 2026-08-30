@@ -4,7 +4,7 @@
 **Plan:** `specs/007.1-dynamic-critic-schema/plan.md` — Approved  
 **Data model:** `specs/007.1-dynamic-critic-schema/data-model.md` — Approved  
 **Branch:** `007.1-dynamic-critic-schema`  
-**Status:** Draft — second review corrections applied; awaiting user approval  
+**Status:** Approved — second review corrections approved by the user on 2026-08-30  
 **Tests:** Required; implementation SHALL proceed tests-first in small verified blocks
 
 ## Execution Rules
@@ -27,9 +27,9 @@ one four-artifact payload without network access or mutation.
 
 ### Tests first
 
-- [ ] T001 [TEST] [US1] Create `tests/unit/infrastructure/llm/test_dynamic_schemas.py` with canonical full and minimal Critic payload fixtures built from real current domain models.
-- [ ] T002 [TEST] [US4] Test Critic snapshot accepts exactly `review_input`, `problem_analysis`, `solution_alternatives`, and `risk_assessment`, and rejects missing, extra, wrong-typed, malformed, non-JSON, and non-mapping values with `LLMRequestSchemaError`.
-- [ ] T003 [TEST] [US4] Test snapshot construction serializes the four-key payload once, validates only the detached parsed value, leaves caller/nested values unchanged after success and failure, and keeps `serialized_payload` stable after later caller mutation.
+- [X] T001 [TEST] [US1] Create `tests/unit/infrastructure/llm/test_dynamic_schemas.py` with canonical full and minimal Critic payload fixtures built from real current domain models.
+- [X] T002 [TEST] [US4] Test Critic snapshot accepts exactly `review_input`, `problem_analysis`, `solution_alternatives`, and `risk_assessment`, and rejects missing, extra, wrong-typed, malformed, non-JSON, and non-mapping values with `LLMRequestSchemaError`.
+- [X] T003 [TEST] [US4] Test snapshot construction serializes the four-key payload once, validates only the detached parsed value, leaves caller/nested values unchanged after success and failure, and keeps `serialized_payload` stable after later caller mutation.
 - [ ] T004 [US1] Test ReviewInput catalog coverage for DESCRIPTION, TITLE, REVIEW_OBJECTIVE, every REVIEW_CONSTRAINT, CONTEXT, and STATED_FACT; prove all omit `item_id`.
 - [ ] T005 [US1] Test ProblemAnalysis coverage for PROBLEM_OBJECTIVE and exact PROBLEM_FACT, PROBLEM_CONSTRAINT, PROBLEM_ASSUMPTION, MISSING_INFORMATION, and UNCERTAINTY findings with actual present/absent optional IDs.
 - [ ] T006 [US1] Test SolutionAlternatives coverage for canonical ALTERNATIVE ID+name, name, description, advantages, disadvantages, assumptions, complexity, generation explanation, and both blocker families.
@@ -50,6 +50,14 @@ one four-artifact payload without network access or mutation.
 - [ ] T018 [US1] Implement explicit RiskAssessment enumeration, including canonical RISK ID+description and optional residual uncertainty behavior.
 
 **Checkpoint:** complete deterministic allowed-reference catalog passes; no JSON Schema or adapter request behavior changed.
+
+### T001–T003 red evidence
+
+- Focused collection fails only with the expected missing Slice 7.1 module:
+  `ModuleNotFoundError: agentic_review_board.infrastructure.llm.dynamic_schemas`.
+- No production module, error contract, schema construction, adapter behavior, or network
+  access was added in this tests-first block.
+- Ruff passes for `tests/unit/infrastructure/llm/test_dynamic_schemas.py`.
 
 ## Phase 2: Correlated Dynamic Critic Schema
 
