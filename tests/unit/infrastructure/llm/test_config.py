@@ -102,7 +102,7 @@ def test_raw_profile_requires_all_non_optional_fields(missing: str) -> None:
 
 def test_raw_profile_forbids_extra_fields() -> None:
     with pytest.raises(ValidationError):
-        RawLLMProfile.model_validate(profile_data(temperature=0.2))
+        RawLLMProfile.model_validate(profile_data(top_p=0.9))
 
 
 def test_raw_profile_strips_model_boundary_whitespace_once() -> None:
@@ -130,6 +130,31 @@ def test_raw_profile_accepts_positive_finite_numeric_timeout(timeout: float) -> 
 def test_raw_profile_rejects_invalid_timeout(timeout: object) -> None:
     with pytest.raises(ValidationError):
         RawLLMProfile.model_validate(profile_data(timeout_seconds=timeout))
+
+
+@pytest.mark.parametrize("temperature", [0, 0.0, 0.6, 2])
+def test_raw_profile_accepts_bounded_temperature(temperature: float) -> None:
+    profile = RawLLMProfile.model_validate(profile_data(temperature=temperature))
+    assert profile.temperature == float(temperature)
+
+
+@pytest.mark.parametrize(
+    "temperature", [-0.1, 2.1, math.inf, -math.inf, math.nan, True, "0", object()]
+)
+def test_raw_profile_rejects_invalid_temperature(temperature: object) -> None:
+    with pytest.raises(ValidationError):
+        RawLLMProfile.model_validate(profile_data(temperature=temperature))
+
+
+@pytest.mark.parametrize("seed", [0, 1, 42, 2**31 - 1])
+def test_raw_profile_accepts_non_negative_integer_seed(seed: int) -> None:
+    assert RawLLMProfile.model_validate(profile_data(seed=seed)).seed == seed
+
+
+@pytest.mark.parametrize("seed", [-1, True, False, 1.0, "1", object()])
+def test_raw_profile_rejects_invalid_seed(seed: object) -> None:
+    with pytest.raises(ValidationError):
+        RawLLMProfile.model_validate(profile_data(seed=seed))
 
 
 @pytest.mark.parametrize(
@@ -301,7 +326,14 @@ def test_immutable_runtime_config_remains_serializable() -> None:
 
     dumped = config.model_dump(mode="json")
 
-    assert dumped["profiles"] == {"local": profile_data(api_key_env=None)}
+    assert dumped["profiles"] == {
+        "local": profile_data(
+            api_key_env=None,
+            max_output_tokens=None,
+            temperature=None,
+            seed=None,
+        )
+    }
     assert dumped["assignments"] == assignment_data()
     assert RawLLMRuntimeConfig.model_validate_json(config.model_dump_json()) == config
 

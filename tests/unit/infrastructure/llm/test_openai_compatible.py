@@ -19,6 +19,7 @@ from agentic_review_board.infrastructure.llm.errors import (
 )
 from agentic_review_board.infrastructure.llm.openai_compatible import (
     OpenAICompatibleLLMAdapter,
+    _strict_json_schema,
 )
 from agentic_review_board.infrastructure.llm.prompts import (
     get_role_prompt_definition,
@@ -72,6 +73,9 @@ def raw_profile(
     model: str = "configured-model",
     api_key_env: str | None = None,
     timeout_seconds: float = 17.5,
+    max_output_tokens: int | None = None,
+    temperature: float | None = None,
+    seed: int | None = None,
     structured_output_mode: str = "PROMPT_ONLY",
 ) -> dict[str, object]:
     result: dict[str, object] = {
@@ -80,6 +84,12 @@ def raw_profile(
         "timeout_seconds": timeout_seconds,
         "structured_output_mode": structured_output_mode,
     }
+    if max_output_tokens is not None:
+        result["max_output_tokens"] = max_output_tokens
+    if temperature is not None:
+        result["temperature"] = temperature
+    if seed is not None:
+        result["seed"] = seed
     if api_key_env is not None:
         result["api_key_env"] = api_key_env
     return result
@@ -92,6 +102,9 @@ def resolved_profile(
     api_key_env: str | None = None,
     api_key: str | None = None,
     timeout_seconds: float = 17.5,
+    max_output_tokens: int | None = None,
+    temperature: float | None = None,
+    seed: int | None = None,
     structured_output_mode: str = "PROMPT_ONLY",
 ) -> ResolvedLLMProfile:
     profile_name = "selected"
@@ -110,6 +123,9 @@ def resolved_profile(
                     model=model,
                     api_key_env=api_key_env,
                     timeout_seconds=timeout_seconds,
+                    max_output_tokens=max_output_tokens,
+                    temperature=temperature,
+                    seed=seed,
                     structured_output_mode=structured_output_mode,
                 )
             },
@@ -202,7 +218,10 @@ def test_uses_exact_two_message_order_and_separates_untrusted_payload() -> None:
             "role": "system",
             "content": (
                 f"{definition.semantic_instruction}\n\n"
-                f"OUTPUT_JSON_SCHEMA:\n{definition.serialized_schema}"
+                f"OUTPUT_JSON_SCHEMA:\n{definition.serialized_schema}\n\n"
+                "The schema above is a constraint, not the requested output. "
+                "Do not copy or return the schema, its metadata, or its properties "
+                "definition. Return one concrete data instance that conforms to it."
             ),
         },
         {
@@ -223,12 +242,51 @@ def test_uses_exact_model_and_single_choice_request() -> None:
     assert body["n"] == 1
 
 
+def test_adds_configured_maximum_output_tokens() -> None:
+    body = json.loads(capture_request(max_output_tokens=4096).content)
+
+    assert body["max_tokens"] == 4096
+
+
+def test_adds_configured_sampling_controls() -> None:
+    body = json.loads(capture_request(temperature=0, seed=42).content)
+
+    assert body["temperature"] == 0.0
+    assert body["seed"] == 42
+
+
+def test_omits_unconfigured_sampling_controls() -> None:
+    body = json.loads(capture_request().content)
+
+    assert "temperature" not in body
+    assert "seed" not in body
+
+
 def test_json_object_mode_adds_exact_response_format() -> None:
     body = json.loads(
         capture_request(structured_output_mode="JSON_OBJECT").content
     )
 
     assert body["response_format"] == {"type": "json_object"}
+
+
+def test_json_schema_mode_adds_role_output_schema() -> None:
+    body = json.loads(
+        capture_request(role="risk_reviewer", structured_output_mode="JSON_SCHEMA").content
+    )
+    definition = get_role_prompt_definition("risk_reviewer")
+
+    assert body["response_format"] == {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "risk_reviewer_output",
+            "strict": True,
+            "schema": _strict_json_schema(definition.output_model.model_json_schema()),
+        },
+    }
+
+    strict_schema = body["response_format"]["json_schema"]["schema"]
+    assert strict_schema["properties"]["risks"]["maxItems"] == 10
 
 
 def test_prompt_only_mode_omits_response_format() -> None:

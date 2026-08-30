@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import NoReturn
 
@@ -26,6 +27,31 @@ from agentic_review_board.infrastructure.llm.prompts import (
 _UNTRUSTED_PAYLOAD_BEGIN = "UNTRUSTED_PAYLOAD_JSON_BEGIN"
 _UNTRUSTED_PAYLOAD_END = "UNTRUSTED_PAYLOAD_JSON_END"
 _OUTPUT_SCHEMA_LABEL = "OUTPUT_JSON_SCHEMA:"
+_OUTPUT_INSTANCE_INSTRUCTION = (
+    "The schema above is a constraint, not the requested output. "
+    "Do not copy or return the schema, its metadata, or its properties definition. "
+    "Return one concrete data instance that conforms to it."
+)
+
+
+def _strict_json_schema(schema: Mapping[str, object]) -> dict[str, object]:
+    result = deepcopy(dict(schema))
+
+    def require_properties(node: object) -> None:
+        if isinstance(node, dict):
+            properties = node.get("properties")
+            if isinstance(properties, dict):
+                node["required"] = list(properties)
+            if node.get("type") == "array":
+                node["maxItems"] = 10
+            for value in node.values():
+                require_properties(value)
+        elif isinstance(node, list):
+            for value in node:
+                require_properties(value)
+
+    require_properties(result)
+    return result
 
 
 def _reject_non_json_constant(_value: str) -> NoReturn:
@@ -36,6 +62,7 @@ def _reject_non_json_constant(_value: str) -> NoReturn:
 class OpenAICompatibleLLMAdapter:
     profile: ResolvedLLMProfile
     client: httpx.Client
+    output_observer: Callable[[str, Mapping[str, object]], None] | None = None
 
     def generate_structured(
         self,
@@ -48,7 +75,8 @@ class OpenAICompatibleLLMAdapter:
 
         system_content = (
             f"{definition.semantic_instruction}\n\n"
-            f"{_OUTPUT_SCHEMA_LABEL}\n{definition.serialized_schema}"
+            f"{_OUTPUT_SCHEMA_LABEL}\n{definition.serialized_schema}\n\n"
+            f"{_OUTPUT_INSTANCE_INSTRUCTION}"
         )
         user_content = (
             f"{_UNTRUSTED_PAYLOAD_BEGIN}\n"
@@ -63,8 +91,25 @@ class OpenAICompatibleLLMAdapter:
             ],
             "n": 1,
         }
+        if self.profile.max_output_tokens is not None:
+            request_body["max_tokens"] = self.profile.max_output_tokens
+        if self.profile.temperature is not None:
+            request_body["temperature"] = self.profile.temperature
+        if self.profile.seed is not None:
+            request_body["seed"] = self.profile.seed
         if self.profile.structured_output_mode is StructuredOutputMode.JSON_OBJECT:
             request_body["response_format"] = {"type": "json_object"}
+        elif self.profile.structured_output_mode is StructuredOutputMode.JSON_SCHEMA:
+            request_body["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": f"{role}_output",
+                    "strict": True,
+                    "schema": _strict_json_schema(
+                        definition.output_model.model_json_schema()
+                    ),
+                },
+            }
 
         headers = {
             "Content-Type": "application/json",
@@ -91,7 +136,10 @@ class OpenAICompatibleLLMAdapter:
             raise LLMHTTPStatusError()
 
         content = self._extract_content(response)
-        return self._parse_structured_content(content)
+        structured = self._parse_structured_content(content)
+        if self.output_observer is not None:
+            self.output_observer(role, structured)
+        return structured
 
     @staticmethod
     def _extract_content(response: httpx.Response) -> str:

@@ -110,6 +110,65 @@ def test_every_instruction_preserves_shared_trust_and_output_rules(
     assert "do not perform external actions" in instruction
 
 
+def test_analyst_instruction_requires_disjoint_classification_and_global_ids() -> None:
+    instruction = " ".join(
+        get_role_prompt_definition(LLMRole.ANALYST.value)
+        .semantic_instruction.lower()
+        .split()
+    )
+
+    assert "never duplicate a constraint in facts" in instruction
+    assert "do not relabel an explicit stated fact or constraint as an assumption" in instruction
+    assert "globally unique across the whole problemanalysis object" in instruction
+    assert "never use bare numeric ids" in instruction
+    assert all(
+        prefix in instruction
+        for prefix in ("fact-001", "con-001", "asm-001", "miss-001", "unc-001")
+    )
+
+
+def test_solution_architect_instruction_requires_exact_typed_references() -> None:
+    instruction = " ".join(
+        get_role_prompt_definition(LLMRole.SOLUTION_ARCHITECT.value)
+        .semantic_instruction.lower()
+        .split()
+    )
+
+    assert "use alternative ids alt-001, alt-002, and alt-003" in instruction
+    assert "return exactly two or three alternatives" in instruction
+    assert "never return exactly one alternative" in instruction
+    assert "exact con-* id" in instruction
+    assert "only exact id-and-text pairs" in instruction
+    assert "never place an unc-* finding in blocking_missing_information" in instruction
+    assert "its corresponding blocking collection must be empty" in instruction
+
+
+def test_risk_reviewer_instruction_forbids_composed_or_invented_references() -> None:
+    instruction = " ".join(
+        get_role_prompt_definition(LLMRole.RISK_REVIEWER.value)
+        .semantic_instruction.lower()
+        .split()
+    )
+
+    assert "copy id and text into their separate json fields exactly" in instruction
+    assert "never prepend or append an id" in instruction
+    assert "collection is empty, do not emit any basis reference" in instruction
+    assert "never invent asm-*, miss-*, or unc-* references" in instruction
+
+
+def test_critic_instruction_bounds_output_and_requires_exact_references() -> None:
+    instruction = " ".join(
+        get_role_prompt_definition(LLMRole.CRITIC.value)
+        .semantic_instruction.lower()
+        .split()
+    )
+
+    assert "return at most two items in each collection" in instruction
+    assert "prefer the most material, well-supported findings" in instruction
+    assert "to one concise sentence" in instruction
+    assert "never combine an id with its value or text" in instruction
+
+
 @pytest.mark.parametrize(("role", "output_model"), ROLE_MODELS.items())
 def test_schema_is_generated_from_exact_model_and_cached_deterministically(
     role: LLMRole,
