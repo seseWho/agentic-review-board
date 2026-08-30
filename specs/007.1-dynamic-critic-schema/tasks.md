@@ -30,11 +30,11 @@ one four-artifact payload without network access or mutation.
 - [X] T001 [TEST] [US1] Create `tests/unit/infrastructure/llm/test_dynamic_schemas.py` with canonical full and minimal Critic payload fixtures built from real current domain models.
 - [X] T002 [TEST] [US4] Test Critic snapshot accepts exactly `review_input`, `problem_analysis`, `solution_alternatives`, and `risk_assessment`, and rejects missing, extra, wrong-typed, malformed, non-JSON, and non-mapping values with `LLMRequestSchemaError`.
 - [X] T003 [TEST] [US4] Test snapshot construction serializes the four-key payload once, validates only the detached parsed value, leaves caller/nested values unchanged after success and failure, and keeps `serialized_payload` stable after later caller mutation.
-- [ ] T004 [US1] Test ReviewInput catalog coverage for DESCRIPTION, TITLE, REVIEW_OBJECTIVE, every REVIEW_CONSTRAINT, CONTEXT, and STATED_FACT; prove all omit `item_id`.
-- [ ] T005 [US1] Test ProblemAnalysis coverage for PROBLEM_OBJECTIVE and exact PROBLEM_FACT, PROBLEM_CONSTRAINT, PROBLEM_ASSUMPTION, MISSING_INFORMATION, and UNCERTAINTY findings with actual present/absent optional IDs.
-- [ ] T006 [US1] Test SolutionAlternatives coverage for canonical ALTERNATIVE ID+name, name, description, advantages, disadvantages, assumptions, complexity, generation explanation, and both blocker families.
-- [ ] T007 [US1] Test zero alternatives/generation notes, absent assumptions, empty blocker collections, repeated characteristic values, and exact alternative-local target identities.
-- [ ] T008 [US1] Test RiskAssessment coverage for canonical RISK ID+description, category, description, severity, mitigation, present residual uncertainty, and overall observations; prove absent residual uncertainty contributes no branch.
+- [X] T004 [US1] Test ReviewInput catalog coverage for DESCRIPTION, TITLE, REVIEW_OBJECTIVE, every REVIEW_CONSTRAINT, CONTEXT, and STATED_FACT; prove all omit `item_id`.
+- [X] T005 [US1] Test ProblemAnalysis coverage for PROBLEM_OBJECTIVE and exact PROBLEM_FACT, PROBLEM_CONSTRAINT, PROBLEM_ASSUMPTION, MISSING_INFORMATION, and UNCERTAINTY findings with actual present/absent optional IDs.
+- [X] T006 [US1] Test SolutionAlternatives coverage for canonical ALTERNATIVE ID+name, name, description, advantages, disadvantages, assumptions, complexity, generation explanation, and both blocker families.
+- [X] T007 [US1] Test zero alternatives/generation notes, absent assumptions, empty blocker collections, repeated characteristic values, and exact alternative-local target identities.
+- [X] T008 [US1] Test RiskAssessment coverage for canonical RISK ID+description, category, description, severity, mitigation, present residual uncertainty, and overall observations; prove absent residual uncertainty contributes no branch.
 - [ ] T009 [US1] Test fixed catalog ordering across artifact families/kinds/tuple positions, exact string-form target-key indices, and byte-equivalent snapshot/schema serialization for equivalent payload mappings with different key insertion order.
 - [ ] T010 [US4] Test identical emitted identity + same target deduplicates deterministically, while an indistinguishable emitted identity for different target keys is completely excluded rather than guessed; an empty normalized catalog fails closed.
 - [ ] T011 [US1] Test Unicode, quotes, backslashes, newlines, JSON-looking text, and prompt-like content are retained as exact data values without interpretation or corruption.
@@ -58,6 +58,15 @@ one four-artifact payload without network access or mutation.
 - No production module, error contract, schema construction, adapter behavior, or network
   access was added in this tests-first block.
 - Ruff passes for `tests/unit/infrastructure/llm/test_dynamic_schemas.py`.
+
+### T004–T008 red evidence
+
+- Added exact family/order/field/target-key assertions for all four Critic payload artifacts,
+  including canonical ALTERNATIVE/RISK values, zero alternatives, generation notes, absent
+  optional fields, and owner-local duplicate exclusion.
+- Focused collection still fails only at the expected absent `dynamic_schemas` production
+  module; no accidental implementation or network access exists.
+- Ruff passes after the expanded catalog contract tests.
 
 ## Phase 2: Correlated Dynamic Critic Schema
 

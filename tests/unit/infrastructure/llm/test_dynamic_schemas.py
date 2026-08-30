@@ -6,10 +6,13 @@ from copy import deepcopy
 
 import pytest
 from agentic_review_board.infrastructure.llm.dynamic_schemas import (
+    AllowedCriticReference,
+    build_allowed_critic_references,
     build_critic_payload_snapshot,
 )
 
 from agentic_review_board.domain.analysis import ProblemAnalysis
+from agentic_review_board.domain.critics import CriticReferenceKind, CriticReferenceSource
 from agentic_review_board.domain.review import ReviewInput
 from agentic_review_board.domain.risks import RiskAssessment
 from agentic_review_board.domain.solutions import SolutionAlternatives
@@ -256,3 +259,218 @@ def test_failed_snapshot_does_not_mutate_nested_caller_values() -> None:
         build_critic_payload_snapshot(payload)
 
     assert payload == before
+
+
+def reference_by_kind(
+    references: tuple[AllowedCriticReference, ...],
+    kind: CriticReferenceKind,
+) -> tuple[AllowedCriticReference, ...]:
+    return tuple(reference for reference in references if reference.kind is kind)
+
+
+def test_review_input_catalog_covers_exact_value_only_targets() -> None:
+    references = build_allowed_critic_references(
+        build_critic_payload_snapshot(full_critic_payload())
+    )
+    review_references = tuple(
+        reference
+        for reference in references
+        if reference.source is CriticReferenceSource.REVIEW_INPUT
+    )
+
+    assert [reference.kind for reference in review_references] == [
+        CriticReferenceKind.DESCRIPTION,
+        CriticReferenceKind.TITLE,
+        CriticReferenceKind.REVIEW_OBJECTIVE,
+        CriticReferenceKind.REVIEW_CONSTRAINT,
+        CriticReferenceKind.CONTEXT,
+        CriticReferenceKind.STATED_FACT,
+    ]
+    assert [reference.value for reference in review_references] == [
+        "Review a local migration.",
+        "Desktop migration",
+        "Select a safe migration direction.",
+        "Must work offline.",
+        "Devices use ARM64.",
+        "The current client uses WPF.",
+    ]
+    assert all(reference.item_id is None for reference in review_references)
+    assert [reference.target_key for reference in review_references[3:]] == [
+        ("REVIEW_INPUT", "REVIEW_CONSTRAINT", "0"),
+        ("REVIEW_INPUT", "CONTEXT", "0"),
+        ("REVIEW_INPUT", "STATED_FACT", "0"),
+    ]
+
+
+def test_problem_analysis_catalog_covers_findings_with_actual_optional_ids() -> None:
+    payload = full_critic_payload()
+    payload["problem_analysis"]["assumptions"][0]["id"] = None  # type: ignore[index]
+
+    references = build_allowed_critic_references(build_critic_payload_snapshot(payload))
+    problem_references = tuple(
+        reference
+        for reference in references
+        if reference.source is CriticReferenceSource.PROBLEM_ANALYSIS
+    )
+
+    assert [reference.kind for reference in problem_references] == [
+        CriticReferenceKind.PROBLEM_OBJECTIVE,
+        CriticReferenceKind.PROBLEM_FACT,
+        CriticReferenceKind.PROBLEM_CONSTRAINT,
+        CriticReferenceKind.PROBLEM_ASSUMPTION,
+        CriticReferenceKind.MISSING_INFORMATION,
+        CriticReferenceKind.UNCERTAINTY,
+    ]
+    assert [reference.item_id for reference in problem_references] == [
+        None,
+        "FACT-001",
+        "CON-001",
+        None,
+        "MISS-001",
+        "UNC-001",
+    ]
+    assert [reference.target_key for reference in problem_references] == [
+        ("PROBLEM_ANALYSIS", "PROBLEM_OBJECTIVE"),
+        ("PROBLEM_ANALYSIS", "PROBLEM_FACT", "0"),
+        ("PROBLEM_ANALYSIS", "PROBLEM_CONSTRAINT", "0"),
+        ("PROBLEM_ANALYSIS", "PROBLEM_ASSUMPTION", "0"),
+        ("PROBLEM_ANALYSIS", "MISSING_INFORMATION", "0"),
+        ("PROBLEM_ANALYSIS", "UNCERTAINTY", "0"),
+    ]
+
+
+def test_solution_catalog_covers_canonical_alternatives_and_generation_notes() -> None:
+    references = build_allowed_critic_references(
+        build_critic_payload_snapshot(full_critic_payload())
+    )
+    solution_references = tuple(
+        reference
+        for reference in references
+        if reference.source is CriticReferenceSource.SOLUTION_ALTERNATIVES
+    )
+
+    assert [reference.kind for reference in solution_references] == [
+        CriticReferenceKind.ALTERNATIVE,
+        CriticReferenceKind.ALTERNATIVE,
+        CriticReferenceKind.ALTERNATIVE_NAME,
+        CriticReferenceKind.ALTERNATIVE_NAME,
+        CriticReferenceKind.ALTERNATIVE_DESCRIPTION,
+        CriticReferenceKind.ALTERNATIVE_DESCRIPTION,
+        CriticReferenceKind.ADVANTAGE,
+        CriticReferenceKind.ADVANTAGE,
+        CriticReferenceKind.DISADVANTAGE,
+        CriticReferenceKind.DISADVANTAGE,
+        CriticReferenceKind.ALTERNATIVE_ASSUMPTION,
+        CriticReferenceKind.ALTERNATIVE_ASSUMPTION,
+        CriticReferenceKind.IMPLEMENTATION_COMPLEXITY,
+        CriticReferenceKind.IMPLEMENTATION_COMPLEXITY,
+        CriticReferenceKind.GENERATION_EXPLANATION,
+        CriticReferenceKind.BLOCKING_MISSING_INFORMATION,
+        CriticReferenceKind.BLOCKING_UNCERTAINTY,
+    ]
+    alternative_references = reference_by_kind(
+        solution_references, CriticReferenceKind.ALTERNATIVE
+    )
+    assert [(reference.item_id, reference.value) for reference in alternative_references] == [
+        ("ALT-001", "Incremental migration"),
+        ("ALT-002", "Cross-platform rewrite"),
+    ]
+    assert [reference.visible_value for reference in alternative_references] == [
+        "Incremental migration",
+        "Cross-platform rewrite",
+    ]
+    assert [
+        (reference.kind, reference.item_id, reference.value)
+        for reference in solution_references[-3:]
+    ] == [
+        (
+            CriticReferenceKind.GENERATION_EXPLANATION,
+            None,
+            "Two viable approaches were identified.",
+        ),
+        (
+            CriticReferenceKind.BLOCKING_MISSING_INFORMATION,
+            "MISS-001",
+            "Measured ARM64 memory usage.",
+        ),
+        (
+            CriticReferenceKind.BLOCKING_UNCERTAINTY,
+            "UNC-001",
+            "ARM64 performance degradation.",
+        ),
+    ]
+
+
+def test_solution_catalog_handles_zero_alternatives_and_local_ambiguity() -> None:
+    zero_references = build_allowed_critic_references(
+        build_critic_payload_snapshot(minimal_critic_payload())
+    )
+    zero_solution_references = tuple(
+        reference
+        for reference in zero_references
+        if reference.source is CriticReferenceSource.SOLUTION_ALTERNATIVES
+    )
+    assert [(reference.kind, reference.value) for reference in zero_solution_references] == [
+        (
+            CriticReferenceKind.GENERATION_EXPLANATION,
+            "No viable alternative can yet be grounded.",
+        )
+    ]
+
+    payload = full_critic_payload()
+    alternatives = payload["solution_alternatives"]["alternatives"]  # type: ignore[index]
+    alternatives[0]["assumptions"] = []  # type: ignore[index]
+    alternatives[0]["advantages"] = ["Repeated.", "Repeated."]  # type: ignore[index]
+    alternatives[1]["advantages"] = ["Repeated."]  # type: ignore[index]
+    references = build_allowed_critic_references(build_critic_payload_snapshot(payload))
+    advantages = reference_by_kind(references, CriticReferenceKind.ADVANTAGE)
+
+    assert [
+        (reference.item_id, reference.value, reference.target_key)
+        for reference in advantages
+    ] == [
+        (
+            "ALT-002",
+            "Repeated.",
+            ("SOLUTION_ALTERNATIVES", "ADVANTAGE", "ALT-002", "0"),
+        )
+    ]
+    assumptions = reference_by_kind(references, CriticReferenceKind.ALTERNATIVE_ASSUMPTION)
+    assert [(reference.item_id, reference.value) for reference in assumptions] == [
+        ("ALT-002", "MAUI meets desktop requirements.")
+    ]
+
+
+def test_risk_catalog_covers_canonical_and_optional_risk_fields() -> None:
+    references = build_allowed_critic_references(
+        build_critic_payload_snapshot(full_critic_payload())
+    )
+    risk_references = tuple(
+        reference
+        for reference in references
+        if reference.source is CriticReferenceSource.RISK_ASSESSMENT
+    )
+
+    assert [reference.kind for reference in risk_references] == [
+        CriticReferenceKind.RISK,
+        CriticReferenceKind.RISK_CATEGORY,
+        CriticReferenceKind.RISK_DESCRIPTION,
+        CriticReferenceKind.RISK_SEVERITY,
+        CriticReferenceKind.MITIGATION,
+        CriticReferenceKind.RESIDUAL_UNCERTAINTY,
+        CriticReferenceKind.OVERALL_OBSERVATION,
+    ]
+    assert (risk_references[0].item_id, risk_references[0].value) == (
+        "RISK-001",
+        "ARM64 performance may be insufficient.",
+    )
+    assert risk_references[0].visible_value == "ARM64 performance may be insufficient."
+
+    payload = full_critic_payload()
+    payload["risk_assessment"]["risks"][0]["residual_uncertainty"] = None  # type: ignore[index]
+    without_optional = build_allowed_critic_references(
+        build_critic_payload_snapshot(payload)
+    )
+    assert not reference_by_kind(
+        without_optional, CriticReferenceKind.RESIDUAL_UNCERTAINTY
+    )
