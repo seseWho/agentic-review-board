@@ -1,6 +1,6 @@
 # Slice 7.2 — Context-Bound Risk Reviewer Output Schema v0.1
 
-**Status:** Draft — awaiting user review  
+**Status:** Approved — reviewed and approved by the user on 2026-08-30  
 **Branch:** `007.2-dynamic-risk-reviewer-schema`  
 **Depends on:** Slices 1–7.1  
 **Observed evidence:** local vLLM campaign recorded on 2026-08-30  
