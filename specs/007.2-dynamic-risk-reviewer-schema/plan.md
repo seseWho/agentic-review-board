@@ -2,7 +2,7 @@
 
 **Branch:** `007.2-dynamic-risk-reviewer-schema`  
 **Specification:** `specs/007.2-dynamic-risk-reviewer-schema/spec.md` — Approved  
-**Status:** Draft — self-reviewed, awaiting user approval
+**Status:** Approved — reviewed and approved by the user on 2026-08-30
 
 ## 1. Objective
 
