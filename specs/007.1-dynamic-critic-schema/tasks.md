@@ -244,7 +244,7 @@ evidence without adding runtime retries.
 - [X] T055 [US5] Add or extend an explicitly marked live test that obtains a minimal schema through the real Slice 7.1 Critic builder/adapter path—not a hand-written substitute—and checks only provider acceptance and direct JSON-object parsing with no retry.
 - [X] T056 [US5] Update `docs/vllm-local-docker-guide.md` with Slice 7.1 activation, diagnostic commands, schema-compatibility expectations, and result-recording format.
 - [X] T057 [US5] Execute the opt-in live smoke against `config/llm.vllm.json`; record model, vLLM image, GPU, context, result, and elapsed time.
-- [ ] T058 [US5] Execute exactly five independently invoked fixed-scenario full reviews with temperature 0/seed 0, unique run-numbered output paths, and no automatic retry, overwrite, rerun substitution, or selective deletion; retain trusted aggregates and opt-in raw outputs under ignored `artifacts/`.
+- [X] T058 [US5] Execute exactly five independently invoked fixed-scenario full reviews with temperature 0/seed 0, unique run-numbered output paths, and no automatic retry, overwrite, rerun substitution, or selective deletion; retain trusted aggregates and opt-in raw outputs under ignored `artifacts/`.
 - [X] T059 [DOC] [US5] Create `specs/007.1-dynamic-critic-schema/live-evaluation.md` with the command/config/model/vLLM-image/GPU context and one row for every run number, summarizing completed/failed stage, safe error family, Critic completion, Coordinator completion, elapsed time, and recurrence of prevented source/kind/paraphrase patterns; reference ignored artifact paths without copying payload/schema/raw-output contents into the document.
 - [X] T060 [US5] If vLLM rejects the `oneOf`/`const` schema itself, record the provider limitation and stop; do not silently weaken, retry another mode, or mark Slice 7.1 successful.
 
@@ -258,10 +258,18 @@ evidence without adding runtime retries.
   returned HTTP 400 because 34,227 requested tokens exceed the 16,384-token profile context.
 - Both aggregates are INCOMPLETE with Critic EXECUTION and Coordinator PENDING; durations
   were 115.86 s and 113.82 s. No Critic raw output exists.
-- The continuous campaign was interrupted before run 03 produced an artifact; 04–05 were not
-  executed. T058 remains unchecked and Slice 7.1 is not declared live-successful.
+- The original 8B campaign was interrupted before run 03 produced an artifact; 04–05 were
+  not executed. It did not satisfy T058 and Slice 7.1 was not declared live-successful.
 - Evidence is recorded in `live-evaluation.md`; no retry, mode downgrade, schema weakening,
   truncation, overwrite, selective deletion, or replacement run occurred.
+- A fresh Qwen3-4B-AWQ campaign used vLLM 0.8.5 with FP16 KV and a verified 44,864-token
+  capacity for the 40,960-token profile. Both live smokes passed in 28.53 seconds combined.
+- Exactly five independently invoked runs used unique `slice-7.1-qwen3-4b-run-01..05`
+  paths. All were INCOMPLETE at Risk Reviewer OUTPUT_VALIDATION; Analyst and Architect
+  completed, while Critic and Coordinator remained PENDING. Durations were 71.96, 69.38,
+  68.50, 69.80, and 69.83 seconds.
+- T058 is complete as an honest evidence target, not as proof of live reliability. The 4B
+  model removed the context limitation but never reached full-scenario Critic evaluation.
 
 ## Phase 6: Cross-Cutting Verification
 
@@ -285,8 +293,8 @@ evidence without adding runtime retries.
   sensitive reference values.
 - Contract review found no diff in `LLMPort`, domain models, participant/orchestrator paths,
   or `pyproject.toml`; non-Critic request behavior and configuration format remain unchanged.
-- Cross-cutting verification is complete, but Slice 7.1 remains live-incomplete while T058
-  is unchecked.
+- Cross-cutting verification and T058 evidence execution are complete, but Slice 7.1 remains
+  live-incomplete because no fixed-scenario run reached a completed Critic and Coordinator.
 
 ## Dependencies and Gate
 

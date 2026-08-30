@@ -10,9 +10,9 @@ en un volumen Docker persistente y no depende de directorios de otro proyecto.
 La configuración de referencia está ajustada para una NVIDIA RTX 3060 de 12 GiB:
 
 - imagen: `vllm/vllm-openai:v0.8.5`;
-- modelo: `Qwen/Qwen3-8B-AWQ`;
-- nombre servido: `qwen3-8b-awq`;
-- contexto: 16 384 tokens;
+- modelo: `Qwen/Qwen3-4B-AWQ`;
+- nombre servido: `qwen3-4b-awq`;
+- contexto: 40 960 tokens;
 - cuantización: AWQ Marlin;
 - puerto local: `127.0.0.1:8000`;
 - caché: volumen Docker `agentic-review-board-huggingface-cache` por defecto, o
@@ -44,7 +44,7 @@ docker compose up -d vllm
 ```
 
 Compose monta entonces `D:\_models\huggingface` en
-`/root/.cache/huggingface`. Qwen3-8B-AWQ se reutiliza si ya está presente y los
+`/root/.cache/huggingface`. Qwen3-4B-AWQ se reutiliza si ya está presente y los
 modelos nuevos se descargan en esa misma ruta. `HF_HOME` solo afecta al comando
 actual y a los procesos lanzados desde esa sesión de PowerShell.
 
@@ -152,7 +152,7 @@ Invoke-RestMethod http://localhost:8000/v1/models |
   ConvertTo-Json -Depth 6
 ```
 
-La respuesta debe contener `qwen3-8b-awq` y `max_model_len: 16384`.
+La respuesta debe contener `qwen3-4b-awq` y `max_model_len: 40960`.
 
 También puedes inspeccionar el consumo:
 
@@ -165,7 +165,7 @@ nvidia-smi
 
 ```powershell
 $requestBody = @{
-  model = "qwen3-8b-awq"
+  model = "qwen3-4b-awq"
   messages = @(
     @{
       role = "user"
@@ -317,9 +317,9 @@ imagen, GPU y tiempos en
 `artifacts/` permanecen ignorados y pueden contener información sensible.
 
 Con el escenario de referencia actual, la petición Critic dinámica observada
-necesita 34 227 tokens (30 131 de mensajes y 4 096 de salida). Por tanto, el
-contexto de referencia de 16 384 sirve para el smoke mínimo, pero no para esta
-revisión completa de Slice 7.1.
+necesita 34 227 tokens (30 131 de mensajes y 4 096 de salida). Por eso el
+compose usa 40 960; el perfil histórico de 16 384 sólo servía para el smoke
+mínimo y no para esta revisión completa.
 
 ## 9. Operación diaria
 
@@ -373,6 +373,7 @@ Los valores pueden modificarse temporalmente sin editar `compose.yaml`:
 ```powershell
 $env:VLLM_MAX_MODEL_LEN = "8192"
 $env:VLLM_GPU_MEMORY_UTILIZATION = "0.90"
+$env:VLLM_KV_CACHE_DTYPE = "auto"
 docker compose up -d vllm
 ```
 
@@ -381,3 +382,19 @@ Si la carga falla por falta de VRAM, reduce primero `VLLM_MAX_MODEL_LEN` a
 secuencial. Cambiar el repositorio o el nombre servido del modelo exige mantener
 sincronizados `VLLM_MODEL`, `VLLM_SERVED_MODEL_NAME` y el campo `model` de la
 configuración JSON de la aplicación.
+
+Para ejecutar el escenario completo del Slice 7.1 hacen falta al menos 34.227
+tokens entre entrada y salida. La configuración de referencia usa
+`Qwen/Qwen3-4B-AWQ`, 40.960 tokens y caché KV `auto`; no necesita FP8,
+FlashInfer ni offload en la RTX 3060 de 12 GiB.
+
+La investigación con el modelo 8B se conserva como contexto de diagnóstico:
+vLLM 0.8.5 sólo disponía de 2,96 GiB para KV frente a los 5,62 GiB necesarios;
+FP8 E5M2 forzaba el motor V0 y excedía el timeout al compilar el esquema
+dinámico; el offload V1 requería UVA, no disponible bajo WSL; y vLLM 0.11.0
+encontró incompatibilidades de kernel FP8 en Ampere. Estas combinaciones no son
+la configuración soportada del proyecto.
+
+Si se cambia de modelo o GPU, conserva siempre suficiente contexto para la suma
+de prompt y salida. No reduzcas el esquema, trunques el catálogo ni sustituyas
+ejecuciones fallidas para hacer pasar la evaluación.
