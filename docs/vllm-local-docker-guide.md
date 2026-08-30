@@ -205,16 +205,34 @@ $env:NO_PROXY = "localhost,127.0.0.1"
   -s
 ```
 
-El smoke hace una petición sintética por cada perfil seleccionado y valida la
-configuración, el transporte OpenAI-compatible y el objeto JSON. No ejecuta los
-cinco participantes ni mide la calidad de sus respuestas.
+El smoke contiene dos comprobaciones:
+
+1. una petición sintética con el contrato estático de Analyst por cada perfil
+   seleccionado;
+2. una petición Critic mínima construida por la ruta real de Slice 7.1, con su
+   catálogo, `oneOf`, valores `const`, sección dinámica delimitada y
+   `response_format` dinámico.
+
+La segunda prueba demuestra que el servidor acepta el subconjunto JSON Schema
+utilizado por Slice 7.1 y devuelve un objeto JSON directo. No demuestra calidad
+semántica ni sustituye la validación del participante.
 
 Resultado validado en la RTX 3060 de referencia:
 
 ```text
 live LLM profile: local-qwen3
-1 passed
+live dynamic Critic profile: local-qwen3
+2 passed
 ```
+
+Si la segunda prueba falla porque vLLM rechaza `oneOf` o `const`, conserva el
+error como evidencia y detén la evaluación. No cambies a `JSON_OBJECT`, no
+debilites el esquema y no repitas hasta obtener éxito.
+
+El smoke mínimo puede pasar aunque un escenario grande exceda el contexto. En ese
+caso los logs de vLLM muestran los tokens solicitados y el límite configurado. No
+trunques el catálogo ni retires el esquema delimitado: detén la campaña y utiliza
+posteriormente un perfil/modelo con contexto explícitamente suficiente.
 
 ## 7. Ejecutar una revisión completa
 
@@ -275,6 +293,33 @@ Antes de construir la interfaz deberían quedar comprobados estos comportamiento
 4. Los fallos contractuales no activan silenciosamente etapas dependientes.
 5. Se decide si el producto necesita esquemas dinámicos, reintentos acotados o
    un modelo más capaz para los roles más exigentes.
+
+### Evaluación de Slice 7.1
+
+Slice 7.1 exige exactamente cinco invocaciones independientes del mismo escenario,
+sin retry automático, sustitución ni borrado selectivo. Usa rutas diferentes:
+
+```powershell
+1..5 | ForEach-Object {
+  $run = $_.ToString("00")
+  .\.venv\Scripts\python.exe scripts\run_live_review.py `
+    --config config\llm.vllm.json `
+    --input examples\reviews\critical-desktop-migration.en.json `
+    --output "artifacts\slice-7.1-run-$run.json" `
+    --raw-output-dir "artifacts\slice-7.1-run-$run.raw"
+}
+```
+
+PowerShell continúa el bucle aunque una ejecución devuelva código 1. No vuelvas a
+ejecutar solo los números fallidos. Registra los cinco resultados, configuración,
+imagen, GPU y tiempos en
+`specs/007.1-dynamic-critic-schema/live-evaluation.md`. Los archivos bajo
+`artifacts/` permanecen ignorados y pueden contener información sensible.
+
+Con el escenario de referencia actual, la petición Critic dinámica observada
+necesita 34 227 tokens (30 131 de mensajes y 4 096 de salida). Por tanto, el
+contexto de referencia de 16 384 sirve para el smoke mínimo, pero no para esta
+revisión completa de Slice 7.1.
 
 ## 9. Operación diaria
 

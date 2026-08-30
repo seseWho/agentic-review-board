@@ -241,25 +241,52 @@ request while preserving all Slice 7 modes and transport behavior.
 **Purpose:** Verify the selected JSON Schema subset on local vLLM and collect honest completion
 evidence without adding runtime retries.
 
-- [ ] T055 [US5] Add or extend an explicitly marked live test that obtains a minimal schema through the real Slice 7.1 Critic builder/adapter path—not a hand-written substitute—and checks only provider acceptance and direct JSON-object parsing with no retry.
-- [ ] T056 [US5] Update `docs/vllm-local-docker-guide.md` with Slice 7.1 activation, diagnostic commands, schema-compatibility expectations, and result-recording format.
-- [ ] T057 [US5] Execute the opt-in live smoke against `config/llm.vllm.json`; record model, vLLM image, GPU, context, result, and elapsed time.
+- [X] T055 [US5] Add or extend an explicitly marked live test that obtains a minimal schema through the real Slice 7.1 Critic builder/adapter path—not a hand-written substitute—and checks only provider acceptance and direct JSON-object parsing with no retry.
+- [X] T056 [US5] Update `docs/vllm-local-docker-guide.md` with Slice 7.1 activation, diagnostic commands, schema-compatibility expectations, and result-recording format.
+- [X] T057 [US5] Execute the opt-in live smoke against `config/llm.vllm.json`; record model, vLLM image, GPU, context, result, and elapsed time.
 - [ ] T058 [US5] Execute exactly five independently invoked fixed-scenario full reviews with temperature 0/seed 0, unique run-numbered output paths, and no automatic retry, overwrite, rerun substitution, or selective deletion; retain trusted aggregates and opt-in raw outputs under ignored `artifacts/`.
-- [ ] T059 [DOC] [US5] Create `specs/007.1-dynamic-critic-schema/live-evaluation.md` with the command/config/model/vLLM-image/GPU context and one row for every run number, summarizing completed/failed stage, safe error family, Critic completion, Coordinator completion, elapsed time, and recurrence of prevented source/kind/paraphrase patterns; reference ignored artifact paths without copying payload/schema/raw-output contents into the document.
-- [ ] T060 [US5] If vLLM rejects the `oneOf`/`const` schema itself, record the provider limitation and stop; do not silently weaken, retry another mode, or mark Slice 7.1 successful.
+- [X] T059 [DOC] [US5] Create `specs/007.1-dynamic-critic-schema/live-evaluation.md` with the command/config/model/vLLM-image/GPU context and one row for every run number, summarizing completed/failed stage, safe error family, Critic completion, Coordinator completion, elapsed time, and recurrence of prevented source/kind/paraphrase patterns; reference ignored artifact paths without copying payload/schema/raw-output contents into the document.
+- [X] T060 [US5] If vLLM rejects the `oneOf`/`const` schema itself, record the provider limitation and stop; do not silently weaken, retry another mode, or mark Slice 7.1 successful.
 
 **Checkpoint:** local evidence is recorded honestly; one successful run is not treated as reliability proof.
 
+### T055–T060 live evidence
+
+- Static selected-profile and real minimal dynamic Critic smokes both passed against
+  `Qwen/Qwen3-8B-AWQ` on vLLM 0.8.5 / RTX 3060 12 GiB; `oneOf`/`const` is accepted.
+- Full runs 01 and 02 independently reached Critic after three completed stages, then vLLM
+  returned HTTP 400 because 34,227 requested tokens exceed the 16,384-token profile context.
+- Both aggregates are INCOMPLETE with Critic EXECUTION and Coordinator PENDING; durations
+  were 115.86 s and 113.82 s. No Critic raw output exists.
+- The continuous campaign was interrupted before run 03 produced an artifact; 04–05 were not
+  executed. T058 remains unchecked and Slice 7.1 is not declared live-successful.
+- Evidence is recorded in `live-evaluation.md`; no retry, mode downgrade, schema weakening,
+  truncation, overwrite, selective deletion, or replacement run occurred.
+
 ## Phase 6: Cross-Cutting Verification
 
-- [ ] T061 Run full deterministic `python -m pytest` with no live endpoint requirement.
-- [ ] T062 Run `python -m ruff check .` without weakening repository rules.
-- [ ] T063 Run strict `python -m mypy` for internal immutable values, JSON mappings, exhaustive role/reference dispatch, and tests without adding ignores solely for convenience.
-- [ ] T064 Run `python -m pip check` and confirm no production dependency change.
-- [ ] T065 Inspect production imports and `pyproject.toml` for no provider SDK, retry/fallback, router, generic schema/rules framework, persistence, RAG, tools, UI, or domain-facing provider types.
-- [ ] T066 Review error paths for no prompt, payload, dynamic schema, exact sensitive values, endpoint details, or credentials in public errors/default logs.
-- [ ] T067 Review implementation against Slice 7.1 artifacts, Slice 5 Critic contracts, Slice 7 adapter contracts, canonical docs, Constitution 1.1.0, ADR-0001, and ADR-0002.
-- [ ] T068 Confirm `LLMPort`, domain models, participant signatures/validation, orchestration, Review lifecycle, configuration format, and non-Critic role request semantics remain unchanged.
+- [X] T061 Run full deterministic `python -m pytest` with no live endpoint requirement.
+- [X] T062 Run `python -m ruff check .` without weakening repository rules.
+- [X] T063 Run strict `python -m mypy` for internal immutable values, JSON mappings, exhaustive role/reference dispatch, and tests without adding ignores solely for convenience.
+- [X] T064 Run `python -m pip check` and confirm no production dependency change.
+- [X] T065 Inspect production imports and `pyproject.toml` for no provider SDK, retry/fallback, router, generic schema/rules framework, persistence, RAG, tools, UI, or domain-facing provider types.
+- [X] T066 Review error paths for no prompt, payload, dynamic schema, exact sensitive values, endpoint details, or credentials in public errors/default logs.
+- [X] T067 Review implementation against Slice 7.1 artifacts, Slice 5 Critic contracts, Slice 7 adapter contracts, canonical docs, Constitution 1.1.0, ADR-0001, and ADR-0002.
+- [X] T068 Confirm `LLMPort`, domain models, participant signatures/validation, orchestration, Review lifecycle, configuration format, and non-Critic role request semantics remain unchanged.
+
+### T061–T068 verification evidence
+
+- The deterministic suite passed with two opt-in live tests skipped.
+- Ruff, strict mypy over 61 source files, `pip check`, and `git diff --check` passed.
+- Dependency/import inspection found no forbidden provider SDK, retry/fallback, router, or
+  generic rules-framework addition; production dependencies remain unchanged.
+- Public error and default-log paths retain only safe error families/messages and do not
+  expose prompts, payloads, generated schemas, endpoint details, credentials, or exact
+  sensitive reference values.
+- Contract review found no diff in `LLMPort`, domain models, participant/orchestrator paths,
+  or `pyproject.toml`; non-Critic request behavior and configuration format remain unchanged.
+- Cross-cutting verification is complete, but Slice 7.1 remains live-incomplete while T058
+  is unchecked.
 
 ## Dependencies and Gate
 
