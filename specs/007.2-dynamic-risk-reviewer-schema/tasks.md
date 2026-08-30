@@ -35,10 +35,10 @@ references from one detached three-artifact payload without network access or mu
 - [X] T002 [TEST] [US4] Test `RiskReviewerPayloadSnapshot` accepts exactly `review_input`, `problem_analysis`, and `solution_alternatives`, while missing, extra, malformed, wrong-typed, non-mapping, non-JSON, and contract-invalid values raise fixed-safe `LLMRequestSchemaError`.
 - [X] T003 [TEST] [US3] Test snapshot construction serializes once, validates only the detached parsed value, preserves caller and nested values after success/failure, retains stable `serialized_payload` after caller mutation, and performs no I/O.
 - [X] T004 [TEST] [US3] Extend `tests/unit/infrastructure/llm/test_dynamic_schemas.py` with Critic regressions proving shared exact-payload detachment leaves its four-key validation, canonical serialized bytes, safe failures, and mutation isolation unchanged.
-- [ ] T005 [TEST] [P] [US1] Test ReviewInput catalog coverage for exact `description`, present `title`/`objective`, and every eligible `constraints`, `context`, and `stated_facts` value with exact lowercase `field` and `source=REVIEW_INPUT`.
-- [ ] T006 [TEST] [P] [US1] Test absent/blank optional ReviewInput scalars, blank collection values, owner-field duplicate text, and equal text across different fields follow the approved inclusion/exclusion rules without normalization.
-- [ ] T007 [TEST] [P] [US1] Test Problem Analysis coverage and fixed order for exact `FACT`, `CONSTRAINT`, `ASSUMPTION`, `MISSING_INFORMATION`, and `UNCERTAINTY` findings with canonical present/absent IDs.
-- [ ] T008 [TEST] [P] [US1] Test ID-less duplicate text, ID-bearing duplicate text, equal text across kinds, wrong kind/ID/text combinations, and collection-local lookup eligibility exactly match the participant resolver.
+- [X] T005 [TEST] [P] [US1] Test ReviewInput catalog coverage for exact `description`, present `title`/`objective`, and every eligible `constraints`, `context`, and `stated_facts` value with exact lowercase `field` and `source=REVIEW_INPUT`.
+- [X] T006 [TEST] [P] [US1] Test absent/blank optional ReviewInput scalars, blank collection values, owner-field duplicate text, and equal text across different fields follow the approved inclusion/exclusion rules without normalization.
+- [X] T007 [TEST] [P] [US1] Test Problem Analysis coverage and fixed order for exact `FACT`, `CONSTRAINT`, `ASSUMPTION`, `MISSING_INFORMATION`, and `UNCERTAINTY` findings with canonical present/absent IDs.
+- [X] T008 [TEST] [P] [US1] Test ID-less duplicate text, ID-bearing duplicate text, equal text across kinds, wrong kind/ID/text combinations, and collection-local lookup eligibility exactly match the participant resolver.
 - [ ] T009 [TEST] [P] [US1] Test Solution Alternative coverage for `DESCRIPTION`, `ADVANTAGE`, `DISADVANTAGE`, `ASSUMPTION`, and `IMPLEMENTATION_COMPLEXITY` in the fixed family/alternative/tuple order; prove generation notes and names contribute no basis.
 - [ ] T010 [TEST] [P] [US1] Test `RELEVANT_CONSTRAINT` retains an exact structured `ConstraintReference`, excludes owner-local duplicate objects, permits equal constraints in different alternatives, and never flattens nested source/kind/value.
 - [ ] T011 [TEST] [US1] Test exact target-key shapes, string-form indices, canonical nested emitted identities, fixed global order, and equivalent results for payload mappings with different insertion order.
@@ -69,6 +69,18 @@ references from one detached three-artifact payload without network access or mu
 - The workspace `.venv` launcher references a removed Python 3.12 installation; tests
   were executed non-destructively with the available Python 3.12 plus the existing
   `.venv/Lib/site-packages`. No environment or dependency files were changed.
+
+### T005–T008 red evidence
+
+- Added exact ReviewInput field/value/order/target-key assertions, including absent and
+  blank optionals, owner-field duplicates, equal cross-field text, and whitespace
+  preservation.
+- Added all five Problem Analysis kind families with canonical present/absent IDs,
+  ID-less ambiguity exclusion, distinct ID-bearing duplicate text, cross-kind equality,
+  and the observed forbidden constraint-as-assumption combination.
+- Focused collection fails only at the expected absent `AllowedRiskBasis` /
+  `build_allowed_risk_bases` Slice 7.2 imports; production remains untouched.
+- Ruff passes for the expanded Risk Reviewer dynamic-schema test module.
 
 ## Phase 2: Exact Scope Catalog and Dynamic RiskAssessment Schema
 

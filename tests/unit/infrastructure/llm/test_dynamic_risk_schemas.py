@@ -8,9 +8,16 @@ import pytest
 
 from agentic_review_board.domain.analysis import ProblemAnalysis
 from agentic_review_board.domain.review import ReviewInput
+from agentic_review_board.domain.risks import (
+    ProblemAnalysisBasisReference,
+    ProblemAnalysisFindingKind,
+    ReviewInputBasisReference,
+)
 from agentic_review_board.domain.solutions import SolutionAlternatives
 from agentic_review_board.infrastructure.llm.dynamic_schemas import (
+    AllowedRiskBasis,
     RiskReviewerPayloadSnapshot,
+    build_allowed_risk_bases,
     build_risk_reviewer_payload_snapshot,
 )
 from agentic_review_board.infrastructure.llm.errors import LLMRequestSchemaError
@@ -355,3 +362,274 @@ def test_snapshot_serialization_is_independent_of_mapping_insertion_order() -> N
     assert first.review_input == second.review_input
     assert first.problem_analysis == second.problem_analysis
     assert first.solution_alternatives == second.solution_alternatives
+
+
+def review_input_bases(
+    bases: tuple[AllowedRiskBasis, ...],
+) -> tuple[AllowedRiskBasis, ...]:
+    return tuple(
+        basis
+        for basis in bases
+        if isinstance(basis.reference, ReviewInputBasisReference)
+    )
+
+
+def problem_analysis_bases(
+    bases: tuple[AllowedRiskBasis, ...],
+) -> tuple[AllowedRiskBasis, ...]:
+    return tuple(
+        basis
+        for basis in bases
+        if isinstance(basis.reference, ProblemAnalysisBasisReference)
+    )
+
+
+def test_review_input_catalog_covers_exact_fields_in_fixed_order() -> None:
+    snapshot = build_risk_reviewer_payload_snapshot(full_risk_reviewer_payload())
+
+    bases = review_input_bases(build_allowed_risk_bases(snapshot))
+
+    assert [basis.reference.field.value for basis in bases] == [
+        "description",
+        "title",
+        "objective",
+        "constraints",
+        "constraints",
+        "context",
+        "stated_facts",
+    ]
+    assert [basis.reference.value for basis in bases] == [
+        "Review a local migration.",
+        "Desktop migration",
+        "Select a safe migration direction.",
+        "Must work offline.",
+        "Keep deployment simple.",
+        "Devices use ARM64.",
+        "The current client uses WPF.",
+    ]
+    assert [basis.target_key for basis in bases] == [
+        ("REVIEW_INPUT", "description"),
+        ("REVIEW_INPUT", "title"),
+        ("REVIEW_INPUT", "objective"),
+        ("REVIEW_INPUT", "constraints", "0"),
+        ("REVIEW_INPUT", "constraints", "1"),
+        ("REVIEW_INPUT", "context", "0"),
+        ("REVIEW_INPUT", "stated_facts", "0"),
+    ]
+    assert [basis.as_wire_object() for basis in bases] == [
+        {
+            "source": "REVIEW_INPUT",
+            "field": basis.reference.field.value,
+            "value": basis.reference.value,
+        }
+        for basis in bases
+    ]
+
+
+def test_review_input_catalog_excludes_blank_and_owner_field_duplicates() -> None:
+    snapshot = build_risk_reviewer_payload_snapshot(
+        duplicate_heavy_risk_reviewer_payload()
+    )
+
+    bases = review_input_bases(build_allowed_risk_bases(snapshot))
+
+    assert [basis.reference.field.value for basis in bases] == [
+        "description",
+        "objective",
+        "context",
+        "stated_facts",
+    ]
+    assert [basis.reference.value for basis in bases] == [
+        "Review a local migration.",
+        "Select a safe migration direction.",
+        "Devices use ARM64.",
+        "The current client uses WPF.",
+    ]
+    assert not any(
+        basis.reference.value in {"", "Repeated input."} for basis in bases
+    )
+
+
+def test_review_input_equal_text_in_different_fields_remains_resolvable() -> None:
+    payload = minimal_risk_reviewer_payload()
+    review_input = payload["review_input"]
+    assert isinstance(review_input, dict)
+    review_input.update(
+        {
+            "title": "Shared exact value.",
+            "constraints": ["Shared exact value."],
+            "context": ["Shared exact value."],
+            "stated_facts": ["Shared exact value."],
+        }
+    )
+
+    bases = review_input_bases(
+        build_allowed_risk_bases(build_risk_reviewer_payload_snapshot(payload))
+    )
+    shared = tuple(
+        basis for basis in bases if basis.reference.value == "Shared exact value."
+    )
+
+    assert [basis.reference.field.value for basis in shared] == [
+        "title",
+        "constraints",
+        "context",
+        "stated_facts",
+    ]
+    assert len({basis.emitted_identity for basis in shared}) == 4
+
+
+def test_review_input_catalog_preserves_non_blank_whitespace_exactly() -> None:
+    payload = minimal_risk_reviewer_payload()
+    review_input = payload["review_input"]
+    assert isinstance(review_input, dict)
+    review_input["constraints"] = ["  exact constraint  "]
+
+    bases = review_input_bases(
+        build_allowed_risk_bases(build_risk_reviewer_payload_snapshot(payload))
+    )
+    constraint = next(
+        basis
+        for basis in bases
+        if basis.reference.field.value == "constraints"
+    )
+
+    assert constraint.reference.value == "  exact constraint  "
+    assert constraint.as_wire_object()["value"] == "  exact constraint  "
+
+
+def test_problem_analysis_catalog_covers_all_kinds_in_fixed_order() -> None:
+    payload = full_risk_reviewer_payload()
+    problem_analysis = payload["problem_analysis"]
+    assert isinstance(problem_analysis, dict)
+    assumptions = problem_analysis["assumptions"]
+    assert isinstance(assumptions, list)
+    assumption = assumptions[0]
+    assert isinstance(assumption, dict)
+    assumption["id"] = None
+
+    bases = problem_analysis_bases(
+        build_allowed_risk_bases(build_risk_reviewer_payload_snapshot(payload))
+    )
+
+    assert [basis.reference.kind for basis in bases] == [
+        ProblemAnalysisFindingKind.FACT,
+        ProblemAnalysisFindingKind.CONSTRAINT,
+        ProblemAnalysisFindingKind.CONSTRAINT,
+        ProblemAnalysisFindingKind.ASSUMPTION,
+        ProblemAnalysisFindingKind.MISSING_INFORMATION,
+        ProblemAnalysisFindingKind.UNCERTAINTY,
+    ]
+    assert [basis.reference.id for basis in bases] == [
+        "FACT-001",
+        "CON-001",
+        "CON-002",
+        None,
+        "MISS-001",
+        "UNC-001",
+    ]
+    assert [basis.target_key for basis in bases] == [
+        ("PROBLEM_ANALYSIS", "FACT", "0"),
+        ("PROBLEM_ANALYSIS", "CONSTRAINT", "0"),
+        ("PROBLEM_ANALYSIS", "CONSTRAINT", "1"),
+        ("PROBLEM_ANALYSIS", "ASSUMPTION", "0"),
+        ("PROBLEM_ANALYSIS", "MISSING_INFORMATION", "0"),
+        ("PROBLEM_ANALYSIS", "UNCERTAINTY", "0"),
+    ]
+    assert "id" not in bases[3].as_wire_object()
+    assert bases[0].as_wire_object() == {
+        "source": "PROBLEM_ANALYSIS",
+        "kind": "FACT",
+        "text": "The current client uses WPF.",
+        "id": "FACT-001",
+    }
+
+
+def test_problem_analysis_idless_duplicate_is_excluded_but_id_pair_survives() -> None:
+    payload = duplicate_heavy_risk_reviewer_payload()
+
+    bases = problem_analysis_bases(
+        build_allowed_risk_bases(build_risk_reviewer_payload_snapshot(payload))
+    )
+    uncertainties = tuple(
+        basis
+        for basis in bases
+        if basis.reference.kind is ProblemAnalysisFindingKind.UNCERTAINTY
+    )
+
+    assert len(uncertainties) == 1
+    assert uncertainties[0].reference.id == "UNC-002"
+    assert uncertainties[0].reference.text == "Repeated uncertainty."
+
+
+def test_problem_analysis_id_bearing_equal_text_targets_remain_distinct() -> None:
+    payload = minimal_risk_reviewer_payload()
+    problem_analysis = payload["problem_analysis"]
+    assert isinstance(problem_analysis, dict)
+    problem_analysis["assumptions"] = [
+        {"id": "ASM-001", "text": "Same identified assumption."},
+        {"id": "ASM-002", "text": "Same identified assumption."},
+    ]
+
+    bases = problem_analysis_bases(
+        build_allowed_risk_bases(build_risk_reviewer_payload_snapshot(payload))
+    )
+    assumptions = tuple(
+        basis
+        for basis in bases
+        if basis.reference.kind is ProblemAnalysisFindingKind.ASSUMPTION
+    )
+
+    assert [basis.reference.id for basis in assumptions] == ["ASM-001", "ASM-002"]
+    assert len({basis.emitted_identity for basis in assumptions}) == 2
+    assert len({basis.target_key for basis in assumptions}) == 2
+
+
+def test_problem_analysis_equal_text_across_kinds_remains_distinct() -> None:
+    payload = minimal_risk_reviewer_payload()
+    problem_analysis = payload["problem_analysis"]
+    assert isinstance(problem_analysis, dict)
+    problem_analysis["constraints"] = [
+        {"id": "CON-001", "text": "Shared cross-kind text."}
+    ]
+    problem_analysis["assumptions"] = [
+        {"id": "ASM-001", "text": "Shared cross-kind text."}
+    ]
+
+    bases = problem_analysis_bases(
+        build_allowed_risk_bases(build_risk_reviewer_payload_snapshot(payload))
+    )
+    shared = tuple(
+        basis
+        for basis in bases
+        if basis.reference.text == "Shared cross-kind text."
+    )
+
+    assert [basis.reference.kind for basis in shared] == [
+        ProblemAnalysisFindingKind.CONSTRAINT,
+        ProblemAnalysisFindingKind.ASSUMPTION,
+    ]
+    assert len({basis.emitted_identity for basis in shared}) == 2
+
+
+def test_observed_problem_analysis_kind_id_text_cross_product_is_not_emitted() -> None:
+    snapshot = build_risk_reviewer_payload_snapshot(full_risk_reviewer_payload())
+    bases = problem_analysis_bases(build_allowed_risk_bases(snapshot))
+    invalid = ProblemAnalysisBasisReference.model_validate(
+        {
+            "source": "PROBLEM_ANALYSIS",
+            "kind": "ASSUMPTION",
+            "text": "Must work offline.",
+            "id": "CON-001",
+        }
+    )
+    invalid_wire = invalid.model_dump(mode="json", exclude_none=True)
+
+    assert invalid_wire not in [basis.as_wire_object() for basis in bases]
+    assert all(
+        not (
+            basis.reference.kind is ProblemAnalysisFindingKind.ASSUMPTION
+            and basis.reference.id == "CON-001"
+        )
+        for basis in bases
+    )
