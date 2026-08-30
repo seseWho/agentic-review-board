@@ -35,19 +35,19 @@ one four-artifact payload without network access or mutation.
 - [X] T006 [US1] Test SolutionAlternatives coverage for canonical ALTERNATIVE ID+name, name, description, advantages, disadvantages, assumptions, complexity, generation explanation, and both blocker families.
 - [X] T007 [US1] Test zero alternatives/generation notes, absent assumptions, empty blocker collections, repeated characteristic values, and exact alternative-local target identities.
 - [X] T008 [US1] Test RiskAssessment coverage for canonical RISK ID+description, category, description, severity, mitigation, present residual uncertainty, and overall observations; prove absent residual uncertainty contributes no branch.
-- [ ] T009 [US1] Test fixed catalog ordering across artifact families/kinds/tuple positions, exact string-form target-key indices, and byte-equivalent snapshot/schema serialization for equivalent payload mappings with different key insertion order.
-- [ ] T010 [US4] Test identical emitted identity + same target deduplicates deterministically, while an indistinguishable emitted identity for different target keys is completely excluded rather than guessed; an empty normalized catalog fails closed.
-- [ ] T011 [US1] Test Unicode, quotes, backslashes, newlines, JSON-looking text, and prompt-like content are retained as exact data values without interpretation or corruption.
-- [ ] T012 [US1] Add explicit regression assertions that catalog entries never include `PROBLEM_ANALYSIS + STATED_FACT`, `PROBLEM_ANALYSIS + CONTEXT`, or `item_id` on value-only kinds.
+- [X] T009 [US1] Test fixed catalog ordering across artifact families/kinds/tuple positions, exact string-form target-key indices, and byte-equivalent payload snapshot serialization/emitted identities for equivalent mappings with different key insertion order; dynamic schema byte equivalence remains covered by T025.
+- [X] T010 [US4] Test identical emitted identity + same target deduplicates deterministically, while an indistinguishable emitted identity for different target keys is completely excluded rather than guessed; an empty normalized catalog fails closed.
+- [X] T011 [US1] Test Unicode, quotes, backslashes, newlines, JSON-looking text, and prompt-like content are retained as exact data values without interpretation or corruption.
+- [X] T012 [US1] Add explicit regression assertions that catalog entries never include `PROBLEM_ANALYSIS + STATED_FACT`, `PROBLEM_ANALYSIS + CONTEXT`, or `item_id` on value-only kinds.
 
 ### Implementation
 
-- [ ] T013 [US4] Add `LLMRequestSchemaError` to `src/agentic_review_board/infrastructure/llm/errors.py` with fixed safe string/repr behavior and no unsafe fields.
-- [ ] T014 [US4] Create `src/agentic_review_board/infrastructure/llm/dynamic_schemas.py` with frozen `CriticPayloadSnapshot`, one safe canonical serialize/strict-parse boundary, exact top-level keys, stored `serialized_payload`, and validation of the detached value through existing Pydantic domain models.
-- [ ] T015 [US1] Implement frozen `AllowedCriticReference`, explicit target-key helpers, canonical emitted identity, and safe catalog normalization.
-- [ ] T016 [US1] Implement explicit ReviewInput and ProblemAnalysis enumeration matching current Critic resolver semantics.
-- [ ] T017 [US1] Implement explicit SolutionAlternatives enumeration, including canonical ALTERNATIVE ID+name and generation-note behavior.
-- [ ] T018 [US1] Implement explicit RiskAssessment enumeration, including canonical RISK ID+description and optional residual uncertainty behavior.
+- [X] T013 [US4] Add `LLMRequestSchemaError` to `src/agentic_review_board/infrastructure/llm/errors.py` with fixed safe string/repr behavior and no unsafe fields.
+- [X] T014 [US4] Create `src/agentic_review_board/infrastructure/llm/dynamic_schemas.py` with frozen `CriticPayloadSnapshot`, one safe canonical serialize/strict-parse boundary, exact top-level keys, stored `serialized_payload`, and validation of the detached value through existing Pydantic domain models.
+- [X] T015 [US1] Implement frozen `AllowedCriticReference`, explicit target-key helpers, canonical emitted identity, and safe catalog normalization.
+- [X] T016 [US1] Implement explicit ReviewInput and ProblemAnalysis enumeration matching current Critic resolver semantics.
+- [X] T017 [US1] Implement explicit SolutionAlternatives enumeration, including canonical ALTERNATIVE ID+name and generation-note behavior.
+- [X] T018 [US1] Implement explicit RiskAssessment enumeration, including canonical RISK ID+description and optional residual uncertainty behavior.
 
 **Checkpoint:** complete deterministic allowed-reference catalog passes; no JSON Schema or adapter request behavior changed.
 
@@ -67,6 +67,25 @@ one four-artifact payload without network access or mutation.
 - Focused collection still fails only at the expected absent `dynamic_schemas` production
   module; no accidental implementation or network access exists.
 - Ruff passes after the expanded catalog contract tests.
+
+### T009–T012 red evidence
+
+- Added deterministic ordering/snapshot equality, exact string target indices, emitted-object
+  deduplication, ambiguous-target exclusion, empty-catalog failure, JSON-significant text,
+  optional-ID duplicate eligibility, and observed illegal-shape regressions.
+- Focused collection remains red only because the production module is intentionally absent.
+- Ruff passes for the complete Phase 1 test contract.
+
+### T013–T018 implementation evidence
+
+- Added the fixed safe `LLMRequestSchemaError`, detached single-serialization Critic snapshot,
+  frozen reference values, resolver-equivalent eligibility, explicit four-family enumeration,
+  deterministic normalization, and empty-catalog failure.
+- Focused Phase 1 suite: **20 passed**.
+- Full deterministic pytest suite: **passed** with the existing live test skipped.
+- Focused Ruff and strict mypy: **passed**.
+- No adapter, prompt, participant, domain, orchestration, configuration, dependency, or
+  network behavior changed.
 
 ## Phase 2: Correlated Dynamic Critic Schema
 

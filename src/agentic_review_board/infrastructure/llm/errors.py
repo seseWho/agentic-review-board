@@ -26,6 +26,10 @@ class LLMPayloadSerializationError(LLMAdapterError):
     message = "LLM payload serialization failed"
 
 
+class LLMRequestSchemaError(LLMAdapterError):
+    message = "LLM request schema construction failed"
+
+
 class LLMRequestTimeoutError(LLMAdapterError):
     message = "LLM request timed out"
 
