@@ -184,21 +184,36 @@ scope and basis resolvers.
 
 ### Tests first
 
-- [ ] T054 [TEST] [P] [US1] Add parameterized parity tests showing every generated ReviewInput basis subtype passes current exact scalar/collection resolution against the same snapshot, including blank/duplicate exclusions.
-- [ ] T055 [TEST] [P] [US1] Add parity tests showing every generated Problem Analysis basis passes selected-kind resolution with exact present/absent ID behavior and matching semantic target.
-- [ ] T056 [TEST] [P] [US1] Add parity tests showing every generated Solution Alternative scalar, text-collection, complexity, and structured-constraint basis passes owner-local current resolution.
-- [ ] T057 [TEST] [P] [US2] Add parity tests showing every generated RiskScope passes `RiskScope` structural validation and current alternative membership validation for zero, two, and three alternatives.
-- [ ] T058 [TEST] [US1] Validate every emitted wire projection through the authoritative discriminated `RiskBasisReference` type and prove every generated branch represents that same projection exactly.
-- [ ] T059 [TEST] [US1] Use the checked-in 2026-08-30 fixture to prove the observed constraint-as-assumption kind/ID/text identities match no catalog/schema branch while unchanged participant validation rejects the mapping.
-- [ ] T060 [TEST] [US3] Run existing Risk, Risk Reviewer, adapter-participant, orchestration, Critic, and final-review tests unchanged to prove no trusted contract, role responsibility, lifecycle, error message, or downstream behavior changed.
+- [X] T054 [TEST] [P] [US1] Add parameterized parity tests showing every generated ReviewInput basis subtype passes current exact scalar/collection resolution against the same snapshot, including blank/duplicate exclusions.
+- [X] T055 [TEST] [P] [US1] Add parity tests showing every generated Problem Analysis basis passes selected-kind resolution with exact present/absent ID behavior and matching semantic target.
+- [X] T056 [TEST] [P] [US1] Add parity tests showing every generated Solution Alternative scalar, text-collection, complexity, and structured-constraint basis passes owner-local current resolution.
+- [X] T057 [TEST] [P] [US2] Add parity tests showing every generated RiskScope passes `RiskScope` structural validation and current alternative membership validation for zero, two, and three alternatives.
+- [X] T058 [TEST] [US1] Validate every emitted wire projection through the authoritative discriminated `RiskBasisReference` type and prove every generated branch represents that same projection exactly.
+- [X] T059 [TEST] [US1] Use the checked-in 2026-08-30 fixture to prove the observed constraint-as-assumption kind/ID/text identities match no catalog/schema branch while unchanged participant validation rejects the mapping.
+- [X] T060 [TEST] [US3] Run existing Risk, Risk Reviewer, adapter-participant, orchestration, Critic, and final-review tests unchanged to prove no trusted contract, role responsibility, lifecycle, error message, or downstream behavior changed.
 
 ### Implementation
 
-- [ ] T061 [US1] Make only parity-driven corrections to explicit Risk Reviewer catalog/scope/schema construction; do not change participant/domain validators, coerce outputs, or make tests pass by broadening guidance.
+- [X] T061 [US1] Make only parity-driven corrections to explicit Risk Reviewer catalog/scope/schema construction; do not change participant/domain validators, coerce outputs, or make tests pass by broadening guidance.
 
 ### Phase 4 checkpoint
 
-- [ ] T062 [GATE] Run all parity and regression tests plus the full deterministic suite, Ruff, strict mypy, and dependency check; record that every offered basis/scope is accepted by unchanged trusted validation and the known invalid output remains rejected.
+- [X] T062 [GATE] Run all parity and regression tests plus the full deterministic suite, Ruff, strict mypy, and dependency check; record that every offered basis/scope is accepted by unchanged trusted validation and the known invalid output remains rejected.
+
+### T054–T062 green evidence
+
+- Every emitted ReviewInput, Problem Analysis, and Solution Alternative basis passed the
+  unchanged trusted participant resolver against the same validated snapshot.
+- Every generated scope for zero, two, and three alternatives passed both `RiskScope`
+  validation and unchanged current-alternative membership validation.
+- Every wire object validated through the authoritative discriminated
+  `RiskBasisReference` union and matched the sole instance encoded by its exact branch.
+- The checked-in cross-kind reference matched no catalog or schema branch and remained
+  rejected by the unchanged Problem Analysis resolver.
+- Focused domain/participant/adapter/orchestrator parity suite: 557 tests passed.
+- Full deterministic pytest passed with two existing live tests skipped; repository-wide
+  Ruff, strict mypy (29 source files), and `pip check` all passed.
+- No parity correction to production or trusted domain/participant validation was needed.
 
 ## Phase 5: Local vLLM Compatibility and Fixed-Run Evidence
 

@@ -7,6 +7,7 @@ from dataclasses import FrozenInstanceError
 from pathlib import Path
 
 import pytest
+from pydantic import TypeAdapter
 
 from agentic_review_board.domain.analysis import ProblemAnalysis
 from agentic_review_board.domain.review import ReviewInput
@@ -15,6 +16,7 @@ from agentic_review_board.domain.risks import (
     ProblemAnalysisFindingKind,
     ReviewInputBasisReference,
     RiskAssessment,
+    RiskBasisReference,
     RiskScope,
     RiskScopeKind,
     SolutionAlternativeBasisReference,
@@ -39,6 +41,10 @@ from agentic_review_board.infrastructure.llm.dynamic_schemas import (
 )
 from agentic_review_board.infrastructure.llm.errors import LLMRequestSchemaError
 from agentic_review_board.infrastructure.llm.prompts import get_role_prompt_definition
+from agentic_review_board.participants.risk_reviewer import (
+    RiskReviewer,
+    RiskReviewerOutputError,
+)
 
 RISK_REVIEWER_PAYLOAD_KEYS = {
     "review_input",
@@ -1358,3 +1364,162 @@ def test_risk_schema_narrowing_rejects_noncanonical_internal_catalogs() -> None:
         narrow_risk_schema(RiskAssessment.model_json_schema(), bases + bases[:1], scopes)
     with pytest.raises(LLMRequestSchemaError):
         narrow_risk_schema(RiskAssessment.model_json_schema(), bases, tuple(reversed(scopes)))
+
+
+@pytest.mark.parametrize(
+    "payload_factory",
+    [full_risk_reviewer_payload, duplicate_heavy_risk_reviewer_payload],
+)
+def test_every_generated_review_input_basis_passes_trusted_resolution(
+    payload_factory: object,
+) -> None:
+    assert callable(payload_factory)
+    snapshot = build_risk_reviewer_payload_snapshot(payload_factory())
+    references = [
+        basis.reference
+        for basis in build_allowed_risk_bases(snapshot)
+        if isinstance(basis.reference, ReviewInputBasisReference)
+    ]
+
+    for reference in references:
+        RiskReviewer._resolve_review_input_basis(reference, snapshot.review_input)
+
+    assert references
+    assert all(reference.value.strip() for reference in references)
+
+
+def test_every_generated_problem_analysis_basis_passes_trusted_resolution() -> None:
+    payload = full_risk_reviewer_payload()
+    problem_analysis = payload["problem_analysis"]
+    assert isinstance(problem_analysis, dict)
+    problem_analysis["assumptions"] = [
+        {"id": None, "text": "Unique ID-less assumption."},
+    ]
+    snapshot = build_risk_reviewer_payload_snapshot(payload)
+    references = [
+        basis.reference
+        for basis in build_allowed_risk_bases(snapshot)
+        if isinstance(basis.reference, ProblemAnalysisBasisReference)
+    ]
+
+    for reference in references:
+        RiskReviewer._resolve_problem_analysis_basis(reference, snapshot.problem_analysis)
+
+    assert {reference.kind for reference in references} == set(ProblemAnalysisFindingKind)
+    assert any(reference.id is None for reference in references)
+    assert any(reference.id is not None for reference in references)
+
+
+def test_every_generated_solution_basis_passes_owner_local_trusted_resolution() -> None:
+    snapshot = build_risk_reviewer_payload_snapshot(full_risk_reviewer_payload())
+    references = [
+        basis.reference
+        for basis in build_allowed_risk_bases(snapshot)
+        if isinstance(basis.reference, SolutionAlternativeBasisReference)
+    ]
+
+    for reference in references:
+        RiskReviewer._resolve_solution_alternative_basis(
+            reference,
+            snapshot.solution_alternatives,
+        )
+
+    assert {reference.characteristic for reference in references} == set(
+        SolutionAlternativeCharacteristicKind
+    )
+    assert {reference.alternative_id for reference in references} == {
+        "ALT-001",
+        "ALT-002",
+    }
+
+
+@pytest.mark.parametrize(
+    "payload_factory",
+    [
+        minimal_risk_reviewer_payload,
+        full_risk_reviewer_payload,
+        three_alternative_risk_reviewer_payload,
+    ],
+)
+def test_every_generated_scope_passes_domain_and_current_membership_validation(
+    payload_factory: object,
+) -> None:
+    assert callable(payload_factory)
+    snapshot = build_risk_reviewer_payload_snapshot(payload_factory())
+    basis = build_allowed_risk_bases(snapshot)[0]
+    scopes = build_allowed_risk_scopes(snapshot)
+
+    for scope in scopes:
+        validated_scope = RiskScope.model_validate(scope.model_dump(mode="json"))
+        assessment = RiskAssessment.model_validate(
+            {
+                "risks": [
+                    {
+                        "id": "RISK-SCOPE-PARITY",
+                        "description": "Scope parity check.",
+                        "affected_scope": validated_scope.model_dump(mode="json"),
+                        "severity": "LOW",
+                        "basis": [basis.as_wire_object()],
+                    }
+                ],
+                "overall_observations": [],
+            }
+        )
+        RiskReviewer._validate_scope_references(
+            assessment,
+            snapshot.solution_alternatives,
+        )
+
+    assert len(scopes) in {1, 5, 16}
+
+
+def _instance_from_exact_branch(branch: dict[str, object]) -> dict[str, object]:
+    properties = branch["properties"]
+    assert isinstance(properties, dict)
+    result: dict[str, object] = {}
+    for key, property_schema in properties.items():
+        assert isinstance(key, str)
+        assert isinstance(property_schema, dict)
+        if "const" in property_schema:
+            result[key] = property_schema["const"]
+        else:
+            result[key] = _instance_from_exact_branch(property_schema)
+    return result
+
+
+def test_every_wire_projection_matches_authoritative_union_and_exact_branch() -> None:
+    snapshot = build_risk_reviewer_payload_snapshot(full_risk_reviewer_payload())
+    adapter = TypeAdapter(RiskBasisReference)
+
+    for basis in build_allowed_risk_bases(snapshot):
+        wire_object = basis.as_wire_object()
+        validated = adapter.validate_python(wire_object)
+        branch = build_risk_basis_schema_branch(basis)
+
+        assert validated == basis.reference
+        assert _instance_from_exact_branch(branch) == wire_object
+        assert branch["required"] == list(wire_object)
+        assert branch["additionalProperties"] is False
+
+
+def test_checked_in_cross_kind_reference_has_no_catalog_or_schema_match() -> None:
+    path = (
+        Path(__file__).parents[3] / "fixtures" / "risk_reviewer_2026-08-30_invalid_references.json"
+    )
+    document = json.loads(path.read_text(encoding="utf-8"))
+    observed = document.pop("observed_invalid_reference")
+    snapshot = build_risk_reviewer_payload_snapshot(document)
+    bases = build_allowed_risk_bases(snapshot)
+    observed_reference = TypeAdapter(RiskBasisReference).validate_python(observed)
+
+    assert observed_reference not in {basis.reference for basis in bases}
+    assert observed not in [basis.as_wire_object() for basis in bases]
+    assert observed not in [
+        _instance_from_exact_branch(build_risk_basis_schema_branch(basis)) for basis in bases
+    ]
+    assert isinstance(observed_reference, ProblemAnalysisBasisReference)
+    with pytest.raises(RiskReviewerOutputError):
+        RiskReviewer._resolve_problem_analysis_basis(
+            observed_reference,
+            snapshot.problem_analysis,
+        )
