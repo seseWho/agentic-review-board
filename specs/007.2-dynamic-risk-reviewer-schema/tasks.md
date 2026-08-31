@@ -39,22 +39,31 @@ references from one detached three-artifact payload without network access or mu
 - [X] T006 [TEST] [P] [US1] Test absent/blank optional ReviewInput scalars, blank collection values, owner-field duplicate text, and equal text across different fields follow the approved inclusion/exclusion rules without normalization.
 - [X] T007 [TEST] [P] [US1] Test Problem Analysis coverage and fixed order for exact `FACT`, `CONSTRAINT`, `ASSUMPTION`, `MISSING_INFORMATION`, and `UNCERTAINTY` findings with canonical present/absent IDs.
 - [X] T008 [TEST] [P] [US1] Test ID-less duplicate text, ID-bearing duplicate text, equal text across kinds, wrong kind/ID/text combinations, and collection-local lookup eligibility exactly match the participant resolver.
-- [ ] T009 [TEST] [P] [US1] Test Solution Alternative coverage for `DESCRIPTION`, `ADVANTAGE`, `DISADVANTAGE`, `ASSUMPTION`, and `IMPLEMENTATION_COMPLEXITY` in the fixed family/alternative/tuple order; prove generation notes and names contribute no basis.
-- [ ] T010 [TEST] [P] [US1] Test `RELEVANT_CONSTRAINT` retains an exact structured `ConstraintReference`, excludes owner-local duplicate objects, permits equal constraints in different alternatives, and never flattens nested source/kind/value.
-- [ ] T011 [TEST] [US1] Test exact target-key shapes, string-form indices, canonical nested emitted identities, fixed global order, and equivalent results for payload mappings with different insertion order.
-- [ ] T012 [TEST] [US4] Test identical emitted identity plus identical semantic target deduplicates to the first candidate, an emitted identity collapsing distinct targets is wholly excluded, unrelated candidates survive, and empty normalization remains a valid zero-risk input to later narrowing.
-- [ ] T013 [TEST] [US3] Test Unicode, quotes, slashes, newlines, JSON-looking strings, delimiter-looking text, and prompt-injection-like values remain exact data in the snapshot, domain reference, emitted identity, and fresh wire projection.
-- [ ] T014 [TEST] [US1] Add `tests/fixtures/risk_reviewer_2026-08-30_invalid_references.json` as a minimal synthetic checked-in reproduction containing matching upstream artifacts plus the observed constraint-as-assumption kind/ID/text mismatch; prove fixture loading needs no ignored local artifact.
+- [X] T009 [TEST] [P] [US1] Test Solution Alternative coverage for `DESCRIPTION`, `ADVANTAGE`, `DISADVANTAGE`, `ASSUMPTION`, and `IMPLEMENTATION_COMPLEXITY` in the fixed family/alternative/tuple order; prove generation notes and names contribute no basis.
+- [X] T010 [TEST] [P] [US1] Test `RELEVANT_CONSTRAINT` retains an exact structured `ConstraintReference`, excludes owner-local duplicate objects, permits equal constraints in different alternatives, and never flattens nested source/kind/value.
+- [X] T011 [TEST] [US1] Test exact target-key shapes, string-form indices, canonical nested emitted identities, fixed global order, and equivalent results for payload mappings with different insertion order.
+- [X] T012 [TEST] [US4] Test identical emitted identity plus identical semantic target deduplicates to the first candidate, an emitted identity collapsing distinct targets is wholly excluded, unrelated candidates survive, and empty normalization remains a valid zero-risk input to later narrowing.
+- [X] T013 [TEST] [US3] Test Unicode, quotes, slashes, newlines, JSON-looking strings, delimiter-looking text, and prompt-injection-like values remain exact data in the snapshot, domain reference, emitted identity, and fresh wire projection.
+- [X] T014 [TEST] [US1] Add `tests/fixtures/risk_reviewer_2026-08-30_invalid_references.json` as a minimal synthetic checked-in reproduction containing matching upstream artifacts plus the observed constraint-as-assumption kind/ID/text mismatch; prove fixture loading needs no ignored local artifact.
 
 ### Implementation
 
-- [ ] T015 [US3] Add the private exact-payload detachment helper and frozen `RiskReviewerPayloadSnapshot` in `src/agentic_review_board/infrastructure/llm/dynamic_schemas.py`; move Critic snapshot mechanics onto the helper only when T004 proves byte-equivalent behavior.
-- [ ] T016 [US1] Add frozen `AllowedRiskBasis`, validated existing basis-subtype storage, fresh `exclude_none` wire projection, canonical JSON emitted identity, private target-key invariants, and deterministic normalization.
-- [ ] T017 [US1] Implement explicit ReviewInput, Problem Analysis, and Solution Alternative basis enumeration with resolver-equivalent scalar, text, optional-ID, and structured-constraint eligibility and no unsupported families.
+- [X] T015 [US3] Add the private exact-payload detachment helper and frozen `RiskReviewerPayloadSnapshot` in `src/agentic_review_board/infrastructure/llm/dynamic_schemas.py`; move Critic snapshot mechanics onto the helper only when T004 proves byte-equivalent behavior.
+- [X] T016 [US1] Add frozen `AllowedRiskBasis`, validated existing basis-subtype storage, fresh `exclude_none` wire projection, canonical JSON emitted identity, private target-key invariants, and deterministic normalization.
+- [X] T017 [US1] Implement explicit ReviewInput, Problem Analysis, and Solution Alternative basis enumeration with resolver-equivalent scalar, text, optional-ID, and structured-constraint eligibility and no unsupported families.
 
 ### Phase 1 checkpoint
 
-- [ ] T018 [GATE] Run the focused Phase 1 tests, full deterministic pytest suite, focused Ruff, and strict mypy; record red/green evidence and confirm no JSON Schema, adapter request, participant, domain, configuration, dependency, or network behavior changed.
+- [X] T018 [GATE] Run the focused Phase 1 tests, full deterministic pytest suite, focused Ruff, and strict mypy; record red/green evidence and confirm no JSON Schema, adapter request, participant, domain, configuration, dependency, or network behavior changed.
+
+### T009–T018 green evidence
+
+- Focused Risk/Critic snapshot and catalog suite: 82 tests passed.
+- Full deterministic pytest suite passed with the two existing live tests skipped.
+- Repository-wide Ruff check passed.
+- Strict mypy passed for all 29 source files.
+- `git diff --check` passed; changes remain limited to the Phase 1 schema module,
+  focused tests, synthetic fixture, and task evidence.
 
 ### T001–T004 red evidence
 

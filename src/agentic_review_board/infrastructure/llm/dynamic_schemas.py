@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass
 from typing import NoReturn
@@ -11,6 +11,7 @@ from agentic_review_board.domain.analysis import (
     AnalysisFinding,
     FactFinding,
     ProblemAnalysis,
+    ReviewInputSource,
 )
 from agentic_review_board.domain.critics import (
     CriticalReview,
@@ -19,13 +20,346 @@ from agentic_review_board.domain.critics import (
     CriticReferenceSource,
 )
 from agentic_review_board.domain.review import ReviewInput
-from agentic_review_board.domain.risks import RiskAssessment
+from agentic_review_board.domain.risks import (
+    ProblemAnalysisBasisReference,
+    ProblemAnalysisFindingKind,
+    ReviewInputBasisReference,
+    RiskAssessment,
+    SolutionAlternativeBasisReference,
+    SolutionAlternativeCharacteristicKind,
+)
 from agentic_review_board.domain.solutions import (
     FindingReference,
+    SolutionAlternative,
     SolutionAlternatives,
 )
 from agentic_review_board.infrastructure.llm.errors import LLMRequestSchemaError
 from agentic_review_board.infrastructure.llm.prompts import RolePromptDefinition
+
+_RISK_PAYLOAD_KEYS = frozenset({"review_input", "problem_analysis", "solution_alternatives"})
+
+_RISK_BASIS_TYPES = (
+    ReviewInputBasisReference,
+    ProblemAnalysisBasisReference,
+    SolutionAlternativeBasisReference,
+)
+
+RiskBasisModel = (
+    ReviewInputBasisReference | ProblemAnalysisBasisReference | SolutionAlternativeBasisReference
+)
+
+
+def _detach_exact_payload(
+    payload: Mapping[str, object],
+    *,
+    expected_keys: frozenset[str],
+) -> tuple[str, dict[str, object]]:
+    if not isinstance(payload, Mapping):
+        raise TypeError("dynamic payload must be a mapping")
+    owned_top_level = dict(payload)
+    if len(owned_top_level) != len(expected_keys) or frozenset(owned_top_level) != expected_keys:
+        raise ValueError("dynamic payload keys are invalid")
+    serialized_payload = json.dumps(
+        owned_top_level,
+        allow_nan=False,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    detached = json.loads(
+        serialized_payload,
+        parse_constant=_reject_non_json_constant,
+    )
+    if not isinstance(detached, dict):
+        raise TypeError("dynamic payload snapshot must be an object")
+    return serialized_payload, detached
+
+
+@dataclass(frozen=True, slots=True)
+class RiskReviewerPayloadSnapshot:
+    serialized_payload: str
+    review_input: ReviewInput
+    problem_analysis: ProblemAnalysis
+    solution_alternatives: SolutionAlternatives
+
+
+@dataclass(frozen=True, slots=True)
+class AllowedRiskBasis:
+    reference: RiskBasisModel
+    target_key: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if type(self.reference) not in _RISK_BASIS_TYPES:
+            raise TypeError("reference must be an approved risk basis model")
+        if not self.target_key or any(
+            not isinstance(component, str) or not component for component in self.target_key
+        ):
+            raise ValueError("target_key must contain non-empty strings")
+
+    @property
+    def emitted_identity(self) -> str:
+        return json.dumps(
+            self.as_wire_object(),
+            allow_nan=False,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+
+    def as_wire_object(self) -> dict[str, object]:
+        return self.reference.model_dump(mode="json", exclude_none=True)
+
+
+def build_risk_reviewer_payload_snapshot(
+    payload: Mapping[str, object],
+) -> RiskReviewerPayloadSnapshot:
+    try:
+        serialized_payload, detached = _detach_exact_payload(
+            payload,
+            expected_keys=_RISK_PAYLOAD_KEYS,
+        )
+        return RiskReviewerPayloadSnapshot(
+            serialized_payload=serialized_payload,
+            review_input=ReviewInput.model_validate(detached["review_input"]),
+            problem_analysis=ProblemAnalysis.model_validate(detached["problem_analysis"]),
+            solution_alternatives=SolutionAlternatives.model_validate(
+                detached["solution_alternatives"]
+            ),
+        )
+    except Exception as error:
+        raise LLMRequestSchemaError() from error
+
+
+def _risk_basis(
+    reference: RiskBasisModel,
+    target_key: tuple[str, ...],
+) -> AllowedRiskBasis:
+    return AllowedRiskBasis(reference=reference, target_key=target_key)
+
+
+def _append_unique_alternative_texts(
+    candidates: list[AllowedRiskBasis],
+    alternatives: tuple[SolutionAlternative, ...],
+    characteristic: SolutionAlternativeCharacteristicKind,
+    values_for: Callable[[SolutionAlternative], tuple[str, ...]],
+) -> None:
+    for alternative in alternatives:
+        values = values_for(alternative)
+        for index, value in enumerate(values):
+            if values.count(value) != 1:
+                continue
+            candidates.append(
+                _risk_basis(
+                    SolutionAlternativeBasisReference(
+                        alternative_id=alternative.id,
+                        characteristic=characteristic,
+                        value=value,
+                    ),
+                    (
+                        "SOLUTION_ALTERNATIVE",
+                        alternative.id,
+                        characteristic.value,
+                        str(index),
+                    ),
+                )
+            )
+
+
+def _append_problem_findings(
+    candidates: list[AllowedRiskBasis],
+    kind: ProblemAnalysisFindingKind,
+    findings: tuple[FactFinding | AnalysisFinding, ...],
+) -> None:
+    for index, finding in enumerate(findings):
+        matches = sum(
+            (candidate.id == finding.id and candidate.text == finding.text)
+            if finding.id
+            else candidate.text == finding.text
+            for candidate in findings
+        )
+        if matches != 1:
+            continue
+        candidates.append(
+            _risk_basis(
+                ProblemAnalysisBasisReference(
+                    kind=kind,
+                    text=finding.text,
+                    id=finding.id,
+                ),
+                ("PROBLEM_ANALYSIS", kind.value, str(index)),
+            )
+        )
+
+
+def build_allowed_risk_bases(
+    snapshot: RiskReviewerPayloadSnapshot,
+) -> tuple[AllowedRiskBasis, ...]:
+    try:
+        candidates: list[AllowedRiskBasis] = []
+        review_input = snapshot.review_input
+        review_scalars = (
+            (ReviewInputSource.DESCRIPTION, review_input.description),
+            (ReviewInputSource.TITLE, review_input.title),
+            (ReviewInputSource.OBJECTIVE, review_input.objective),
+        )
+        for field, value in review_scalars:
+            if value:
+                candidates.append(
+                    _risk_basis(
+                        ReviewInputBasisReference(field=field, value=value),
+                        ("REVIEW_INPUT", field.value),
+                    )
+                )
+
+        review_collections = (
+            (ReviewInputSource.CONSTRAINTS, review_input.constraints),
+            (ReviewInputSource.CONTEXT, review_input.context),
+            (ReviewInputSource.STATED_FACTS, review_input.stated_facts),
+        )
+        for field, values in review_collections:
+            for index, value in enumerate(values):
+                if not value.strip() or values.count(value) != 1:
+                    continue
+                candidates.append(
+                    _risk_basis(
+                        ReviewInputBasisReference(field=field, value=value),
+                        ("REVIEW_INPUT", field.value, str(index)),
+                    )
+                )
+
+        problem_analysis = snapshot.problem_analysis
+        _append_problem_findings(
+            candidates,
+            ProblemAnalysisFindingKind.FACT,
+            problem_analysis.facts,
+        )
+        _append_problem_findings(
+            candidates,
+            ProblemAnalysisFindingKind.CONSTRAINT,
+            problem_analysis.constraints,
+        )
+        _append_problem_findings(
+            candidates,
+            ProblemAnalysisFindingKind.ASSUMPTION,
+            problem_analysis.assumptions,
+        )
+        _append_problem_findings(
+            candidates,
+            ProblemAnalysisFindingKind.MISSING_INFORMATION,
+            problem_analysis.missing_information,
+        )
+        _append_problem_findings(
+            candidates,
+            ProblemAnalysisFindingKind.UNCERTAINTY,
+            problem_analysis.uncertainties,
+        )
+
+        alternatives = snapshot.solution_alternatives.alternatives
+        for alternative in alternatives:
+            candidates.append(
+                _risk_basis(
+                    SolutionAlternativeBasisReference(
+                        alternative_id=alternative.id,
+                        characteristic=SolutionAlternativeCharacteristicKind.DESCRIPTION,
+                        value=alternative.description,
+                    ),
+                    (
+                        "SOLUTION_ALTERNATIVE",
+                        alternative.id,
+                        SolutionAlternativeCharacteristicKind.DESCRIPTION.value,
+                    ),
+                )
+            )
+
+        text_families: tuple[
+            tuple[
+                SolutionAlternativeCharacteristicKind,
+                Callable[[SolutionAlternative], tuple[str, ...]],
+            ],
+            ...,
+        ] = (
+            (
+                SolutionAlternativeCharacteristicKind.ADVANTAGE,
+                lambda alternative: alternative.advantages,
+            ),
+            (
+                SolutionAlternativeCharacteristicKind.DISADVANTAGE,
+                lambda alternative: alternative.disadvantages,
+            ),
+            (
+                SolutionAlternativeCharacteristicKind.ASSUMPTION,
+                lambda alternative: alternative.assumptions,
+            ),
+        )
+        for characteristic, values_for in text_families:
+            _append_unique_alternative_texts(
+                candidates,
+                alternatives,
+                characteristic,
+                values_for,
+            )
+
+        for alternative in alternatives:
+            candidates.append(
+                _risk_basis(
+                    SolutionAlternativeBasisReference(
+                        alternative_id=alternative.id,
+                        characteristic=(
+                            SolutionAlternativeCharacteristicKind.IMPLEMENTATION_COMPLEXITY
+                        ),
+                        value=alternative.implementation_complexity.value,
+                    ),
+                    (
+                        "SOLUTION_ALTERNATIVE",
+                        alternative.id,
+                        SolutionAlternativeCharacteristicKind.IMPLEMENTATION_COMPLEXITY.value,
+                    ),
+                )
+            )
+
+        for alternative in alternatives:
+            constraint_keys = tuple(
+                constraint.model_dump_json() for constraint in alternative.relevant_constraints
+            )
+            for index, constraint in enumerate(alternative.relevant_constraints):
+                if constraint_keys.count(constraint_keys[index]) != 1:
+                    continue
+                candidates.append(
+                    _risk_basis(
+                        SolutionAlternativeBasisReference(
+                            alternative_id=alternative.id,
+                            characteristic=(
+                                SolutionAlternativeCharacteristicKind.RELEVANT_CONSTRAINT
+                            ),
+                            value=constraint,
+                        ),
+                        (
+                            "SOLUTION_ALTERNATIVE",
+                            alternative.id,
+                            SolutionAlternativeCharacteristicKind.RELEVANT_CONSTRAINT.value,
+                            str(index),
+                        ),
+                    )
+                )
+        return normalize_allowed_risk_bases(candidates)
+    except LLMRequestSchemaError:
+        raise
+    except Exception as error:
+        raise LLMRequestSchemaError() from error
+
+
+def normalize_allowed_risk_bases(
+    candidates: Iterable[AllowedRiskBasis],
+) -> tuple[AllowedRiskBasis, ...]:
+    groups: dict[str, list[AllowedRiskBasis]] = {}
+    for candidate in candidates:
+        groups.setdefault(candidate.emitted_identity, []).append(candidate)
+    return tuple(
+        group[0]
+        for group in groups.values()
+        if len({candidate.target_key for candidate in group}) == 1
+    )
+
 
 _CRITIC_PAYLOAD_KEYS = frozenset(
     {
@@ -104,24 +438,10 @@ def build_critic_payload_snapshot(
     payload: Mapping[str, object],
 ) -> CriticPayloadSnapshot:
     try:
-        if not isinstance(payload, Mapping):
-            raise TypeError("Critic payload must be a mapping")
-        owned_top_level = dict(payload)
-        if len(owned_top_level) != 4 or frozenset(owned_top_level) != _CRITIC_PAYLOAD_KEYS:
-            raise ValueError("Critic payload keys are invalid")
-        serialized_payload = json.dumps(
-            owned_top_level,
-            allow_nan=False,
-            ensure_ascii=False,
-            separators=(",", ":"),
-            sort_keys=True,
+        serialized_payload, detached = _detach_exact_payload(
+            payload,
+            expected_keys=_CRITIC_PAYLOAD_KEYS,
         )
-        detached = json.loads(
-            serialized_payload,
-            parse_constant=_reject_non_json_constant,
-        )
-        if not isinstance(detached, dict):
-            raise TypeError("Critic payload snapshot must be an object")
         return CriticPayloadSnapshot(
             serialized_payload=serialized_payload,
             review_input=ReviewInput.model_validate(detached["review_input"]),
@@ -576,9 +896,7 @@ def build_request_output_schema(
             snapshot = build_critic_payload_snapshot(payload)
             return build_critic_request_output_schema(snapshot)
         else:
-            document = strict_json_schema_document(
-                definition.output_model.model_json_schema()
-            )
+            document = strict_json_schema_document(definition.output_model.model_json_schema())
         return _serialize_request_schema(document)
     except LLMRequestSchemaError:
         raise

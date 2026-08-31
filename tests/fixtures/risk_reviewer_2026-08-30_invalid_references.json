@@ -1,0 +1,24 @@
+{
+  "review_input": {"description": "Review a migration."},
+  "problem_analysis": {
+    "objective": "Assess feasibility.",
+    "facts": [], "constraints": [{"id": "CON-001", "text": "Must work offline."}],
+    "assumptions": [], "missing_information": [], "uncertainties": []
+  },
+  "solution_alternatives": {
+    "alternatives": [{
+      "id": "ALT-001", "name": "Incremental", "description": "Migrate incrementally.",
+      "advantages": ["Lower risk."], "disadvantages": [], "assumptions": [],
+      "implementation_complexity": "LOW",
+      "relevant_constraints": [{"source": "PROBLEM_ANALYSIS", "kind": "ID", "value": "CON-001"}]
+    }, {
+      "id": "ALT-002", "name": "Rewrite", "description": "Rewrite the client.",
+      "advantages": ["Modern stack."], "disadvantages": [], "assumptions": [],
+      "implementation_complexity": "HIGH", "relevant_constraints": []
+    }],
+    "generation_notes": {"explanation": "Two approaches.", "blocking_missing_information": [], "blocking_uncertainties": []}
+  },
+  "observed_invalid_reference": {
+    "source": "PROBLEM_ANALYSIS", "kind": "ASSUMPTION", "id": "CON-001", "text": "Must work offline."
+  }
+}
