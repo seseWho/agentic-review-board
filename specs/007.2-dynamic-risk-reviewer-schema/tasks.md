@@ -98,30 +98,42 @@ other strict RiskAssessment shape and valid zero-risk result.
 
 ### Tests first
 
-- [ ] T019 [TEST] [US2] Test the allowed scope catalog returns exactly 1, 5, and 16 frozen `RiskScope` values for zero, two, and three alternatives, in overall-then-length-then-permutation order.
-- [ ] T020 [TEST] [US2] Test every current non-empty ordered alternative-ID sequence appears exactly once and no empty `ALTERNATIVES`, repeated ID, unknown ID, stale ID, ranking, or canonical-preference behavior appears.
-- [ ] T021 [TEST] [P] [US1] Test each ReviewInput and Problem Analysis `AllowedRiskBasis` becomes one fresh closed branch with exact `const` properties, canonical property/required order, absent optional ID omission, and no discriminator/free enum/nullable route.
-- [ ] T022 [TEST] [P] [US1] Test each string-valued Solution Alternative basis branch binds exact source, alternative, characteristic, and value without Cartesian-product combinations.
-- [ ] T023 [TEST] [P] [US1] Test a relevant-constraint branch contains a fresh nested closed object with exact source/kind/value constants and cannot combine the outer alternative/characteristic with another constraint.
-- [ ] T024 [TEST] [P] [US2] Test every allowed `RiskScope` becomes one fresh closed `kind + alternative_ids` branch using scalar/array `const`, including exact overall and reversed-order examples.
-- [ ] T025 [TEST] [US1] Test RiskAssessment narrowing starts from the authoritative strict schema, replaces the complete Risk `basis.items` discriminated union with exact catalog `oneOf`, sets `basis.minItems=1`, retains `basis.maxItems=10`, and changes no unrelated definition.
-- [ ] T026 [TEST] [US2] Test narrowing replaces only `RiskScope` with the exact scope branches, preserves every legal current order, and leaves no free kind/ID item route or `uniqueItems` dependency.
-- [ ] T027 [TEST] [US3] Test fully empty and observation-only RiskAssessment remain representable; optional category/mitigation/residual uncertainty, qualitative severity, root arrays, forbidden extra fields, and Slice 7 bounds remain equivalent to the strict static contract.
-- [ ] T028 [TEST] [US4] Test empty basis catalog narrows root `risks.maxItems` to zero without empty `oneOf`, open/fallback basis, or construction failure, while non-empty observations remain representable.
-- [ ] T029 [TEST] [US5] Test deterministic compact Unicode-preserving schema serialization, fresh `new_document()` ownership, mutation isolation, no alias to base/catalog/branches/prior calls, and byte equivalence for semantically equivalent snapshots.
-- [ ] T030 [TEST] [US5] Build a documented high-cardinality contract-valid fixture using the real maximum of three alternatives and explicit unbounded-input stress counts; assert exact basis/scope branch formulas, no truncation, and recorded UTF-8 schema size without creating product limits.
-- [ ] T031 [TEST] [US4] Test missing, renamed, wrongly typed, unexpectedly referenced, or otherwise drifted authoritative Risk/RiskScope schema locations and internal branch invariant failures raise `LLMRequestSchemaError` with no static-schema fallback.
+- [X] T019 [TEST] [US2] Test the allowed scope catalog returns exactly 1, 5, and 16 frozen `RiskScope` values for zero, two, and three alternatives, in overall-then-length-then-permutation order.
+- [X] T020 [TEST] [US2] Test every current non-empty ordered alternative-ID sequence appears exactly once and no empty `ALTERNATIVES`, repeated ID, unknown ID, stale ID, ranking, or canonical-preference behavior appears.
+- [X] T021 [TEST] [P] [US1] Test each ReviewInput and Problem Analysis `AllowedRiskBasis` becomes one fresh closed branch with exact `const` properties, canonical property/required order, absent optional ID omission, and no discriminator/free enum/nullable route.
+- [X] T022 [TEST] [P] [US1] Test each string-valued Solution Alternative basis branch binds exact source, alternative, characteristic, and value without Cartesian-product combinations.
+- [X] T023 [TEST] [P] [US1] Test a relevant-constraint branch contains a fresh nested closed object with exact source/kind/value constants and cannot combine the outer alternative/characteristic with another constraint.
+- [X] T024 [TEST] [P] [US2] Test every allowed `RiskScope` becomes one fresh closed `kind + alternative_ids` branch using scalar/array `const`, including exact overall and reversed-order examples.
+- [X] T025 [TEST] [US1] Test RiskAssessment narrowing starts from the authoritative strict schema, replaces the complete Risk `basis.items` discriminated union with exact catalog `oneOf`, sets `basis.minItems=1`, retains `basis.maxItems=10`, and changes no unrelated definition.
+- [X] T026 [TEST] [US2] Test narrowing replaces only `RiskScope` with the exact scope branches, preserves every legal current order, and leaves no free kind/ID item route or `uniqueItems` dependency.
+- [X] T027 [TEST] [US3] Test fully empty and observation-only RiskAssessment remain representable; optional category/mitigation/residual uncertainty, qualitative severity, root arrays, forbidden extra fields, and Slice 7 bounds remain equivalent to the strict static contract.
+- [X] T028 [TEST] [US4] Test empty basis catalog narrows root `risks.maxItems` to zero without empty `oneOf`, open/fallback basis, or construction failure, while non-empty observations remain representable.
+- [X] T029 [TEST] [US5] Test deterministic compact Unicode-preserving schema serialization, fresh `new_document()` ownership, mutation isolation, no alias to base/catalog/branches/prior calls, and byte equivalence for semantically equivalent snapshots.
+- [X] T030 [TEST] [US5] Build a documented high-cardinality contract-valid fixture using the real maximum of three alternatives and explicit unbounded-input stress counts; assert exact basis/scope branch formulas, no truncation, and recorded UTF-8 schema size without creating product limits.
+- [X] T031 [TEST] [US4] Test missing, renamed, wrongly typed, unexpectedly referenced, or otherwise drifted authoritative Risk/RiskScope schema locations and internal branch invariant failures raise `LLMRequestSchemaError` with no static-schema fallback.
 
 ### Implementation
 
-- [ ] T032 [US2] Implement deterministic `tuple[RiskScope, ...]` construction with overall first and ordered permutations without replacement, plus exact fresh scope-branch projection.
-- [ ] T033 [US1] Implement exact fresh basis-branch projection, including explicit nested `ConstraintReference`, canonical required ordering, and fail-safe rejection of unexpected nested values.
-- [ ] T034 [US1] Implement strict-before-narrow RiskAssessment transformation with explicit structural checks, exact basis-item replacement, non-empty-basis bounds, empty-catalog zero-risk behavior, and exact RiskScope replacement.
-- [ ] T035 [US3] Implement dynamic Risk Reviewer schema serialization through the unchanged `RequestOutputSchema`, then extend the existing general schema builder so exact `risk_reviewer` receives this schema while Critic and static-role semantics remain unchanged.
+- [X] T032 [US2] Implement deterministic `tuple[RiskScope, ...]` construction with overall first and ordered permutations without replacement, plus exact fresh scope-branch projection.
+- [X] T033 [US1] Implement exact fresh basis-branch projection, including explicit nested `ConstraintReference`, canonical required ordering, and fail-safe rejection of unexpected nested values.
+- [X] T034 [US1] Implement strict-before-narrow RiskAssessment transformation with explicit structural checks, exact basis-item replacement, non-empty-basis bounds, empty-catalog zero-risk behavior, and exact RiskScope replacement.
+- [X] T035 [US3] Implement dynamic Risk Reviewer schema serialization through the unchanged `RequestOutputSchema`, then extend the existing general schema builder so exact `risk_reviewer` receives this schema while Critic and static-role semantics remain unchanged.
 
 ### Phase 2 checkpoint
 
-- [ ] T036 [GATE] Run focused Phase 1–2 tests, full deterministic pytest, Ruff, and strict mypy; record catalog/branch counts and schema bytes, and confirm the adapter, prompts, participant/domain validation, and network behavior remain unchanged.
+- [X] T036 [GATE] Run focused Phase 1–2 tests, full deterministic pytest, Ruff, and strict mypy; record catalog/branch counts and schema bytes, and confirm the adapter, prompts, participant/domain validation, and network behavior remain unchanged.
+
+### T019–T036 green evidence
+
+- Focused Phase 1–2 Risk/Critic schema suite: 96 tests passed.
+- Full deterministic pytest suite passed with the two existing live tests skipped.
+- Repository-wide Ruff and strict mypy (29 source files) passed.
+- Scope catalogs contain exactly 1, 5, and 16 branches for zero, two, and three
+  alternatives.
+- The high-cardinality fixture produces 509 exact basis branches and 16 exact scope
+  branches without truncation; canonical UTF-8 schema size is 154,324 bytes.
+- Adapter transport, prompts, participant/domain validation, configuration,
+  dependencies, and network behavior remain unchanged in this phase.
 
 ## Phase 3: One-Snapshot Dynamic Dispatch and Adapter Integration
 
@@ -130,29 +142,40 @@ and provider guidance while retaining all existing modes and safe failure behavi
 
 ### Tests first
 
-- [ ] T037 [TEST] [US3] Test frozen `DynamicRequestContext` pairs one snapshot's exact serialized payload with its `RequestOutputSchema`, stores no mutable document/provider data, and is rebuilt independently per invocation.
-- [ ] T038 [TEST] [US3] Test closed dispatch returns Risk Reviewer context for exact `risk_reviewer`, existing Critic context for exact `critic`, and `None` for Analyst, Solution Architect, and Coordinator; unknown roles retain existing failure before dispatch.
-- [ ] T039 [TEST] [US3] Test the general request-schema helper returns each dynamic role's schema and preserves byte-equivalent strict static schemas for the three static roles without requiring dynamic payload keys.
-- [ ] T040 [TEST] [US3] Extend `tests/unit/infrastructure/llm/test_openai_compatible.py` so a Risk Reviewer call retains the exact static payload-value-free system message and includes independently delimited snapshot payload and dynamic-schema JSON only in user/data content; include newline- and delimiter-looking values and prove they remain inside parsed JSON without creating extra boundary lines.
-- [ ] T041 [TEST] [US3] Test Risk Reviewer `JSON_SCHEMA` uses a fresh provider document deeply equal to the delimited dynamic schema while retaining `risk_reviewer_output`, `strict=true`, configured sampling/max-token fields, and one request.
-- [ ] T042 [TEST] [P] [US3] Test Risk Reviewer `JSON_OBJECT` carries dynamic schema only as untrusted data and retains exact `{type: json_object}` response format without an enforcement claim.
-- [ ] T043 [TEST] [P] [US3] Test Risk Reviewer `PROMPT_ONLY` carries dynamic schema only as untrusted data and omits response format without an enforcement claim.
-- [ ] T044 [TEST] [US3] Test Critic request bodies remain Slice 7.1-equivalent and Analyst, Solution Architect, and Coordinator remain Slice 7-equivalent across applicable modes; Risk Reviewer is removed only from the former static-role regression set.
-- [ ] T045 [TEST] [US4] Test invalid Risk Reviewer snapshot/schema construction fails before credential extraction, header construction, HTTP invocation, and output observation; static-role serialization failures retain `LLMPayloadSerializationError`.
-- [ ] T046 [TEST] [US4] Test schema-error `str`/`repr` and orchestrator mapping contain no payload marker, basis/scope value, target key, schema fragment, endpoint/profile/model detail, credential, raw output, or nested validation text.
-- [ ] T047 [TEST] [US3] Test successful adapter parsing and observer invocation still return only the exact provider mapping; dynamic guidance does not instantiate RiskAssessment, mark output trusted, or alter response content.
-- [ ] T048 [TEST] [US4] Test a provider ignoring guidance and returning the checked-in invalid Risk Reviewer mapping still reaches unchanged participant rejection, `Risk Reviewer FAILED + Review INCOMPLETE`, and pending Critic/Coordinator.
+- [X] T037 [TEST] [US3] Test frozen `DynamicRequestContext` pairs one snapshot's exact serialized payload with its `RequestOutputSchema`, stores no mutable document/provider data, and is rebuilt independently per invocation.
+- [X] T038 [TEST] [US3] Test closed dispatch returns Risk Reviewer context for exact `risk_reviewer`, existing Critic context for exact `critic`, and `None` for Analyst, Solution Architect, and Coordinator; unknown roles retain existing failure before dispatch.
+- [X] T039 [TEST] [US3] Test the general request-schema helper returns each dynamic role's schema and preserves byte-equivalent strict static schemas for the three static roles without requiring dynamic payload keys.
+- [X] T040 [TEST] [US3] Extend `tests/unit/infrastructure/llm/test_openai_compatible.py` so a Risk Reviewer call retains the exact static payload-value-free system message and includes independently delimited snapshot payload and dynamic-schema JSON only in user/data content; include newline- and delimiter-looking values and prove they remain inside parsed JSON without creating extra boundary lines.
+- [X] T041 [TEST] [US3] Test Risk Reviewer `JSON_SCHEMA` uses a fresh provider document deeply equal to the delimited dynamic schema while retaining `risk_reviewer_output`, `strict=true`, configured sampling/max-token fields, and one request.
+- [X] T042 [TEST] [P] [US3] Test Risk Reviewer `JSON_OBJECT` carries dynamic schema only as untrusted data and retains exact `{type: json_object}` response format without an enforcement claim.
+- [X] T043 [TEST] [P] [US3] Test Risk Reviewer `PROMPT_ONLY` carries dynamic schema only as untrusted data and omits response format without an enforcement claim.
+- [X] T044 [TEST] [US3] Test Critic request bodies remain Slice 7.1-equivalent and Analyst, Solution Architect, and Coordinator remain Slice 7-equivalent across applicable modes; Risk Reviewer is removed only from the former static-role regression set.
+- [X] T045 [TEST] [US4] Test invalid Risk Reviewer snapshot/schema construction fails before credential extraction, header construction, HTTP invocation, and output observation; static-role serialization failures retain `LLMPayloadSerializationError`.
+- [X] T046 [TEST] [US4] Test schema-error `str`/`repr` and orchestrator mapping contain no payload marker, basis/scope value, target key, schema fragment, endpoint/profile/model detail, credential, raw output, or nested validation text.
+- [X] T047 [TEST] [US3] Test successful adapter parsing and observer invocation still return only the exact provider mapping; dynamic guidance does not instantiate RiskAssessment, mark output trusted, or alter response content.
+- [X] T048 [TEST] [US4] Test a provider ignoring guidance and returning the checked-in invalid Risk Reviewer mapping still reaches unchanged participant rejection, `Risk Reviewer FAILED + Review INCOMPLETE`, and pending Critic/Coordinator.
 
 ### Implementation
 
-- [ ] T049 [US3] Add `DynamicRequestContext` and the exact two-role/three-static-role dispatcher in `dynamic_schemas.py`, reusing existing Critic builders without a registry, reflection, or externally configurable rules.
-- [ ] T050 [US3] Refactor `OpenAICompatibleLLMAdapter.generate_structured` to consume the closed dynamic context for Risk Reviewer and Critic, use the existing serializer for static roles, and keep one common downstream transport path.
-- [ ] T051 [US3] Append the dynamic schema only to the delimited untrusted user/data message for both dynamic roles and reuse a fresh document from the same serialization only in `JSON_SCHEMA` provider guidance.
-- [ ] T052 [US4] Preserve existing mode, header, credential, timeout, HTTP, parsing, observer, and safe-error behavior while ensuring every dynamic construction failure occurs before side effects.
+- [X] T049 [US3] Add `DynamicRequestContext` and the exact two-role/three-static-role dispatcher in `dynamic_schemas.py`, reusing existing Critic builders without a registry, reflection, or externally configurable rules.
+- [X] T050 [US3] Refactor `OpenAICompatibleLLMAdapter.generate_structured` to consume the closed dynamic context for Risk Reviewer and Critic, use the existing serializer for static roles, and keep one common downstream transport path.
+- [X] T051 [US3] Append the dynamic schema only to the delimited untrusted user/data message for both dynamic roles and reuse a fresh document from the same serialization only in `JSON_SCHEMA` provider guidance.
+- [X] T052 [US4] Preserve existing mode, header, credential, timeout, HTTP, parsing, observer, and safe-error behavior while ensuring every dynamic construction failure occurs before side effects.
 
 ### Phase 3 checkpoint
 
-- [ ] T053 [GATE] Run focused dynamic-schema, adapter, integration, participant, and orchestrator tests plus the full deterministic suite, Ruff, and strict mypy; confirm one-snapshot Risk Reviewer behavior and unchanged Critic/static-role requests.
+- [X] T053 [GATE] Run focused dynamic-schema, adapter, integration, participant, and orchestrator tests plus the full deterministic suite, Ruff, and strict mypy; confirm one-snapshot Risk Reviewer behavior and unchanged Critic/static-role requests.
+
+### T037–T053 green evidence
+
+- Focused dynamic-schema, adapter, participant, integration, and orchestrator suite:
+  252 tests passed.
+- Full deterministic pytest suite passed with the two existing live tests skipped.
+- Repository-wide Ruff and strict mypy (29 source files) passed.
+- Risk Reviewer and Critic each read one payload snapshot and reuse one canonical schema
+  serialization across untrusted message data and provider guidance.
+- Static-role request bodies, transport behavior, credentials, observer behavior, and
+  safe error surfaces remain covered by unchanged regressions.
 
 ## Phase 4: Parity With Trusted Risk Reviewer Validation
 

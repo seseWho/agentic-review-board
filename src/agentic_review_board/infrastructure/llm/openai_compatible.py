@@ -12,8 +12,7 @@ from agentic_review_board.infrastructure.llm.config import (
     StructuredOutputMode,
 )
 from agentic_review_board.infrastructure.llm.dynamic_schemas import (
-    build_critic_payload_snapshot,
-    build_critic_request_output_schema,
+    build_dynamic_request_context,
     strict_json_schema_document,
 )
 from agentic_review_board.infrastructure.llm.errors import (
@@ -61,24 +60,23 @@ class OpenAICompatibleLLMAdapter:
         payload: Mapping[str, object],
     ) -> Mapping[str, object]:
         definition = get_role_prompt_definition(role)
-        request_output_schema = None
-        if definition.role.value == "critic":
-            critic_snapshot = build_critic_payload_snapshot(payload)
-            serialized_payload = critic_snapshot.serialized_payload
-            request_output_schema = build_critic_request_output_schema(critic_snapshot)
-        else:
+        dynamic_context = build_dynamic_request_context(
+            definition=definition,
+            payload=payload,
+        )
+        if dynamic_context is None:
             serialized_payload = self._serialize_payload(payload)
+            request_output_schema = None
+        else:
+            serialized_payload = dynamic_context.serialized_payload
+            request_output_schema = dynamic_context.output_schema
 
         system_content = (
             f"{definition.semantic_instruction}\n\n"
             f"{_OUTPUT_SCHEMA_LABEL}\n{definition.serialized_schema}\n\n"
             f"{_OUTPUT_INSTANCE_INSTRUCTION}"
         )
-        user_content = (
-            f"{_UNTRUSTED_PAYLOAD_BEGIN}\n"
-            f"{serialized_payload}\n"
-            f"{_UNTRUSTED_PAYLOAD_END}"
-        )
+        user_content = f"{_UNTRUSTED_PAYLOAD_BEGIN}\n{serialized_payload}\n{_UNTRUSTED_PAYLOAD_END}"
         if request_output_schema is not None:
             user_content = (
                 f"{user_content}\n\n"
@@ -122,9 +120,7 @@ class OpenAICompatibleLLMAdapter:
             "Accept": "application/json",
         }
         if self.profile.api_key is not None:
-            headers["Authorization"] = (
-                f"Bearer {self.profile.api_key.get_secret_value()}"
-            )
+            headers["Authorization"] = f"Bearer {self.profile.api_key.get_secret_value()}"
 
         try:
             response = self.client.post(

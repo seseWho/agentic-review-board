@@ -79,9 +79,7 @@ def minimal_critic_payload() -> dict[str, object]:
             },
         }
     )
-    risk_assessment = RiskAssessment.model_validate(
-        {"risks": [], "overall_observations": []}
-    )
+    risk_assessment = RiskAssessment.model_validate({"risks": [], "overall_observations": []})
     return {
         "review_input": review_input.model_dump(mode="json"),
         "problem_analysis": problem_analysis.model_dump(mode="json"),
@@ -111,12 +109,8 @@ def full_critic_payload() -> dict[str, object]:
             ],
             "constraints": [{"id": "CON-001", "text": "Must work offline."}],
             "assumptions": [{"id": "ASM-001", "text": "Drivers support ARM64."}],
-            "missing_information": [
-                {"id": "MISS-001", "text": "Measured ARM64 memory usage."}
-            ],
-            "uncertainties": [
-                {"id": "UNC-001", "text": "ARM64 performance degradation."}
-            ],
+            "missing_information": [{"id": "MISS-001", "text": "Measured ARM64 memory usage."}],
+            "uncertainties": [{"id": "UNC-001", "text": "ARM64 performance degradation."}],
         }
     )
     solution_alternatives = SolutionAlternatives.model_validate(
@@ -218,15 +212,11 @@ def test_snapshot_accepts_exact_four_artifact_payload(payload_factory: object) -
     assert set(payload) == CRITIC_PAYLOAD_KEYS
     assert json.loads(snapshot.serialized_payload) == payload
     assert snapshot.review_input == ReviewInput.model_validate(payload["review_input"])
-    assert snapshot.problem_analysis == ProblemAnalysis.model_validate(
-        payload["problem_analysis"]
-    )
+    assert snapshot.problem_analysis == ProblemAnalysis.model_validate(payload["problem_analysis"])
     assert snapshot.solution_alternatives == SolutionAlternatives.model_validate(
         payload["solution_alternatives"]
     )
-    assert snapshot.risk_assessment == RiskAssessment.model_validate(
-        payload["risk_assessment"]
-    )
+    assert snapshot.risk_assessment == RiskAssessment.model_validate(payload["risk_assessment"])
 
 
 @pytest.mark.parametrize(
@@ -421,9 +411,7 @@ def test_solution_catalog_covers_canonical_alternatives_and_generation_notes() -
         CriticReferenceKind.BLOCKING_MISSING_INFORMATION,
         CriticReferenceKind.BLOCKING_UNCERTAINTY,
     ]
-    alternative_references = reference_by_kind(
-        solution_references, CriticReferenceKind.ALTERNATIVE
-    )
+    alternative_references = reference_by_kind(solution_references, CriticReferenceKind.ALTERNATIVE)
     assert [(reference.item_id, reference.value) for reference in alternative_references] == [
         ("ALT-001", "Incremental migration"),
         ("ALT-002", "Cross-platform rewrite"),
@@ -479,8 +467,7 @@ def test_solution_catalog_handles_zero_alternatives_and_local_ambiguity() -> Non
     advantages = reference_by_kind(references, CriticReferenceKind.ADVANTAGE)
 
     assert [
-        (reference.item_id, reference.value, reference.target_key)
-        for reference in advantages
+        (reference.item_id, reference.value, reference.target_key) for reference in advantages
     ] == [
         (
             "ALT-002",
@@ -521,12 +508,8 @@ def test_risk_catalog_covers_canonical_and_optional_risk_fields() -> None:
 
     payload = full_critic_payload()
     payload["risk_assessment"]["risks"][0]["residual_uncertainty"] = None  # type: ignore[index]
-    without_optional = build_allowed_critic_references(
-        build_critic_payload_snapshot(payload)
-    )
-    assert not reference_by_kind(
-        without_optional, CriticReferenceKind.RESIDUAL_UNCERTAINTY
-    )
+    without_optional = build_allowed_critic_references(build_critic_payload_snapshot(payload))
+    assert not reference_by_kind(without_optional, CriticReferenceKind.RESIDUAL_UNCERTAINTY)
 
 
 def test_catalog_and_payload_order_are_deterministic() -> None:
@@ -590,9 +573,9 @@ def test_catalog_normalization_deduplicates_or_excludes_by_semantic_target() -> 
     )
 
     assert normalize_allowed_critic_references((first, exact_duplicate)) == (first,)
-    assert normalize_allowed_critic_references(
-        (first, safe_other, ambiguous_target)
-    ) == (safe_other,)
+    assert normalize_allowed_critic_references((first, safe_other, ambiguous_target)) == (
+        safe_other,
+    )
     with pytest.raises(LLMRequestSchemaError):
         normalize_allowed_critic_references(())
 
@@ -607,7 +590,9 @@ def test_idless_duplicate_finding_is_excluded_but_unique_id_pair_remains() -> No
     references = build_allowed_critic_references(build_critic_payload_snapshot(payload))
     uncertainties = reference_by_kind(references, CriticReferenceKind.UNCERTAINTY)
 
-    assert [(reference.item_id, reference.value, reference.target_key) for reference in uncertainties] == [
+    assert [
+        (reference.item_id, reference.value, reference.target_key) for reference in uncertainties
+    ] == [
         (
             "UNC-002",
             "Duplicated uncertainty.",
@@ -656,14 +641,11 @@ def test_catalog_never_contains_observed_illegal_reference_shapes() -> None:
 
     assert not any(
         reference.source is CriticReferenceSource.PROBLEM_ANALYSIS
-        and reference.kind
-        in {CriticReferenceKind.STATED_FACT, CriticReferenceKind.CONTEXT}
+        and reference.kind in {CriticReferenceKind.STATED_FACT, CriticReferenceKind.CONTEXT}
         for reference in references
     )
     assert all(
-        reference.item_id is None
-        for reference in references
-        if reference.kind in value_only_kinds
+        reference.item_id is None for reference in references if reference.kind in value_only_kinds
     )
 
 
@@ -786,22 +768,26 @@ def test_dynamic_schema_preserves_strict_outer_critical_review_contract() -> Non
     criticism = as_json_object(definitions["Criticism"])
     criticism_properties = as_json_object(criticism["properties"])
     target_reference = as_json_object(criticism_properties["target_reference"])
-    target_branches = [as_json_object(branch) for branch in as_json_array(target_reference["anyOf"])]
+    target_branches = [
+        as_json_object(branch) for branch in as_json_array(target_reference["anyOf"])
+    ]
     assert {branch.get("type") for branch in target_branches} >= {None, "null"}
     root_properties = as_json_object(schema["properties"])
     assert all(
-        "minItems" not in as_json_object(collection)
-        for collection in root_properties.values()
+        "minItems" not in as_json_object(collection) for collection in root_properties.values()
     )
-    assert CriticalReview.model_validate(
-        {
-            "criticisms": [],
-            "validated_points": [],
-            "missing_alternatives": [],
-            "contradictions": [],
-            "unresolved_issues": [],
-        }
-    ) == CriticalReview()
+    assert (
+        CriticalReview.model_validate(
+            {
+                "criticisms": [],
+                "validated_points": [],
+                "missing_alternatives": [],
+                "contradictions": [],
+                "unresolved_issues": [],
+            }
+        )
+        == CriticalReview()
+    )
 
 
 @pytest.mark.parametrize(
@@ -809,7 +795,6 @@ def test_dynamic_schema_preserves_strict_outer_critical_review_contract() -> Non
     [
         LLMRole.ANALYST,
         LLMRole.SOLUTION_ARCHITECT,
-        LLMRole.RISK_REVIEWER,
         LLMRole.COORDINATOR,
     ],
 )
@@ -919,13 +904,9 @@ def test_schema_construction_owns_every_mutable_document() -> None:
 def high_cardinality_critic_payload() -> dict[str, object]:
     payload = full_critic_payload()
     review_input = as_json_object(payload["review_input"])
-    review_input["constraints"] = [
-        f"Input constraint {index}." for index in range(25)
-    ]
+    review_input["constraints"] = [f"Input constraint {index}." for index in range(25)]
     review_input["context"] = [f"Context value {index}." for index in range(25)]
-    review_input["stated_facts"] = [
-        f"Stated fact {index}." for index in range(25)
-    ]
+    review_input["stated_facts"] = [f"Stated fact {index}." for index in range(25)]
     problem_analysis = as_json_object(payload["problem_analysis"])
     for field, prefix in (
         ("facts", "FACT"),
@@ -955,12 +936,10 @@ def high_cardinality_critic_payload() -> dict[str, object]:
             ]
     notes = as_json_object(solution_alternatives["generation_notes"])
     notes["blocking_missing_information"] = [
-        {"id": f"BMISS-{index:03d}", "text": f"Blocking missing {index}."}
-        for index in range(20)
+        {"id": f"BMISS-{index:03d}", "text": f"Blocking missing {index}."} for index in range(20)
     ]
     notes["blocking_uncertainties"] = [
-        {"id": f"BUNC-{index:03d}", "text": f"Blocking uncertainty {index}."}
-        for index in range(20)
+        {"id": f"BUNC-{index:03d}", "text": f"Blocking uncertainty {index}."} for index in range(20)
     ]
     risk_assessment = as_json_object(payload["risk_assessment"])
     risk_template = as_json_object(as_json_array(risk_assessment["risks"])[0])
@@ -1127,9 +1106,7 @@ def test_generated_contradiction_sides_have_exact_trusted_statement_parity() -> 
 
 def test_2026_08_29_invalid_reference_fixture_is_excluded_and_rejected() -> None:
     fixture_path = (
-        Path(__file__).parents[3]
-        / "fixtures"
-        / "critic_2026-08-29_invalid_references.json"
+        Path(__file__).parents[3] / "fixtures" / "critic_2026-08-29_invalid_references.json"
     )
     fixture = as_json_object(json.loads(fixture_path.read_text(encoding="utf-8")))
     payload = as_json_object(fixture["payload"])

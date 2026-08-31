@@ -1,4 +1,6 @@
+import json
 from collections.abc import Mapping
+from pathlib import Path
 
 import pytest
 
@@ -148,9 +150,7 @@ def risk_response() -> dict[str, object]:
 def zero_risk_response() -> dict[str, object]:
     return {
         "risks": [],
-        "overall_observations": [
-            "No material risk is justified by the current trusted inputs."
-        ],
+        "overall_observations": ["No material risk is justified by the current trusted inputs."],
     }
 
 
@@ -244,12 +244,8 @@ def coordinator_response_for_payload(
     return {
         "situation_summary": "The current artifacts support a bounded conclusion.",
         "ranked_alternatives": ranking,
-        "recommendation_outcome": (
-            "RECOMMENDED" if has_alternatives else "INSUFFICIENT_EVIDENCE"
-        ),
-        "preferred_alternative_id": (
-            ranking[0]["alternative_id"] if has_alternatives else None
-        ),
+        "recommendation_outcome": ("RECOMMENDED" if has_alternatives else "INSUFFICIENT_EVIDENCE"),
+        "preferred_alternative_id": (ranking[0]["alternative_id"] if has_alternatives else None),
         "conclusion_rationale": "The conclusion follows the current evidence.",
         "principal_risks": [],
         "unresolved_questions": [],
@@ -651,6 +647,53 @@ def test_risk_reviewer_output_validation_failure_is_mapped_fail_closed() -> None
         "solution_architect",
         "risk_reviewer",
     ]
+    assert_critic_pending(result)
+    assert_coordinator_pending(result)
+
+
+def test_checked_in_invalid_risk_reference_remains_fail_closed() -> None:
+    fixture_path = (
+        Path(__file__).parents[1] / "fixtures" / "risk_reviewer_2026-08-30_invalid_references.json"
+    )
+    fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+    review_input = fixture["review_input"]
+    problem_analysis = fixture["problem_analysis"]
+    solution_alternatives = fixture["solution_alternatives"]
+    invalid_reference = fixture["observed_invalid_reference"]
+    assert isinstance(review_input, dict)
+    assert isinstance(problem_analysis, dict)
+    assert isinstance(solution_alternatives, dict)
+    assert isinstance(invalid_reference, dict)
+    invalid_output = {
+        "risks": [
+            {
+                "id": "RISK-INVALID-REFERENCE",
+                "description": "Observed invalid cross-kind reference.",
+                "affected_scope": {"kind": "OVERALL", "alternative_ids": []},
+                "severity": "MEDIUM",
+                "basis": [invalid_reference],
+            }
+        ],
+        "overall_observations": [],
+    }
+    llm = RecordingLLM(
+        {
+            "analyst": problem_analysis,
+            "solution_architect": solution_alternatives,
+            "risk_reviewer": invalid_output,
+        }
+    )
+    review = Review.create(ReviewInput.model_validate(review_input))
+
+    result = orchestrator_with(llm).execute(review)
+
+    reviewer_stage = result.stage(StageIdentity.RISK_REVIEWER)
+    assert result.status is ReviewStatus.INCOMPLETE
+    assert reviewer_stage.status is StageStatus.FAILED
+    assert reviewer_stage.output is None
+    assert reviewer_stage.error is not None
+    assert reviewer_stage.error.kind is ReviewErrorKind.OUTPUT_VALIDATION
+    assert reviewer_stage.error.message == "Risk Reviewer output validation failed"
     assert_critic_pending(result)
     assert_coordinator_pending(result)
 
@@ -1082,9 +1125,7 @@ def test_critic_failure_does_not_contaminate_next_fresh_review() -> None:
     )
     orchestrator = orchestrator_with(llm)
 
-    first_result = orchestrator.execute(
-        create_named_review("Review expected to fail at Critic.")
-    )
+    first_result = orchestrator.execute(create_named_review("Review expected to fail at Critic."))
     first_analyst = first_result.stage(StageIdentity.ANALYST)
     first_architect = first_result.stage(StageIdentity.SOLUTION_ARCHITECT)
     first_reviewer = first_result.stage(StageIdentity.RISK_REVIEWER)
@@ -1117,8 +1158,7 @@ def test_critic_failure_does_not_contaminate_next_fresh_review() -> None:
     assert second_critic.inputs.review_input is not first_critic.inputs.review_input
     assert second_critic.inputs.problem_analysis is not first_critic.inputs.problem_analysis
     assert (
-        second_critic.inputs.solution_alternatives
-        is not first_critic.inputs.solution_alternatives
+        second_critic.inputs.solution_alternatives is not first_critic.inputs.solution_alternatives
     )
     assert second_critic.inputs.risk_assessment is not first_critic.inputs.risk_assessment
     assert second_critic.output is not None
@@ -1142,6 +1182,7 @@ def test_coordinator_output_validation_failure_is_mapped_fail_closed() -> None:
     assert coordinator.error.kind is ReviewErrorKind.OUTPUT_VALIDATION
     assert coordinator.error.message == "Coordinator output validation failed"
 
+
 def test_coordinator_execution_failure_hides_raw_detail() -> None:
     llm = RecordingLLM(
         successful_responses(),
@@ -1158,6 +1199,7 @@ def test_coordinator_execution_failure_hides_raw_detail() -> None:
     assert coordinator.error.kind is ReviewErrorKind.EXECUTION
     assert coordinator.error.message == "Coordinator execution failed"
     assert "provider secret coordinator detail" not in coordinator.error.message
+
 
 def test_coordinator_invariant_failure_outside_call_boundary_propagates(
     monkeypatch: pytest.MonkeyPatch,
@@ -1213,15 +1255,11 @@ def test_orchestrator_reuses_exact_trusted_final_review(
         assessment: RiskAssessment,
         critique: CriticalReview,
     ) -> FinalReview:
-        received.append(
-            (review_input, analysis, alternatives, assessment, critique)
-        )
+        received.append((review_input, analysis, alternatives, assessment, critique))
         return trusted
 
     monkeypatch.setattr(Coordinator, "coordinate", exact_coordinate)
-    result = orchestrator_with(RecordingLLM(successful_responses())).execute(
-        create_review()
-    )
+    result = orchestrator_with(RecordingLLM(successful_responses())).execute(create_review())
 
     analyst = result.stage(StageIdentity.ANALYST)
     architect = result.stage(StageIdentity.SOLUTION_ARCHITECT)
@@ -1274,9 +1312,6 @@ def test_coordinator_failure_does_not_contaminate_fresh_review() -> None:
     assert second_coordinator.status is StageStatus.COMPLETED
     assert isinstance(second_coordinator.inputs, CoordinatorStageInput)
     assert second_coordinator.inputs.review_input is second_result.review_input
-    assert (
-        second_coordinator.inputs.review_input
-        is not first_coordinator.inputs.review_input
-    )
+    assert second_coordinator.inputs.review_input is not first_coordinator.inputs.review_input
     assert isinstance(second_coordinator.output, FinalReview)
     assert second_coordinator.error is None

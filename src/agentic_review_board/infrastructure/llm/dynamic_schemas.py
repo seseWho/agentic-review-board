@@ -5,6 +5,7 @@ from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass
+from itertools import permutations
 from typing import NoReturn
 
 from agentic_review_board.domain.analysis import (
@@ -25,6 +26,8 @@ from agentic_review_board.domain.risks import (
     ProblemAnalysisFindingKind,
     ReviewInputBasisReference,
     RiskAssessment,
+    RiskScope,
+    RiskScopeKind,
     SolutionAlternativeBasisReference,
     SolutionAlternativeCharacteristicKind,
 )
@@ -361,6 +364,30 @@ def normalize_allowed_risk_bases(
     )
 
 
+def build_allowed_risk_scopes(
+    snapshot: RiskReviewerPayloadSnapshot,
+) -> tuple[RiskScope, ...]:
+    try:
+        alternative_ids = tuple(
+            alternative.id for alternative in snapshot.solution_alternatives.alternatives
+        )
+        scopes = [RiskScope(kind=RiskScopeKind.OVERALL)]
+        for length in range(1, len(alternative_ids) + 1):
+            scopes.extend(
+                RiskScope(
+                    kind=RiskScopeKind.ALTERNATIVES,
+                    alternative_ids=alternative_ids_permutation,
+                )
+                for alternative_ids_permutation in permutations(
+                    alternative_ids,
+                    length,
+                )
+            )
+        return tuple(scopes)
+    except Exception as error:
+        raise LLMRequestSchemaError() from error
+
+
 _CRITIC_PAYLOAD_KEYS = frozenset(
     {
         "review_input",
@@ -432,6 +459,12 @@ class RequestOutputSchema:
             return document
         except Exception as error:
             raise LLMRequestSchemaError() from error
+
+
+@dataclass(frozen=True, slots=True)
+class DynamicRequestContext:
+    serialized_payload: str
+    output_schema: RequestOutputSchema
 
 
 def build_critic_payload_snapshot(
@@ -813,6 +846,171 @@ def strict_json_schema_document(schema: Mapping[str, object]) -> dict[str, objec
     return result
 
 
+def _closed_exact_object_branch(
+    wire_object: Mapping[str, object],
+) -> dict[str, object]:
+    properties: dict[str, object] = {}
+    for key, value in wire_object.items():
+        if not isinstance(key, str) or not key:
+            raise TypeError("exact branch property name is invalid")
+        if isinstance(value, str):
+            properties[key] = {"const": value}
+            continue
+        if key != "value" or not isinstance(value, dict):
+            raise TypeError("exact basis branch contains an unsupported value")
+        if tuple(value) != ("source", "kind", "value") or not all(
+            isinstance(component, str) for component in value.values()
+        ):
+            raise ValueError("structured constraint wire value is invalid")
+        nested_properties = {
+            nested_key: {"const": nested_value} for nested_key, nested_value in value.items()
+        }
+        properties[key] = {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": nested_properties,
+            "required": list(nested_properties),
+        }
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": properties,
+        "required": list(properties),
+    }
+
+
+def build_risk_basis_schema_branch(
+    basis: AllowedRiskBasis,
+) -> dict[str, object]:
+    try:
+        if not isinstance(basis, AllowedRiskBasis):
+            raise TypeError("allowed risk basis is invalid")
+        return _closed_exact_object_branch(basis.as_wire_object())
+    except LLMRequestSchemaError:
+        raise
+    except Exception as error:
+        raise LLMRequestSchemaError() from error
+
+
+def build_risk_scope_schema_branch(scope: RiskScope) -> dict[str, object]:
+    try:
+        if not isinstance(scope, RiskScope):
+            raise TypeError("allowed risk scope is invalid")
+        wire_object = scope.model_dump(mode="json")
+        if tuple(wire_object) != ("kind", "alternative_ids"):
+            raise ValueError("risk scope wire shape is invalid")
+        kind = wire_object["kind"]
+        alternative_ids = wire_object["alternative_ids"]
+        if not isinstance(kind, str) or not isinstance(alternative_ids, list):
+            raise TypeError("risk scope wire values are invalid")
+        if any(not isinstance(alternative_id, str) for alternative_id in alternative_ids):
+            raise TypeError("risk scope alternative id is invalid")
+        return {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "kind": {"const": kind},
+                "alternative_ids": {"const": list(alternative_ids)},
+            },
+            "required": ["kind", "alternative_ids"],
+        }
+    except LLMRequestSchemaError:
+        raise
+    except Exception as error:
+        raise LLMRequestSchemaError() from error
+
+
+def narrow_risk_schema(
+    base_schema: Mapping[str, object],
+    bases: Iterable[AllowedRiskBasis],
+    scopes: Iterable[RiskScope],
+) -> dict[str, object]:
+    try:
+        owned_bases = tuple(bases)
+        owned_scopes = tuple(scopes)
+        if not owned_scopes:
+            raise ValueError("allowed risk scope catalog is empty")
+        if owned_bases != normalize_allowed_risk_bases(owned_bases):
+            raise ValueError("allowed risk basis catalog is not normalized")
+        overall_scope = RiskScope(kind=RiskScopeKind.OVERALL)
+        singleton_ids = tuple(
+            scope.alternative_ids[0]
+            for scope in owned_scopes
+            if scope.kind is RiskScopeKind.ALTERNATIVES and len(scope.alternative_ids) == 1
+        )
+        expected_scopes = [overall_scope]
+        for length in range(1, len(singleton_ids) + 1):
+            expected_scopes.extend(
+                RiskScope(
+                    kind=RiskScopeKind.ALTERNATIVES,
+                    alternative_ids=alternative_ids_permutation,
+                )
+                for alternative_ids_permutation in permutations(singleton_ids, length)
+            )
+        if owned_scopes != tuple(expected_scopes):
+            raise ValueError("allowed risk scope catalog is incomplete or out of order")
+
+        result = strict_json_schema_document(base_schema)
+        root_properties = result.get("properties")
+        if not isinstance(root_properties, dict):
+            raise TypeError("RiskAssessment properties are absent")
+        risks_schema = root_properties.get("risks")
+        if not isinstance(risks_schema, dict) or risks_schema.get("type") != "array":
+            raise TypeError("RiskAssessment risks schema is invalid")
+
+        definitions = result.get("$defs")
+        if not isinstance(definitions, dict):
+            raise TypeError("RiskAssessment definitions are absent")
+        risk_schema = definitions.get("Risk")
+        if not isinstance(risk_schema, dict) or risk_schema.get("type") != "object":
+            raise TypeError("Risk definition is invalid")
+        risk_properties = risk_schema.get("properties")
+        if not isinstance(risk_properties, dict):
+            raise TypeError("Risk properties are absent")
+        basis_schema = risk_properties.get("basis")
+        if not isinstance(basis_schema, dict) or basis_schema.get("type") != "array":
+            raise TypeError("Risk basis schema is invalid")
+        if not isinstance(basis_schema.get("items"), dict):
+            raise TypeError("Risk basis item schema is invalid")
+        affected_scope = risk_properties.get("affected_scope")
+        if not isinstance(affected_scope, dict) or affected_scope.get("$ref") != (
+            "#/$defs/RiskScope"
+        ):
+            raise ValueError("Risk affected scope reference is invalid")
+        if not isinstance(definitions.get("RiskScope"), dict):
+            raise TypeError("RiskScope definition is invalid")
+
+        if owned_bases:
+            basis_schema["items"] = {
+                "oneOf": [build_risk_basis_schema_branch(basis) for basis in owned_bases]
+            }
+            basis_schema["minItems"] = 1
+        else:
+            risks_schema["maxItems"] = 0
+
+        definitions["RiskScope"] = {
+            "oneOf": [build_risk_scope_schema_branch(scope) for scope in owned_scopes]
+        }
+        return result
+    except LLMRequestSchemaError:
+        raise
+    except Exception as error:
+        raise LLMRequestSchemaError() from error
+
+
+def build_dynamic_risk_schema(
+    snapshot: RiskReviewerPayloadSnapshot,
+) -> dict[str, object]:
+    try:
+        bases = build_allowed_risk_bases(snapshot)
+        scopes = build_allowed_risk_scopes(snapshot)
+        return narrow_risk_schema(RiskAssessment.model_json_schema(), bases, scopes)
+    except LLMRequestSchemaError:
+        raise
+    except Exception as error:
+        raise LLMRequestSchemaError() from error
+
+
 def narrow_critic_schema(
     base_schema: Mapping[str, object],
     references: Iterable[AllowedCriticReference],
@@ -886,17 +1084,58 @@ def build_critic_request_output_schema(
         raise LLMRequestSchemaError() from error
 
 
+def build_risk_reviewer_request_output_schema(
+    snapshot: RiskReviewerPayloadSnapshot,
+) -> RequestOutputSchema:
+    try:
+        return _serialize_request_schema(build_dynamic_risk_schema(snapshot))
+    except LLMRequestSchemaError:
+        raise
+    except Exception as error:
+        raise LLMRequestSchemaError() from error
+
+
+def build_dynamic_request_context(
+    *,
+    definition: RolePromptDefinition,
+    payload: Mapping[str, object],
+) -> DynamicRequestContext | None:
+    try:
+        role = definition.role.value
+        if role == "risk_reviewer":
+            risk_snapshot = build_risk_reviewer_payload_snapshot(payload)
+            return DynamicRequestContext(
+                serialized_payload=risk_snapshot.serialized_payload,
+                output_schema=build_risk_reviewer_request_output_schema(risk_snapshot),
+            )
+        if role == "critic":
+            critic_snapshot = build_critic_payload_snapshot(payload)
+            return DynamicRequestContext(
+                serialized_payload=critic_snapshot.serialized_payload,
+                output_schema=build_critic_request_output_schema(critic_snapshot),
+            )
+        if role in {"analyst", "solution_architect", "coordinator"}:
+            return None
+        raise ValueError("dynamic request role is invalid")
+    except LLMRequestSchemaError:
+        raise
+    except Exception as error:
+        raise LLMRequestSchemaError() from error
+
+
 def build_request_output_schema(
     *,
     definition: RolePromptDefinition,
     payload: Mapping[str, object],
 ) -> RequestOutputSchema:
     try:
-        if definition.role.value == "critic":
-            snapshot = build_critic_payload_snapshot(payload)
-            return build_critic_request_output_schema(snapshot)
-        else:
-            document = strict_json_schema_document(definition.output_model.model_json_schema())
+        context = build_dynamic_request_context(
+            definition=definition,
+            payload=payload,
+        )
+        if context is not None:
+            return context.output_schema
+        document = strict_json_schema_document(definition.output_model.model_json_schema())
         return _serialize_request_schema(document)
     except LLMRequestSchemaError:
         raise

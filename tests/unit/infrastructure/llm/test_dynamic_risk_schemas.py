@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import Iterator, Mapping
 from copy import deepcopy
+from dataclasses import FrozenInstanceError
 from pathlib import Path
 
 import pytest
@@ -13,18 +14,31 @@ from agentic_review_board.domain.risks import (
     ProblemAnalysisBasisReference,
     ProblemAnalysisFindingKind,
     ReviewInputBasisReference,
+    RiskAssessment,
+    RiskScope,
+    RiskScopeKind,
     SolutionAlternativeBasisReference,
     SolutionAlternativeCharacteristicKind,
 )
 from agentic_review_board.domain.solutions import ConstraintReference, SolutionAlternatives
 from agentic_review_board.infrastructure.llm.dynamic_schemas import (
     AllowedRiskBasis,
+    DynamicRequestContext,
     RiskReviewerPayloadSnapshot,
     build_allowed_risk_bases,
+    build_allowed_risk_scopes,
+    build_dynamic_request_context,
+    build_dynamic_risk_schema,
+    build_request_output_schema,
+    build_risk_basis_schema_branch,
     build_risk_reviewer_payload_snapshot,
+    build_risk_scope_schema_branch,
+    narrow_risk_schema,
     normalize_allowed_risk_bases,
+    strict_json_schema_document,
 )
 from agentic_review_board.infrastructure.llm.errors import LLMRequestSchemaError
+from agentic_review_board.infrastructure.llm.prompts import get_role_prompt_definition
 
 RISK_REVIEWER_PAYLOAD_KEYS = {
     "review_input",
@@ -953,3 +967,394 @@ def test_invalid_reference_fixture_is_checked_in_and_excluded() -> None:
     snapshot = build_risk_reviewer_payload_snapshot(document)
     wires = [basis.as_wire_object() for basis in build_allowed_risk_bases(snapshot)]
     assert observed not in wires
+
+
+def three_alternative_risk_reviewer_payload() -> dict[str, object]:
+    payload = full_risk_reviewer_payload()
+    solution_alternatives = payload["solution_alternatives"]
+    assert isinstance(solution_alternatives, dict)
+    alternatives = solution_alternatives["alternatives"]
+    assert isinstance(alternatives, list)
+    third = deepcopy(alternatives[0])
+    assert isinstance(third, dict)
+    third.update(
+        {
+            "id": "ALT-003",
+            "name": "Hybrid migration",
+            "description": "Use a hybrid migration path.",
+        }
+    )
+    alternatives.append(third)
+    return payload
+
+
+def high_cardinality_risk_reviewer_payload(
+    values_per_unbounded_collection: int = 25,
+) -> dict[str, object]:
+    payload = three_alternative_risk_reviewer_payload()
+    review_input = payload["review_input"]
+    problem_analysis = payload["problem_analysis"]
+    solution_alternatives = payload["solution_alternatives"]
+    assert isinstance(review_input, dict)
+    assert isinstance(problem_analysis, dict)
+    assert isinstance(solution_alternatives, dict)
+
+    review_input["constraints"] = [
+        f"Constraint {index:02d} ñ." for index in range(values_per_unbounded_collection)
+    ]
+    review_input["context"] = [
+        f"Context {index:02d}." for index in range(values_per_unbounded_collection)
+    ]
+    review_input["stated_facts"] = [
+        f"Stated fact {index:02d}." for index in range(values_per_unbounded_collection)
+    ]
+    finding_families = (
+        ("facts", "FACT", True),
+        ("constraints", "CON", False),
+        ("assumptions", "ASM", False),
+        ("missing_information", "MISS", False),
+        ("uncertainties", "UNC", False),
+    )
+    for field, prefix, is_fact in finding_families:
+        findings = [
+            {
+                "id": f"{prefix}-{index:03d}",
+                "text": f"{field} value {index:02d}.",
+            }
+            for index in range(values_per_unbounded_collection)
+        ]
+        if is_fact:
+            for finding in findings:
+                finding["source_ref"] = "description"
+        problem_analysis[field] = findings
+
+    alternatives = solution_alternatives["alternatives"]
+    assert isinstance(alternatives, list)
+    constraints = review_input["constraints"]
+    assert isinstance(constraints, list)
+    for alternative in alternatives:
+        assert isinstance(alternative, dict)
+        alternative_id = alternative["id"]
+        for field in ("advantages", "disadvantages", "assumptions"):
+            alternative[field] = [
+                f"{alternative_id} {field} {index:02d}."
+                for index in range(values_per_unbounded_collection)
+            ]
+        alternative["relevant_constraints"] = [
+            {"source": "REVIEW_INPUT", "kind": "TEXT", "value": value} for value in constraints
+        ]
+    return payload
+
+
+def test_allowed_scope_catalog_has_exact_counts_and_permutation_order() -> None:
+    snapshots = (
+        build_risk_reviewer_payload_snapshot(minimal_risk_reviewer_payload()),
+        build_risk_reviewer_payload_snapshot(full_risk_reviewer_payload()),
+        build_risk_reviewer_payload_snapshot(three_alternative_risk_reviewer_payload()),
+    )
+
+    zero, two, three = tuple(build_allowed_risk_scopes(item) for item in snapshots)
+
+    assert [len(zero), len(two), len(three)] == [1, 5, 16]
+    assert zero == (RiskScope(kind=RiskScopeKind.OVERALL),)
+    assert [scope.alternative_ids for scope in two] == [
+        (),
+        ("ALT-001",),
+        ("ALT-002",),
+        ("ALT-001", "ALT-002"),
+        ("ALT-002", "ALT-001"),
+    ]
+    assert [scope.alternative_ids for scope in three[-6:]] == [
+        ("ALT-001", "ALT-002", "ALT-003"),
+        ("ALT-001", "ALT-003", "ALT-002"),
+        ("ALT-002", "ALT-001", "ALT-003"),
+        ("ALT-002", "ALT-003", "ALT-001"),
+        ("ALT-003", "ALT-001", "ALT-002"),
+        ("ALT-003", "ALT-002", "ALT-001"),
+    ]
+    assert len({scope.alternative_ids for scope in three}) == 16
+    assert all(len(scope.alternative_ids) == len(set(scope.alternative_ids)) for scope in three)
+
+
+def test_exact_risk_basis_branches_are_closed_fresh_and_non_cartesian() -> None:
+    snapshot = build_risk_reviewer_payload_snapshot(full_risk_reviewer_payload())
+    bases = build_allowed_risk_bases(snapshot)
+
+    review_branch = build_risk_basis_schema_branch(bases[0])
+    assert review_branch == {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "source": {"const": "REVIEW_INPUT"},
+            "field": {"const": "description"},
+            "value": {"const": "Review a local migration."},
+        },
+        "required": ["source", "field", "value"],
+    }
+    advantage_basis = next(
+        basis
+        for basis in bases
+        if isinstance(basis.reference, SolutionAlternativeBasisReference)
+        and basis.reference.alternative_id == "ALT-002"
+        and basis.reference.characteristic is SolutionAlternativeCharacteristicKind.ADVANTAGE
+    )
+    assert build_risk_basis_schema_branch(advantage_basis)["properties"] == {
+        "source": {"const": "SOLUTION_ALTERNATIVE"},
+        "alternative_id": {"const": "ALT-002"},
+        "characteristic": {"const": "ADVANTAGE"},
+        "value": {"const": "Broadens platform options."},
+    }
+    constraint_basis = next(
+        basis
+        for basis in bases
+        if isinstance(basis.reference, SolutionAlternativeBasisReference)
+        and basis.reference.characteristic
+        is SolutionAlternativeCharacteristicKind.RELEVANT_CONSTRAINT
+    )
+    constraint_branch = build_risk_basis_schema_branch(constraint_basis)
+    assert constraint_branch["properties"] == {
+        "source": {"const": "SOLUTION_ALTERNATIVE"},
+        "alternative_id": {"const": "ALT-001"},
+        "characteristic": {"const": "RELEVANT_CONSTRAINT"},
+        "value": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "source": {"const": "REVIEW_INPUT"},
+                "kind": {"const": "TEXT"},
+                "value": {"const": "Must work offline."},
+            },
+            "required": ["source", "kind", "value"],
+        },
+    }
+    first = build_risk_basis_schema_branch(constraint_basis)
+    second = build_risk_basis_schema_branch(constraint_basis)
+    assert first == second
+    assert first is not second
+    assert first["properties"] is not second["properties"]
+
+
+def test_problem_analysis_branch_omits_absent_optional_id_entirely() -> None:
+    payload = full_risk_reviewer_payload()
+    problem_analysis = payload["problem_analysis"]
+    assert isinstance(problem_analysis, dict)
+    problem_analysis["assumptions"] = [{"id": None, "text": "Exact ID-less assumption."}]
+    basis = next(
+        candidate
+        for candidate in build_allowed_risk_bases(build_risk_reviewer_payload_snapshot(payload))
+        if isinstance(candidate.reference, ProblemAnalysisBasisReference)
+        and candidate.reference.kind is ProblemAnalysisFindingKind.ASSUMPTION
+    )
+
+    branch = build_risk_basis_schema_branch(basis)
+
+    assert list(branch["properties"]) == ["source", "kind", "text"]  # type: ignore[arg-type]
+    assert branch["required"] == ["source", "kind", "text"]
+    assert "null" not in json.dumps(branch)
+
+
+def test_exact_scope_branch_uses_array_const_and_fresh_ownership() -> None:
+    scope = RiskScope(
+        kind=RiskScopeKind.ALTERNATIVES,
+        alternative_ids=("ALT-002", "ALT-001"),
+    )
+
+    first = build_risk_scope_schema_branch(scope)
+    second = build_risk_scope_schema_branch(scope)
+
+    assert first == {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "kind": {"const": "ALTERNATIVES"},
+            "alternative_ids": {"const": ["ALT-002", "ALT-001"]},
+        },
+        "required": ["kind", "alternative_ids"],
+    }
+    assert first == second
+    assert first is not second
+    assert "uniqueItems" not in json.dumps(first)
+
+
+def test_risk_schema_narrowing_changes_only_basis_and_scope_routes() -> None:
+    snapshot = build_risk_reviewer_payload_snapshot(full_risk_reviewer_payload())
+    bases = build_allowed_risk_bases(snapshot)
+    scopes = build_allowed_risk_scopes(snapshot)
+    base = strict_json_schema_document(RiskAssessment.model_json_schema())
+
+    narrowed = narrow_risk_schema(RiskAssessment.model_json_schema(), bases, scopes)
+    expected = deepcopy(base)
+    expected_basis = expected["$defs"]["Risk"]["properties"]["basis"]  # type: ignore[index]
+    assert isinstance(expected_basis, dict)
+    expected_basis["items"] = {"oneOf": [build_risk_basis_schema_branch(basis) for basis in bases]}
+    expected_basis["minItems"] = 1
+    expected["$defs"]["RiskScope"] = {  # type: ignore[index]
+        "oneOf": [build_risk_scope_schema_branch(scope) for scope in scopes]
+    }
+
+    assert narrowed == expected
+    narrowed_basis = narrowed["$defs"]["Risk"]["properties"]["basis"]  # type: ignore[index]
+    assert narrowed_basis["maxItems"] == 10  # type: ignore[index]
+    assert len(narrowed_basis["items"]["oneOf"]) == len(bases)  # type: ignore[index]
+    assert len(narrowed["$defs"]["RiskScope"]["oneOf"]) == 5  # type: ignore[index]
+
+
+def test_empty_basis_catalog_allows_only_zero_risk_assessments() -> None:
+    snapshot = build_risk_reviewer_payload_snapshot(minimal_risk_reviewer_payload())
+    scopes = build_allowed_risk_scopes(snapshot)
+
+    narrowed = narrow_risk_schema(RiskAssessment.model_json_schema(), (), scopes)
+
+    risks = narrowed["properties"]["risks"]  # type: ignore[index]
+    assert risks["maxItems"] == 0  # type: ignore[index]
+    basis_items = narrowed["$defs"]["Risk"]["properties"]["basis"]["items"]  # type: ignore[index]
+    assert basis_items
+    assert basis_items.get("oneOf") != []  # type: ignore[union-attr]
+    assert len(narrowed["$defs"]["RiskScope"]["oneOf"]) == 1  # type: ignore[index]
+
+
+def test_dynamic_risk_schema_serialization_is_canonical_and_fresh() -> None:
+    payload = full_risk_reviewer_payload()
+    definition = get_role_prompt_definition("risk_reviewer")
+
+    first = build_request_output_schema(definition=definition, payload=payload)
+    second = build_request_output_schema(
+        definition=definition,
+        payload=dict(reversed(tuple(payload.items()))),
+    )
+    expected = json.dumps(
+        build_dynamic_risk_schema(build_risk_reviewer_payload_snapshot(payload)),
+        allow_nan=False,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+
+    assert first.serialized == second.serialized == expected
+    assert "Must work offline." in first.serialized
+    first_document = first.new_document()
+    first_document.clear()
+    assert first.new_document() == second.new_document()
+
+
+def test_dynamic_request_context_owns_one_risk_snapshot_per_invocation() -> None:
+    payload_values = full_risk_reviewer_payload()
+    payload = SingleReadMapping(payload_values)
+    definition = get_role_prompt_definition("risk_reviewer")
+
+    context = build_dynamic_request_context(definition=definition, payload=payload)
+
+    assert isinstance(context, DynamicRequestContext)
+    assert payload.iterations == 1
+    assert json.loads(context.serialized_payload) == payload_values
+    assert context.output_schema.new_document() == build_dynamic_risk_schema(
+        build_risk_reviewer_payload_snapshot(payload_values)
+    )
+    assert not hasattr(context, "__dict__")
+    with pytest.raises(FrozenInstanceError):
+        context.serialized_payload = "changed"  # type: ignore[misc]
+
+    second = build_dynamic_request_context(
+        definition=definition,
+        payload=full_risk_reviewer_payload(),
+    )
+    assert second == context
+    assert second is not context
+    assert second is not None
+    assert second.output_schema is not context.output_schema
+
+
+@pytest.mark.parametrize("role", ["analyst", "solution_architect", "coordinator"])
+def test_dynamic_request_context_closed_dispatch_skips_static_payloads(role: str) -> None:
+    payload = SingleReadMapping({"must": "not be read"})
+    context = build_dynamic_request_context(
+        definition=get_role_prompt_definition(role),
+        payload=payload,
+    )
+
+    assert context is None
+    assert payload.iterations == 0
+
+
+def test_dynamic_request_context_dispatches_existing_critic_path() -> None:
+    payload = full_risk_reviewer_payload()
+    payload["risk_assessment"] = {"risks": [], "overall_observations": []}
+
+    context = build_dynamic_request_context(
+        definition=get_role_prompt_definition("critic"),
+        payload=payload,
+    )
+
+    assert isinstance(context, DynamicRequestContext)
+    assert json.loads(context.serialized_payload) == payload
+    assert context.output_schema == build_request_output_schema(
+        definition=get_role_prompt_definition("critic"),
+        payload=payload,
+    )
+
+
+def test_high_cardinality_schema_has_formula_counts_without_truncation() -> None:
+    values_per_collection = 25
+    payload = high_cardinality_risk_reviewer_payload(values_per_collection)
+    snapshot = build_risk_reviewer_payload_snapshot(payload)
+
+    bases = build_allowed_risk_bases(snapshot)
+    scopes = build_allowed_risk_scopes(snapshot)
+    request_schema = build_request_output_schema(
+        definition=get_role_prompt_definition("risk_reviewer"),
+        payload=payload,
+    )
+    document = request_schema.new_document()
+    basis_branches = document["$defs"]["Risk"]["properties"]["basis"]["items"][  # type: ignore[index]
+        "oneOf"
+    ]
+    scope_branches = document["$defs"]["RiskScope"]["oneOf"]  # type: ignore[index]
+    expected_basis_count = 9 + (20 * values_per_collection)
+
+    assert len(bases) == expected_basis_count
+    assert len(basis_branches) == expected_basis_count  # type: ignore[arg-type]
+    assert len(scopes) == len(scope_branches) == 16  # type: ignore[arg-type]
+    assert len(request_schema.serialized.encode("utf-8")) == 154_324
+
+
+@pytest.mark.parametrize(
+    "drift",
+    [
+        lambda schema: schema.pop("$defs"),
+        lambda schema: schema["properties"].pop("risks"),
+        lambda schema: schema["$defs"].pop("Risk"),
+        lambda schema: schema["$defs"]["Risk"]["properties"]["basis"].pop("items"),
+        lambda schema: schema["$defs"]["Risk"]["properties"]["affected_scope"].update(
+            {"$ref": "#/$defs/UnknownScope"}
+        ),
+        lambda schema: schema["$defs"].pop("RiskScope"),
+    ],
+)
+def test_risk_schema_narrowing_fails_safely_on_authoritative_schema_drift(
+    drift: object,
+) -> None:
+    assert callable(drift)
+    base = RiskAssessment.model_json_schema()
+    drift(base)
+    snapshot = build_risk_reviewer_payload_snapshot(full_risk_reviewer_payload())
+
+    with pytest.raises(
+        LLMRequestSchemaError,
+        match="^LLM request schema construction failed$",
+    ):
+        narrow_risk_schema(
+            base,
+            build_allowed_risk_bases(snapshot),
+            build_allowed_risk_scopes(snapshot),
+        )
+
+
+def test_risk_schema_narrowing_rejects_noncanonical_internal_catalogs() -> None:
+    snapshot = build_risk_reviewer_payload_snapshot(full_risk_reviewer_payload())
+    bases = build_allowed_risk_bases(snapshot)
+    scopes = build_allowed_risk_scopes(snapshot)
+
+    with pytest.raises(LLMRequestSchemaError):
+        narrow_risk_schema(RiskAssessment.model_json_schema(), bases + bases[:1], scopes)
+    with pytest.raises(LLMRequestSchemaError):
+        narrow_risk_schema(RiskAssessment.model_json_schema(), bases, tuple(reversed(scopes)))
