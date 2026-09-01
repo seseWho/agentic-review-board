@@ -2,7 +2,7 @@ name: agentic-review-board
 
 services:
   vllm:
-    image: ${VLLM_IMAGE:-vllm/vllm-openai:v0.8.5}
+    image: ${VLLM_IMAGE:-vllm/vllm-openai:v0.11.0}
     container_name: arb-vllm
     init: true
     gpus: all

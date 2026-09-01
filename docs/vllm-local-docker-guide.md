@@ -9,7 +9,7 @@ en un volumen Docker persistente y no depende de directorios de otro proyecto.
 
 La configuración de referencia está ajustada para una NVIDIA RTX 3060 de 12 GiB:
 
-- imagen: `vllm/vllm-openai:v0.8.5`;
+- imagen: `vllm/vllm-openai:v0.11.0`;
 - modelo: `Qwen/Qwen3-4B-AWQ`;
 - nombre servido: `qwen3-4b-awq`;
 - contexto: 40 960 tokens;
@@ -75,7 +75,7 @@ python --version
 docker version
 docker compose version
 nvidia-smi
-docker run --rm --gpus all nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi
+docker run --rm --gpus all nvidia/cuda:12.8.1-base-ubuntu22.04 nvidia-smi
 ```
 
 En Docker Desktop conviene revisar **Settings > Resources > Advanced > Disk
@@ -205,27 +205,38 @@ $env:NO_PROXY = "localhost,127.0.0.1"
   -s
 ```
 
-El smoke contiene dos comprobaciones:
+El smoke contiene tres comprobaciones:
 
 1. una petición sintética con el contrato estático de Analyst por cada perfil
    seleccionado;
 2. una petición Critic mínima construida por la ruta real de Slice 7.1, con su
    catálogo, `oneOf`, valores `const`, sección dinámica delimitada y
    `response_format` dinámico.
+3. una petición Risk Reviewer mínima construida por la ruta real de Slice 7.2,
+   con `oneOf`, `const`, `minItems`, `maxItems` y el ámbito dinámico exacto.
 
-La segunda prueba demuestra que el servidor acepta el subconjunto JSON Schema
-utilizado por Slice 7.1 y devuelve un objeto JSON directo. No demuestra calidad
-semántica ni sustituye la validación del participante.
+Las dos pruebas dinámicas demuestran que el servidor acepta el subconjunto JSON
+Schema utilizado por Slice 7.1 y Slice 7.2 y devuelve objetos JSON directos. No
+demuestran calidad semántica ni sustituyen la validación de los participantes.
 
-Resultado validado en la RTX 3060 de referencia:
+Resultado de compatibilidad validado con vLLM 0.11.0 en la RTX 3060 de
+referencia:
 
 ```text
 live LLM profile: local-qwen3
 live dynamic Critic profile: local-qwen3
-2 passed
+live dynamic Risk Reviewer profile: local-qwen3
+1 failed, 2 passed
 ```
 
-Si la segunda prueba falla porque vLLM rechaza `oneOf` o `const`, conserva el
+Los dos contratos dinámicos fueron aceptados y completados. La comprobación
+estática falló por contenido del modelo que no superó la validación de la
+aplicación, no por rechazo del JSON Schema en vLLM. Por tanto, este resultado
+valida la compatibilidad del proveedor con los esquemas dinámicos, pero no la
+fiabilidad semántica de Qwen3-4B-AWQ.
+
+Si alguna prueba dinámica falla porque vLLM rechaza `oneOf`, `const`, `minItems`
+o `maxItems`, conserva el
 error como evidencia y detén la evaluación. No cambies a `JSON_OBJECT`, no
 debilites el esquema y no repitas hasta obtener éxito.
 

@@ -107,3 +107,22 @@ vLLM logged that exact `oneOf` constraints are unsupported by guided decoding. T
 five-run evidence target was not completed; runs 02–05 were intentionally not
 initiated and their paths remain absent. The row above is therefore retained as the
 predeclared template, with this execution record authoritative for the observed run.
+
+## vLLM 0.11.0 compatibility diagnostic
+
+After the fixed v0.8.5 campaign stopped, a separate, non-campaign diagnostic was
+run with `vllm/vllm-openai:v0.11.0` on the same RTX 3060, model, context, and
+application profile. The image loaded successfully with AWQ Marlin and exposed a
+54,576-token GPU KV cache.
+
+The dynamic Critic and Risk Reviewer smoke requests both completed. The static
+selected-profile smoke reached inference but its model content failed application
+validation; vLLM did not reject its schema. A separate full review completed Analyst,
+Solution Architect, Risk Reviewer, and Critic. Coordinator failed closed with
+`OUTPUT_VALIDATION`, leaving the review `INCOMPLETE` after 182.52 seconds.
+
+The preserved diagnostic artifact is
+`artifacts/slice-7.2-v011-diagnostic-01.json` with its `.raw/` directory. It is not
+run 02 of the fixed campaign and does not alter the five-run evidence record. This
+diagnostic establishes v0.11.0 as the supported candidate for the RTX 3060 and the
+current dynamic schemas; it does not establish five-participant semantic reliability.
