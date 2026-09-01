@@ -156,3 +156,41 @@ artifacts:
 
 These are compatibility diagnostics, not replacement rows in the stopped fixed
 v0.8.5 five-run campaign and not a statistical reliability claim.
+
+## vLLM 0.11.0 five-run repeatability campaign
+
+This is a new fixed campaign using the checked-in vLLM 0.11.0 configuration and
+dynamic Critic, Risk Reviewer, and Coordinator schemas. All five aggregate and raw
+artifact paths were confirmed absent before execution. Each run is initiated once;
+failures are preserved and are not retried, replaced, or selectively deleted.
+
+| Run | Review | Analyst | Solution Architect | Risk Reviewer | Critic | Coordinator | Seconds | Preserved ignored artifacts |
+|---|---|---|---|---|---|---|---:|---|
+| 01 | INCOMPLETE | COMPLETED | COMPLETED | COMPLETED | FAILED | PENDING | 192.83 | `artifacts/slice-7.2-v011-run-01.json`, `.raw/` |
+| 02 | COMPLETED | COMPLETED | COMPLETED | COMPLETED | COMPLETED | COMPLETED | 162.65 | `artifacts/slice-7.2-v011-run-02.json`, `.raw/` |
+| 03 | COMPLETED | COMPLETED | COMPLETED | COMPLETED | COMPLETED | COMPLETED | 148.83 | `artifacts/slice-7.2-v011-run-03.json`, `.raw/` |
+| 04 | COMPLETED | COMPLETED | COMPLETED | COMPLETED | COMPLETED | COMPLETED | 205.94 | `artifacts/slice-7.2-v011-run-04.json`, `.raw/` |
+| 05 | COMPLETED | COMPLETED | COMPLETED | COMPLETED | COMPLETED | COMPLETED | 209.55 | `artifacts/slice-7.2-v011-run-05.json`, `.raw/` |
+
+The fixed campaign completed all five initiated executions without retry. Four reviews
+completed all five participants, for an observed end-to-end completion rate of 4/5
+(80%). Mean elapsed time was 183.96 seconds across all runs and 181.74 seconds across
+completed reviews.
+
+Run 01 failed closed at Critic structural validation. Its criticism repeated the exact
+`target_reference` object inside `basis_references`, which the authoritative
+`CriticalReview` contract forbids. Analyst, Solution Architect, and Risk Reviewer had
+already completed; Coordinator correctly remained pending. Runs 02–05 completed
+Coordinator with its dynamic schema. No run failed because of provider schema support,
+transport, timeout, context length, GPU memory, or Coordinator reference resolution.
+This five-run result is compatibility and repeatability evidence for the fixed scenario,
+not a general reliability guarantee for Qwen3-4B-AWQ.
+
+After the campaign, the Critic instruction was made explicit that a criticism's
+`target_reference` must not be repeated in `basis_references`. An isolated probe using
+the exact run-01 upstream artifacts still produced the same forbidden duplicate and
+failed closed. The probe is preserved as
+`artifacts/slice-7.2-v011-critic-probe-01.json`; it does not replace run 01 or change
+the 4/5 result. Prompt-only guidance is therefore not considered a reliable remedy for
+this cross-field constraint. No automatic repair, retry, schema weakening, or fallback
+mode was introduced.

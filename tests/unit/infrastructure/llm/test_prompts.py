@@ -167,6 +167,9 @@ def test_critic_instruction_bounds_output_and_requires_exact_references() -> Non
     assert "prefer the most material, well-supported findings" in instruction
     assert "to one concise sentence" in instruction
     assert "never combine an id with its value or text" in instruction
+    assert "target_reference identifies the challenged item" in instruction
+    assert "must never be repeated in basis_references" in instruction
+    assert "only distinct additional evidence" in instruction
 
 
 def test_coordinator_instruction_requires_consistent_criticism_dispositions() -> None:

@@ -127,6 +127,10 @@ material, well-supported findings and omit weaker or repetitive ones. Keep each
 issue, rationale, statement, category, and correction_or_question to one concise
 sentence. Copy all reference fields exactly from the supplied upstream artifacts;
 never combine an id with its value or text.
+
+Within each criticism, target_reference identifies the challenged item and must never
+be repeated in basis_references. Basis references may contain only distinct additional
+evidence. Omit a redundant basis item instead of duplicating target_reference.
 """.strip()
 
 _COORDINATOR_INSTRUCTION: Final = """
