@@ -194,3 +194,42 @@ failed closed. The probe is preserved as
 the 4/5 result. Prompt-only guidance is therefore not considered a reliable remedy for
 this cross-field constraint. No automatic repair, retry, schema weakening, or fallback
 mode was introduced.
+
+## Provider-enforced Critic cross-field follow-up
+
+The Critic dynamic schema now prevents an exact `target_reference` from appearing in
+the same criticism's `basis_references`. A direct xgrammar 0.11.0 experiment showed
+that `allOf` plus `not` was accepted with a warning but compiled the affected array
+items as unconstrained JSON, so that apparently compact form was rejected. The
+implemented schema instead uses only enforced constructs: exact `const` objects,
+`oneOf`, and a balanced tree of `$ref` definitions. Each target branch refers to the
+tree complement that contains every allowed reference except that target. A null
+target remains available only for `CROSS_ARTIFACT_CONCLUSION` and `OMISSION`, and that
+branch requires at least one basis reference. Domain validation remains unchanged and
+fail-closed.
+
+For the run-01 upstream snapshot, the catalog contains 137 exact references and the
+resulting provider schema is 294,791 bytes. Sending that schema both as
+`response_format` and as user-message context produced an 85,159-token request, above
+the configured 40,960-token model context. In `JSON_SCHEMA` mode the adapter now sends
+the dynamic schema only through the provider's structured-output field; the exact
+payload and static semantic contract remain in the messages. `PROMPT_ONLY` and
+`JSON_OBJECT` modes still include the dynamic schema as delimited untrusted data
+because those modes do not provide schema enforcement.
+
+An isolated Critic probe reused the exact four upstream artifacts from failed run 01.
+It completed with one criticism, two validated points, and one contradiction; no
+criticism repeated its target as basis. The preserved outputs are
+`artifacts/slice-7.2-v011-critic-schema-probe-01.json` and
+`artifacts/slice-7.2-v011-critic-schema-probe-01.raw.json`.
+
+A subsequent independent five-agent diagnostic completed every stage in 123.67
+seconds:
+
+- `artifacts/slice-7.2-v011-critic-schema-diagnostic-01.json`
+- `artifacts/slice-7.2-v011-critic-schema-diagnostic-01.raw/`
+
+This diagnostic does not replace any campaign row or change the recorded 4/5 campaign
+result. It demonstrates that vLLM 0.11.0 on the RTX 3060 enforces the new Critic
+cross-field schema and that Analyst, Solution Architect, Risk Reviewer, Critic, and
+Coordinator still complete together without retries, automatic repair, or fallback.

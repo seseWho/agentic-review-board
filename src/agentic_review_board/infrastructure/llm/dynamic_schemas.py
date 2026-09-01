@@ -16,6 +16,7 @@ from agentic_review_board.domain.analysis import (
 )
 from agentic_review_board.domain.critics import (
     CriticalReview,
+    CriticismTargetType,
     CriticReference,
     CriticReferenceKind,
     CriticReferenceSource,
@@ -454,6 +455,14 @@ class AllowedCriticReference:
 class AllowedContradictionSide:
     reference: AllowedCriticReference
     statement: str
+
+
+@dataclass(frozen=True, slots=True)
+class _CriticReferenceSchemaNode:
+    name: str
+    start: int
+    stop: int
+    children: tuple[_CriticReferenceSchemaNode, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -1057,6 +1066,99 @@ def build_contradiction_side_schema_branch(
         raise LLMRequestSchemaError() from error
 
 
+def _definition_reference(name: str) -> dict[str, object]:
+    if not name:
+        raise ValueError("schema definition name must not be empty")
+    return {"$ref": f"#/$defs/{name}"}
+
+
+def _build_critic_reference_schema_tree(
+    definitions: dict[str, object],
+    references: tuple[AllowedCriticReference, ...],
+) -> _CriticReferenceSchemaNode:
+    width = max(4, len(str(len(references))))
+
+    def build(start: int, stop: int) -> _CriticReferenceSchemaNode:
+        if stop - start == 1:
+            name = f"CriticReferenceExact{start:0{width}d}"
+            if name in definitions:
+                raise ValueError("generated Critic reference definition collides")
+            definitions[name] = build_reference_schema_branch(references[start])
+            return _CriticReferenceSchemaNode(name=name, start=start, stop=stop)
+
+        middle = start + (stop - start) // 2
+        children = (build(start, middle), build(middle, stop))
+        name = f"CriticReferenceSet{start:0{width}d}_{stop:0{width}d}"
+        if name in definitions:
+            raise ValueError("generated Critic reference definition collides")
+        definitions[name] = {
+            "oneOf": [_definition_reference(child.name) for child in children]
+        }
+        return _CriticReferenceSchemaNode(
+            name=name,
+            start=start,
+            stop=stop,
+            children=children,
+        )
+
+    return build(0, len(references))
+
+
+def _critic_reference_complement(
+    node: _CriticReferenceSchemaNode,
+    excluded_index: int,
+) -> list[dict[str, object]]:
+    if excluded_index < node.start or excluded_index >= node.stop:
+        return [_definition_reference(node.name)]
+    if not node.children:
+        return []
+    return [
+        reference
+        for child in node.children
+        for reference in _critic_reference_complement(child, excluded_index)
+    ]
+
+
+def _critic_reference_union(branches: list[dict[str, object]]) -> dict[str, object]:
+    if not branches:
+        raise ValueError("Critic reference union must not be empty")
+    if len(branches) == 1:
+        return branches[0]
+    return {"oneOf": branches}
+
+
+def _criticism_schema_branch(
+    base_criticism: Mapping[str, object],
+    *,
+    target_reference: Mapping[str, object],
+    basis_item: Mapping[str, object] | None,
+    target_may_be_null: bool,
+) -> dict[str, object]:
+    branch = deepcopy(dict(base_criticism))
+    properties = branch.get("properties")
+    if not isinstance(properties, dict):
+        raise TypeError("Criticism properties are absent")
+    basis_references = properties.get("basis_references")
+    if not isinstance(basis_references, dict) or basis_references.get("type") != "array":
+        raise TypeError("Criticism basis references schema is invalid")
+
+    properties["target_reference"] = deepcopy(dict(target_reference))
+    if basis_item is None:
+        properties["basis_references"] = {"const": []}
+    else:
+        basis_references["items"] = deepcopy(dict(basis_item))
+        if target_may_be_null:
+            basis_references["minItems"] = 1
+    if target_may_be_null:
+        properties["target_type"] = {
+            "enum": [
+                CriticismTargetType.CROSS_ARTIFACT_CONCLUSION.value,
+                CriticismTargetType.OMISSION.value,
+            ]
+        }
+    return branch
+
+
 def strict_json_schema_document(schema: Mapping[str, object]) -> dict[str, object]:
     result = deepcopy(dict(schema))
 
@@ -1388,15 +1490,45 @@ def narrow_critic_schema(
             raise TypeError("CriticReference definition is invalid")
         if not isinstance(definitions.get("ContradictionSide"), dict):
             raise TypeError("ContradictionSide definition is invalid")
-        reference_branches = [
-            build_reference_schema_branch(reference) for reference in owned_references
-        ]
+        criticism_definition = definitions.get("Criticism")
+        if not isinstance(criticism_definition, dict):
+            raise TypeError("Criticism definition is invalid")
+
+        reference_tree = _build_critic_reference_schema_tree(
+            definitions,
+            owned_references,
+        )
         side_branches = [
             build_contradiction_side_schema_branch(side)
             for side in build_allowed_contradiction_sides(owned_references)
         ]
-        definitions["CriticReference"] = {"oneOf": reference_branches}
+        definitions["CriticReference"] = _definition_reference(reference_tree.name)
         definitions["ContradictionSide"] = {"oneOf": side_branches}
+        reference_name_width = max(4, len(str(len(owned_references))))
+        criticism_branches = []
+        for index in range(len(owned_references)):
+            complement = _critic_reference_complement(reference_tree, index)
+            criticism_branches.append(
+                _criticism_schema_branch(
+                    criticism_definition,
+                    target_reference=_definition_reference(
+                        f"CriticReferenceExact{index:0{reference_name_width}d}"
+                    ),
+                    basis_item=(
+                        _critic_reference_union(complement) if complement else None
+                    ),
+                    target_may_be_null=False,
+                )
+            )
+        criticism_branches.append(
+            _criticism_schema_branch(
+                criticism_definition,
+                target_reference={"type": "null"},
+                basis_item=_definition_reference("CriticReference"),
+                target_may_be_null=True,
+            )
+        )
+        definitions["Criticism"] = {"oneOf": criticism_branches}
         return strict_json_schema_document(result)
     except LLMRequestSchemaError:
         raise

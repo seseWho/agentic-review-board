@@ -77,7 +77,10 @@ class OpenAICompatibleLLMAdapter:
             f"{_OUTPUT_INSTANCE_INSTRUCTION}"
         )
         user_content = f"{_UNTRUSTED_PAYLOAD_BEGIN}\n{serialized_payload}\n{_UNTRUSTED_PAYLOAD_END}"
-        if request_output_schema is not None:
+        if (
+            request_output_schema is not None
+            and self.profile.structured_output_mode is not StructuredOutputMode.JSON_SCHEMA
+        ):
             user_content = (
                 f"{user_content}\n\n"
                 f"{_UNTRUSTED_REQUEST_SCHEMA_BEGIN}\n"

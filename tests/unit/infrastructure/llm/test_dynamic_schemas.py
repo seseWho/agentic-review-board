@@ -57,6 +57,32 @@ def as_json_array(value: object) -> list[Any]:
     return value
 
 
+def collect_exact_reference_branches(
+    schema: object,
+    definitions: Mapping[str, object],
+) -> list[dict[str, Any]]:
+    node = as_json_object(schema)
+    reference = node.get("$ref")
+    if isinstance(reference, str):
+        prefix = "#/$defs/"
+        assert reference.startswith(prefix)
+        return collect_exact_reference_branches(
+            definitions[reference.removeprefix(prefix)],
+            definitions,
+        )
+    alternatives = node.get("oneOf")
+    if isinstance(alternatives, list):
+        return [
+            branch
+            for alternative in alternatives
+            for branch in collect_exact_reference_branches(alternative, definitions)
+        ]
+    properties = as_json_object(node["properties"])
+    assert "source" in properties
+    assert "kind" in properties
+    return [node]
+
+
 def minimal_critic_payload() -> dict[str, object]:
     review_input = ReviewInput(description="Review a local migration.")
     problem_analysis = ProblemAnalysis.model_validate(
@@ -691,21 +717,56 @@ def test_reference_schema_branch_is_exact_closed_and_fresh() -> None:
     assert "item_id" not in value_only_properties
 
 
-def test_dynamic_reference_definition_is_exact_catalog_one_of() -> None:
+def test_dynamic_reference_definition_is_exact_catalog_tree() -> None:
     snapshot = build_critic_payload_snapshot(full_critic_payload())
     references = build_allowed_critic_references(snapshot)
 
     schema = build_dynamic_critic_schema(snapshot)
     definitions = as_json_object(schema["$defs"])
     definition = as_json_object(definitions["CriticReference"])
+    reference_branches = collect_exact_reference_branches(definition, definitions)
 
-    assert definition == {
-        "oneOf": [build_reference_schema_branch(reference) for reference in references]
+    assert reference_branches == [
+        build_reference_schema_branch(reference) for reference in references
+    ]
+    assert len(reference_branches) == len(references)
+    assert all("const" in json.dumps(branch) for branch in reference_branches)
+
+
+def test_criticism_branches_exclude_each_exact_target_from_its_basis() -> None:
+    snapshot = build_critic_payload_snapshot(full_critic_payload())
+    references = build_allowed_critic_references(snapshot)
+    expected = [build_reference_schema_branch(reference) for reference in references]
+
+    schema = build_dynamic_critic_schema(snapshot)
+    definitions = as_json_object(schema["$defs"])
+    criticism = as_json_object(definitions["Criticism"])
+    criticism_branches = as_json_array(criticism["oneOf"])
+
+    assert len(criticism_branches) == len(references) + 1
+    for index, branch_value in enumerate(criticism_branches[:-1]):
+        branch = as_json_object(branch_value)
+        properties = as_json_object(branch["properties"])
+        target = collect_exact_reference_branches(
+            properties["target_reference"],
+            definitions,
+        )
+        basis = as_json_object(properties["basis_references"])
+        basis_items = collect_exact_reference_branches(basis["items"], definitions)
+
+        assert target == [expected[index]]
+        assert basis_items == expected[:index] + expected[index + 1 :]
+        assert expected[index] not in basis_items
+
+    null_branch = as_json_object(criticism_branches[-1])
+    null_properties = as_json_object(null_branch["properties"])
+    assert null_properties["target_reference"] == {"type": "null"}
+    assert null_properties["target_type"] == {
+        "enum": ["CROSS_ARTIFACT_CONCLUSION", "OMISSION"]
     }
-    serialized_definition = json.dumps(definition, sort_keys=True)
-    assert '"enum"' not in serialized_definition
-    assert '"source": {"type": "string"}' not in serialized_definition
-    assert len(as_json_array(definition["oneOf"])) == len(references)
+    null_basis = as_json_object(null_properties["basis_references"])
+    assert null_basis["minItems"] == 1
+    assert collect_exact_reference_branches(null_basis["items"], definitions) == expected
 
 
 def test_allowed_contradiction_sides_pair_each_reference_with_visible_value() -> None:
@@ -760,18 +821,22 @@ def test_dynamic_schema_preserves_strict_outer_critical_review_contract() -> Non
     assert schema["additionalProperties"] is False
     definitions = as_json_object(schema["$defs"])
     strict_definitions = as_json_object(strict_base["$defs"])
-    assert set(definitions) == set(strict_definitions)
+    generated_definitions = set(definitions) - set(strict_definitions)
+    assert len(generated_definitions) == 2 * len(
+        build_allowed_critic_references(snapshot)
+    ) - 1
+    assert all(
+        name.startswith(("CriticReferenceExact", "CriticReferenceSet"))
+        for name in generated_definitions
+    )
     for name, definition in strict_definitions.items():
-        if name not in {"CriticReference", "ContradictionSide"}:
+        if name not in {"Criticism", "CriticReference", "ContradictionSide"}:
             assert definitions[name] == definition
 
     criticism = as_json_object(definitions["Criticism"])
-    criticism_properties = as_json_object(criticism["properties"])
-    target_reference = as_json_object(criticism_properties["target_reference"])
-    target_branches = [
-        as_json_object(branch) for branch in as_json_array(target_reference["anyOf"])
-    ]
-    assert {branch.get("type") for branch in target_branches} >= {None, "null"}
+    assert len(as_json_array(criticism["oneOf"])) == len(
+        build_allowed_critic_references(snapshot)
+    ) + 1
     root_properties = as_json_object(schema["properties"])
     assert all(
         "minItems" not in as_json_object(collection) for collection in root_properties.values()
@@ -968,13 +1033,19 @@ def test_high_cardinality_schema_has_exact_branch_counts_without_truncation() ->
     definitions = as_json_object(document["$defs"])
     reference_definition = as_json_object(definitions["CriticReference"])
     side_definition = as_json_object(definitions["ContradictionSide"])
-    reference_branches = as_json_array(reference_definition["oneOf"])
+    criticism_definition = as_json_object(definitions["Criticism"])
+    reference_branches = collect_exact_reference_branches(
+        reference_definition,
+        definitions,
+    )
     side_branches = as_json_array(side_definition["oneOf"])
+    criticism_branches = as_json_array(criticism_definition["oneOf"])
 
     assert len(references) == 512
     assert len(reference_branches) == 512
     assert len(side_branches) == 512
-    assert len(request_schema.serialized.encode("utf-8")) == 338_537
+    assert len(criticism_branches) == 513
+    assert len(request_schema.serialized.encode("utf-8")) < 4_000_000
 
 
 def assert_reference_parity(

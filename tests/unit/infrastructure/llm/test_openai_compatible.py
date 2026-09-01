@@ -14,6 +14,9 @@ from agentic_review_board.infrastructure.llm.config import (
     ResolvedLLMProfile,
     resolve_llm_runtime_config,
 )
+from agentic_review_board.infrastructure.llm.dynamic_schemas import (
+    build_dynamic_request_context,
+)
 from agentic_review_board.infrastructure.llm.errors import (
     LLMPayloadSerializationError,
     LLMRequestSchemaError,
@@ -541,10 +544,11 @@ def test_critic_keeps_dynamic_values_out_of_system_and_delimits_user_data() -> N
     assert user_content.splitlines().count("UNTRUSTED_REQUEST_SCHEMA_JSON_END") == 1
 
 
-def test_critic_json_schema_mode_reuses_exact_dynamic_logical_schema() -> None:
+def test_critic_json_schema_mode_sends_dynamic_schema_only_to_provider() -> None:
+    payload = minimal_critic_payload()
     request = capture_request(
         role="critic",
-        payload=minimal_critic_payload(),
+        payload=payload,
         structured_output_mode="JSON_SCHEMA",
         max_output_tokens=777,
         temperature=0.0,
@@ -552,20 +556,23 @@ def test_critic_json_schema_mode_reuses_exact_dynamic_logical_schema() -> None:
     )
     body = json.loads(request.content)
     user_content = body["messages"][1]["content"]
-    dynamic_schema = delimited_json(
-        user_content,
-        "UNTRUSTED_REQUEST_SCHEMA_JSON_BEGIN",
-        "UNTRUSTED_REQUEST_SCHEMA_JSON_END",
+    definition = get_role_prompt_definition("critic")
+    dynamic_context = build_dynamic_request_context(
+        definition=definition,
+        payload=payload,
     )
+    assert dynamic_context is not None
 
     assert body["response_format"] == {
         "type": "json_schema",
         "json_schema": {
             "name": "critic_output",
             "strict": True,
-            "schema": dynamic_schema,
+            "schema": dynamic_context.output_schema.new_document(),
         },
     }
+    assert "UNTRUSTED_REQUEST_SCHEMA_JSON_BEGIN" not in user_content
+    assert "CriticReferenceExact" not in user_content
     assert body["max_tokens"] == 777
     assert body["temperature"] == 0.0
     assert body["seed"] == 0
@@ -663,30 +670,33 @@ def test_risk_reviewer_adapter_uses_one_payload_snapshot() -> None:
     assert payload.iterations == 1
 
 
-def test_risk_reviewer_json_schema_reuses_fresh_dynamic_document() -> None:
+def test_risk_reviewer_json_schema_sends_dynamic_schema_only_to_provider() -> None:
+    payload = minimal_risk_reviewer_payload()
     request = capture_request(
         role="risk_reviewer",
-        payload=minimal_risk_reviewer_payload(),
+        payload=payload,
         structured_output_mode="JSON_SCHEMA",
         max_output_tokens=777,
         temperature=0.0,
         seed=0,
     )
     body = json.loads(request.content)
-    dynamic_schema = delimited_json(
-        body["messages"][1]["content"],
-        "UNTRUSTED_REQUEST_SCHEMA_JSON_BEGIN",
-        "UNTRUSTED_REQUEST_SCHEMA_JSON_END",
+    definition = get_role_prompt_definition("risk_reviewer")
+    dynamic_context = build_dynamic_request_context(
+        definition=definition,
+        payload=payload,
     )
+    assert dynamic_context is not None
 
     assert body["response_format"] == {
         "type": "json_schema",
         "json_schema": {
             "name": "risk_reviewer_output",
             "strict": True,
-            "schema": dynamic_schema,
+            "schema": dynamic_context.output_schema.new_document(),
         },
     }
+    assert "UNTRUSTED_REQUEST_SCHEMA_JSON_BEGIN" not in body["messages"][1]["content"]
     assert body["max_tokens"] == 777
     assert body["temperature"] == 0.0
     assert body["seed"] == 0
