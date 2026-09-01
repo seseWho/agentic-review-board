@@ -795,10 +795,9 @@ def test_dynamic_schema_preserves_strict_outer_critical_review_contract() -> Non
     [
         LLMRole.ANALYST,
         LLMRole.SOLUTION_ARCHITECT,
-        LLMRole.COORDINATOR,
     ],
 )
-def test_static_roles_bypass_critic_payload_and_keep_current_strict_schema(
+def test_remaining_static_roles_bypass_dynamic_payloads_and_keep_strict_schema(
     role: LLMRole,
 ) -> None:
     definition = get_role_prompt_definition(role.value)

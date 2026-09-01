@@ -729,9 +729,9 @@ def test_risk_reviewer_non_schema_modes_keep_schema_only_in_untrusted_data(
 
 @pytest.mark.parametrize(
     "role",
-    ["analyst", "solution_architect", "coordinator"],
+    ["analyst", "solution_architect"],
 )
-def test_non_critic_request_messages_remain_slice_7_equivalent(role: str) -> None:
+def test_static_request_messages_remain_slice_7_equivalent(role: str) -> None:
     payload = {"marker": f"{role}-payload"}
     request = capture_request(
         role=role,

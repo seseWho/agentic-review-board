@@ -135,6 +135,17 @@ Alternatives, Risk Assessment, and Critical Review. Rank alternatives and recomm
 the justified preferred option while preserving uncertainty, dissent, and conditions.
 Support human decision authority: do not make an autonomous external decision,
 execute the recommendation, or perform any external action.
+
+Return exactly one criticism_dispositions item for every item in
+critical_review.criticisms and no others, copying its criticism id exactly. Create
+dispositions only from critical_review.criticisms, not from validated_points,
+missing_alternatives, contradictions, or unresolved_issues. Those other collections
+may ground final content but their ids must never appear as criticism_id. Outcome
+REFLECTED requires a non-empty reflected_in collection naming every Final Review
+section that incorporates the criticism. Outcome DISMISSED requires an empty
+reflected_in collection. If the criticism changes, qualifies, or is acknowledged in
+any visible final section, choose REFLECTED rather than DISMISSED. Use DISMISSED only
+when the rationale explains why the criticism does not affect any final section.
 """.strip()
 
 

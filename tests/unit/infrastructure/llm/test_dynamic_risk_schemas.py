@@ -1270,7 +1270,7 @@ def test_dynamic_request_context_owns_one_risk_snapshot_per_invocation() -> None
     assert second.output_schema is not context.output_schema
 
 
-@pytest.mark.parametrize("role", ["analyst", "solution_architect", "coordinator"])
+@pytest.mark.parametrize("role", ["analyst", "solution_architect"])
 def test_dynamic_request_context_closed_dispatch_skips_static_payloads(role: str) -> None:
     payload = SingleReadMapping({"must": "not be read"})
     context = build_dynamic_request_context(

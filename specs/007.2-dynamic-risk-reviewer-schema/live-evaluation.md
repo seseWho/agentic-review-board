@@ -126,3 +126,33 @@ The preserved diagnostic artifact is
 run 02 of the fixed campaign and does not alter the five-run evidence record. This
 diagnostic establishes v0.11.0 as the supported candidate for the RTX 3060 and the
 current dynamic schemas; it does not establish five-participant semantic reliability.
+
+## Dynamic Coordinator follow-up
+
+A second full diagnostic with prompt-only Coordinator guidance again completed the
+first four participants but failed Coordinator validation. The preserved raw output
+showed two independent contextual errors across attempts: disposition ids copied from
+non-criticism Critic collections, and paraphrased Problem Analysis id-and-text pairs.
+This demonstrated that instructions alone could not reliably enforce the existing
+Coordinator resolver contract.
+
+Coordinator now receives a detached, typed five-artifact payload snapshot and a
+request-local JSON Schema. The schema enumerates only exact resolvable unresolved-item
+references and only ids from `critical_review.criticisms`. It also encodes the
+`REFLECTED`/non-empty `reflected_in` and `DISMISSED`/empty `reflected_in` shapes. The
+provider schema intentionally omits `uniqueItems`, which vLLM 0.11.0 xgrammar rejected;
+the unchanged trusted domain model still rejects duplicate sections after generation.
+
+An isolated Coordinator probe against the four already validated upstream artifacts
+completed with `RECOMMENDED`, preferred `ALT-001`, one exact criticism disposition,
+and one exact unresolved question. The subsequent independent full diagnostic reached
+Review `COMPLETED` with Analyst, Solution Architect, Risk Reviewer, Critic, and
+Coordinator all `COMPLETED` after 201.12 seconds. Evidence is preserved in ignored
+artifacts:
+
+- `artifacts/slice-7.2-v011-coordinator-probe-03.json`
+- `artifacts/slice-7.2-v011-diagnostic-03.json`
+- `artifacts/slice-7.2-v011-diagnostic-03.raw/`
+
+These are compatibility diagnostics, not replacement rows in the stopped fixed
+v0.8.5 five-run campaign and not a statistical reliability claim.

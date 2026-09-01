@@ -20,6 +20,18 @@ from agentic_review_board.domain.critics import (
     CriticReferenceKind,
     CriticReferenceSource,
 )
+from agentic_review_board.domain.final_reviews import (
+    CriticismDispositionOutcome,
+    CriticUnresolvedKind,
+    CriticUnresolvedReference,
+    FinalReview,
+    FinalReviewSection,
+    ProblemUnresolvedKind,
+    ProblemUnresolvedReference,
+    RiskUnresolvedReference,
+    SolutionUnresolvedKind,
+    SolutionUnresolvedReference,
+)
 from agentic_review_board.domain.review import ReviewInput
 from agentic_review_board.domain.risks import (
     ProblemAnalysisBasisReference,
@@ -467,6 +479,225 @@ class DynamicRequestContext:
     output_schema: RequestOutputSchema
 
 
+_COORDINATOR_PAYLOAD_KEYS = frozenset(
+    {
+        "review_input",
+        "problem_analysis",
+        "solution_alternatives",
+        "risk_assessment",
+        "critical_review",
+    }
+)
+
+CoordinatorReferenceModel = (
+    ProblemUnresolvedReference
+    | SolutionUnresolvedReference
+    | RiskUnresolvedReference
+    | CriticUnresolvedReference
+)
+
+
+@dataclass(frozen=True, slots=True)
+class CoordinatorPayloadSnapshot:
+    serialized_payload: str
+    review_input: ReviewInput
+    problem_analysis: ProblemAnalysis
+    solution_alternatives: SolutionAlternatives
+    risk_assessment: RiskAssessment
+    critical_review: CriticalReview
+
+
+@dataclass(frozen=True, slots=True)
+class AllowedCoordinatorReference:
+    reference: CoordinatorReferenceModel
+    target_key: tuple[str, ...]
+
+    @property
+    def emitted_identity(self) -> str:
+        return json.dumps(
+            self.as_wire_object(),
+            allow_nan=False,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+
+    def as_wire_object(self) -> dict[str, object]:
+        return self.reference.model_dump(mode="json", exclude_none=True)
+
+
+def build_coordinator_payload_snapshot(
+    payload: Mapping[str, object],
+) -> CoordinatorPayloadSnapshot:
+    try:
+        serialized_payload, detached = _detach_exact_payload(
+            payload,
+            expected_keys=_COORDINATOR_PAYLOAD_KEYS,
+        )
+        return CoordinatorPayloadSnapshot(
+            serialized_payload=serialized_payload,
+            review_input=ReviewInput.model_validate(detached["review_input"]),
+            problem_analysis=ProblemAnalysis.model_validate(detached["problem_analysis"]),
+            solution_alternatives=SolutionAlternatives.model_validate(
+                detached["solution_alternatives"]
+            ),
+            risk_assessment=RiskAssessment.model_validate(detached["risk_assessment"]),
+            critical_review=CriticalReview.model_validate(detached["critical_review"]),
+        )
+    except LLMRequestSchemaError:
+        raise
+    except Exception as error:
+        raise LLMRequestSchemaError() from error
+
+
+def _coordinator_reference(
+    reference: CoordinatorReferenceModel,
+    *target_key: str,
+) -> AllowedCoordinatorReference:
+    return AllowedCoordinatorReference(reference=reference, target_key=target_key)
+
+
+def _problem_unresolved_references(
+    snapshot: CoordinatorPayloadSnapshot,
+) -> Iterable[AllowedCoordinatorReference]:
+    for kind, findings in (
+        (ProblemUnresolvedKind.PROBLEM_ASSUMPTION, snapshot.problem_analysis.assumptions),
+        (ProblemUnresolvedKind.MISSING_INFORMATION, snapshot.problem_analysis.missing_information),
+        (ProblemUnresolvedKind.UNCERTAINTY, snapshot.problem_analysis.uncertainties),
+    ):
+        for index, finding in enumerate(findings):
+            yield _coordinator_reference(
+                ProblemUnresolvedReference(
+                    kind=kind,
+                    item_id=finding.id,
+                    value=finding.text,
+                ),
+                "PROBLEM_ANALYSIS",
+                kind.value,
+                str(index),
+            )
+
+
+def _solution_unresolved_references(
+    snapshot: CoordinatorPayloadSnapshot,
+) -> Iterable[AllowedCoordinatorReference]:
+    for alternative in snapshot.solution_alternatives.alternatives:
+        for index, assumption in enumerate(alternative.assumptions):
+            yield _coordinator_reference(
+                SolutionUnresolvedReference(
+                    kind=SolutionUnresolvedKind.ALTERNATIVE_ASSUMPTION,
+                    alternative_id=alternative.id,
+                    value=assumption,
+                ),
+                "SOLUTION_ALTERNATIVES",
+                SolutionUnresolvedKind.ALTERNATIVE_ASSUMPTION.value,
+                alternative.id,
+                str(index),
+            )
+
+    notes = snapshot.solution_alternatives.generation_notes
+    if notes is None:
+        return
+    for kind, findings in (
+        (
+            SolutionUnresolvedKind.BLOCKING_MISSING_INFORMATION,
+            notes.blocking_missing_information,
+        ),
+        (SolutionUnresolvedKind.BLOCKING_UNCERTAINTY, notes.blocking_uncertainties),
+    ):
+        for index, finding in enumerate(findings):
+            yield _coordinator_reference(
+                SolutionUnresolvedReference(
+                    kind=kind,
+                    item_id=finding.id,
+                    value=finding.text,
+                ),
+                "SOLUTION_ALTERNATIVES",
+                kind.value,
+                str(index),
+            )
+
+
+def _risk_unresolved_references(
+    snapshot: CoordinatorPayloadSnapshot,
+) -> Iterable[AllowedCoordinatorReference]:
+    for risk in snapshot.risk_assessment.risks:
+        if risk.residual_uncertainty is None:
+            continue
+        yield _coordinator_reference(
+            RiskUnresolvedReference(
+                risk_id=risk.id,
+                value=risk.residual_uncertainty,
+            ),
+            "RISK_ASSESSMENT",
+            risk.id,
+            "RESIDUAL_UNCERTAINTY",
+        )
+
+
+def _critic_unresolved_references(
+    snapshot: CoordinatorPayloadSnapshot,
+) -> Iterable[AllowedCoordinatorReference]:
+    critical_review = snapshot.critical_review
+    for missing_alternative in critical_review.missing_alternatives:
+        yield _coordinator_reference(
+            CriticUnresolvedReference(
+                kind=CriticUnresolvedKind.MISSING_ALTERNATIVE,
+                item_id=missing_alternative.id,
+                value=missing_alternative.category,
+            ),
+            "CRITICAL_REVIEW",
+            CriticUnresolvedKind.MISSING_ALTERNATIVE.value,
+            missing_alternative.id,
+        )
+    for contradiction in critical_review.contradictions:
+        yield _coordinator_reference(
+            CriticUnresolvedReference(
+                kind=CriticUnresolvedKind.CONTRADICTION,
+                item_id=contradiction.id,
+                value=contradiction.rationale,
+            ),
+            "CRITICAL_REVIEW",
+            CriticUnresolvedKind.CONTRADICTION.value,
+            contradiction.id,
+        )
+    for unresolved_issue in critical_review.unresolved_issues:
+        yield _coordinator_reference(
+            CriticUnresolvedReference(
+                kind=CriticUnresolvedKind.UNRESOLVED_ISSUE,
+                item_id=unresolved_issue.id,
+                value=unresolved_issue.issue,
+            ),
+            "CRITICAL_REVIEW",
+            CriticUnresolvedKind.UNRESOLVED_ISSUE.value,
+            unresolved_issue.id,
+        )
+
+
+def build_allowed_coordinator_references(
+    snapshot: CoordinatorPayloadSnapshot,
+) -> tuple[AllowedCoordinatorReference, ...]:
+    try:
+        candidates = (
+            *_problem_unresolved_references(snapshot),
+            *_solution_unresolved_references(snapshot),
+            *_risk_unresolved_references(snapshot),
+            *_critic_unresolved_references(snapshot),
+        )
+        groups: dict[str, list[AllowedCoordinatorReference]] = {}
+        for candidate in candidates:
+            groups.setdefault(candidate.emitted_identity, []).append(candidate)
+        return tuple(
+            group[0]
+            for group in groups.values()
+            if len({candidate.target_key for candidate in group}) == 1
+        )
+    except LLMRequestSchemaError:
+        raise
+    except Exception as error:
+        raise LLMRequestSchemaError() from error
+
+
 def build_critic_payload_snapshot(
     payload: Mapping[str, object],
 ) -> CriticPayloadSnapshot:
@@ -879,6 +1110,52 @@ def _closed_exact_object_branch(
     }
 
 
+def build_coordinator_reference_schema_branch(
+    reference: AllowedCoordinatorReference,
+) -> dict[str, object]:
+    try:
+        if not isinstance(reference, AllowedCoordinatorReference) or not reference.target_key:
+            raise TypeError("allowed Coordinator reference is invalid")
+        return _closed_exact_object_branch(reference.as_wire_object())
+    except LLMRequestSchemaError:
+        raise
+    except Exception as error:
+        raise LLMRequestSchemaError() from error
+
+
+def build_criticism_disposition_schema_branch(
+    criticism_id: str,
+    outcome: CriticismDispositionOutcome,
+) -> dict[str, object]:
+    try:
+        if not criticism_id or not isinstance(outcome, CriticismDispositionOutcome):
+            raise ValueError("criticism disposition branch identity is invalid")
+        reflected_in: dict[str, object]
+        if outcome is CriticismDispositionOutcome.REFLECTED:
+            reflected_in = {
+                "type": "array",
+                "items": {"enum": [section.value for section in FinalReviewSection]},
+                "minItems": 1,
+            }
+        else:
+            reflected_in = {"const": []}
+        return {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "criticism_id": {"const": criticism_id},
+                "outcome": {"const": outcome.value},
+                "rationale": {"type": "string", "minLength": 1},
+                "reflected_in": reflected_in,
+            },
+            "required": ["criticism_id", "outcome", "rationale", "reflected_in"],
+        }
+    except LLMRequestSchemaError:
+        raise
+    except Exception as error:
+        raise LLMRequestSchemaError() from error
+
+
 def build_risk_basis_schema_branch(
     basis: AllowedRiskBasis,
 ) -> dict[str, object]:
@@ -1011,6 +1288,90 @@ def build_dynamic_risk_schema(
         raise LLMRequestSchemaError() from error
 
 
+def narrow_coordinator_schema(
+    base_schema: Mapping[str, object],
+    references: Iterable[AllowedCoordinatorReference],
+    criticism_ids: Iterable[str],
+) -> dict[str, object]:
+    try:
+        owned_references = tuple(references)
+        owned_criticism_ids = tuple(criticism_ids)
+        if any(not criticism_id for criticism_id in owned_criticism_ids):
+            raise ValueError("criticism id must not be empty")
+        if len(owned_criticism_ids) != len(set(owned_criticism_ids)):
+            raise ValueError("criticism ids must be unique")
+
+        result = deepcopy(dict(base_schema))
+        definitions = result.get("$defs")
+        properties = result.get("properties")
+        if not isinstance(definitions, dict) or not isinstance(properties, dict):
+            raise TypeError("FinalReview schema shape is invalid")
+        unresolved_definition = definitions.get("UnresolvedQuestion")
+        if not isinstance(unresolved_definition, dict):
+            raise TypeError("UnresolvedQuestion definition is invalid")
+        unresolved_properties = unresolved_definition.get("properties")
+        if not isinstance(unresolved_properties, dict):
+            raise TypeError("UnresolvedQuestion properties are invalid")
+        if not isinstance(definitions.get("CriticismDisposition"), dict):
+            raise TypeError("CriticismDisposition definition is invalid")
+
+        if owned_references:
+            unresolved_properties["reference"] = {
+                "oneOf": [
+                    build_coordinator_reference_schema_branch(reference)
+                    for reference in owned_references
+                ]
+            }
+        else:
+            properties["unresolved_questions"] = {"const": []}
+
+        if owned_criticism_ids:
+            definitions["CriticismDisposition"] = {
+                "oneOf": [
+                    build_criticism_disposition_schema_branch(criticism_id, outcome)
+                    for criticism_id in owned_criticism_ids
+                    for outcome in CriticismDispositionOutcome
+                ]
+            }
+        else:
+            properties["criticism_dispositions"] = {"const": []}
+
+        strict = strict_json_schema_document(result)
+        strict_properties = strict.get("properties")
+        if not isinstance(strict_properties, dict):
+            raise TypeError("strict FinalReview properties are invalid")
+        if owned_criticism_ids:
+            dispositions = strict_properties.get("criticism_dispositions")
+            if not isinstance(dispositions, dict):
+                raise TypeError("criticism dispositions schema is invalid")
+            dispositions["minItems"] = len(owned_criticism_ids)
+            dispositions["maxItems"] = len(owned_criticism_ids)
+        return strict
+    except LLMRequestSchemaError:
+        raise
+    except Exception as error:
+        raise LLMRequestSchemaError() from error
+
+
+def build_dynamic_coordinator_schema(
+    snapshot: CoordinatorPayloadSnapshot,
+) -> dict[str, object]:
+    try:
+        references = build_allowed_coordinator_references(snapshot)
+        criticism_ids = tuple(
+            criticism.id for criticism in snapshot.critical_review.criticisms
+        )
+        return narrow_coordinator_schema(
+            FinalReview.model_json_schema(),
+            references,
+            criticism_ids,
+        )
+    except LLMRequestSchemaError:
+        raise
+    except Exception as error:
+        raise LLMRequestSchemaError() from error
+
+
 def narrow_critic_schema(
     base_schema: Mapping[str, object],
     references: Iterable[AllowedCriticReference],
@@ -1095,6 +1456,17 @@ def build_risk_reviewer_request_output_schema(
         raise LLMRequestSchemaError() from error
 
 
+def build_coordinator_request_output_schema(
+    snapshot: CoordinatorPayloadSnapshot,
+) -> RequestOutputSchema:
+    try:
+        return _serialize_request_schema(build_dynamic_coordinator_schema(snapshot))
+    except LLMRequestSchemaError:
+        raise
+    except Exception as error:
+        raise LLMRequestSchemaError() from error
+
+
 def build_dynamic_request_context(
     *,
     definition: RolePromptDefinition,
@@ -1114,7 +1486,15 @@ def build_dynamic_request_context(
                 serialized_payload=critic_snapshot.serialized_payload,
                 output_schema=build_critic_request_output_schema(critic_snapshot),
             )
-        if role in {"analyst", "solution_architect", "coordinator"}:
+        if role == "coordinator":
+            coordinator_snapshot = build_coordinator_payload_snapshot(payload)
+            return DynamicRequestContext(
+                serialized_payload=coordinator_snapshot.serialized_payload,
+                output_schema=build_coordinator_request_output_schema(
+                    coordinator_snapshot
+                ),
+            )
+        if role in {"analyst", "solution_architect"}:
             return None
         raise ValueError("dynamic request role is invalid")
     except LLMRequestSchemaError:

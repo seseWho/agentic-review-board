@@ -169,6 +169,23 @@ def test_critic_instruction_bounds_output_and_requires_exact_references() -> Non
     assert "never combine an id with its value or text" in instruction
 
 
+def test_coordinator_instruction_requires_consistent_criticism_dispositions() -> None:
+    instruction = " ".join(
+        get_role_prompt_definition(LLMRole.COORDINATOR.value)
+        .semantic_instruction.lower()
+        .split()
+    )
+
+    assert "exactly one criticism_dispositions item" in instruction
+    assert "critical_review.criticisms" in instruction
+    assert "not from validated_points, missing_alternatives" in instruction
+    assert "contradictions, or unresolved_issues" in instruction
+    assert "outcome reflected requires" in instruction
+    assert "non-empty reflected_in" in instruction
+    assert "outcome dismissed requires an empty reflected_in" in instruction
+    assert "choose reflected" in instruction
+
+
 @pytest.mark.parametrize(("role", "output_model"), ROLE_MODELS.items())
 def test_schema_is_generated_from_exact_model_and_cached_deterministically(
     role: LLMRole,
