@@ -220,29 +220,29 @@ scope and basis resolvers.
 **Purpose:** Verify the additional schema subset against the approved local profile and
 collect honest completion evidence without retries or result selection.
 
-- [ ] T063 [TEST] [US5] Extend `tests/live/test_llm_smoke.py` with a minimal valid three-artifact payload that obtains its schema through the real Risk Reviewer snapshot/adapter path and checks provider acceptance plus direct JSON-object parsing with no retry.
-- [ ] T064 [DOC] [US5] Create `specs/007.2-dynamic-risk-reviewer-schema/live-evaluation.md` with exact opt-in commands, current fixed scenario/configuration, profile/model/vLLM/GPU/context fields, unique-path preconditions, a five-row result table, and interpretation rules before executing runs.
-- [ ] T065 [TEST] [US5] Execute the selected-profile static smoke, Slice 7.1 Critic dynamic smoke, and Slice 7.2 Risk Reviewer dynamic smoke against `config/llm.vllm.json`; record elapsed time and safe failure without changing mode/profile automatically.
+- [X] T063 [TEST] [US5] Extend `tests/live/test_llm_smoke.py` with a minimal valid three-artifact payload that obtains its schema through the real Risk Reviewer snapshot/adapter path and checks provider acceptance plus direct JSON-object parsing with no retry.
+- [X] T064 [DOC] [US5] Create `specs/007.2-dynamic-risk-reviewer-schema/live-evaluation.md` with exact opt-in commands, current fixed scenario/configuration, profile/model/vLLM/GPU/context fields, unique-path preconditions, a five-row result table, and interpretation rules before executing runs.
+- [X] T065 [TEST] [US5] Execute the selected-profile static smoke, Slice 7.1 Critic dynamic smoke, and Slice 7.2 Risk Reviewer dynamic smoke against `config/llm.vllm.json`; record elapsed time and safe failure without changing mode/profile automatically.
 - [ ] T066 [US5] Execute exactly five independently initiated fixed-scenario full reviews with temperature 0/seed 0, assert every aggregate/raw path is absent before invocation, use unique Slice 7.2 run numbers, and perform no automatic retry, overwrite, rerun substitution, or selective deletion.
 - [ ] T067 [DOC] [US5] Complete every live-evaluation row with Review and five stage statuses, safe failure family, elapsed time, whether the observed Risk basis mismatch recurred, whether Critic/Coordinator completed, and ignored artifact paths without copying full payload/schema/raw output into documentation.
-- [ ] T068 [US5] If vLLM rejects array-valued `const`, `minItems`, or another required schema feature, record the compatibility boundary and stop the affected campaign; do not weaken, truncate, retry another mode/model, or claim Slice 7.2 live success.
-- [ ] T069 [DOC] [US5] Classify any remaining failure separately from the prevented basis/scope patterns, state explicitly whether the five-run evidence target—not end-to-end reliability—was completed, and update `docs/vllm-local-docker-guide.md` only if shared commands or profile interpretation actually changed.
+- [X] T068 [US5] If vLLM rejects array-valued `const`, `minItems`, or another required schema feature, record the compatibility boundary and stop the affected campaign; do not weaken, truncate, retry another mode/model, or claim Slice 7.2 live success.
+- [X] T069 [DOC] [US5] Classify any remaining failure separately from the prevented basis/scope patterns, state explicitly whether the five-run evidence target—not end-to-end reliability—was completed, and update `docs/vllm-local-docker-guide.md` only if shared commands or profile interpretation actually changed.
 
 ### Phase 5 checkpoint
 
-- [ ] T070 [GATE] Review the preserved run set and evaluation document for no retries, replacement, overwrite, selective deletion, unsupported reliability claim, sensitive request logging, or configuration drift.
+- [X] T070 [GATE] Review the preserved run set and evaluation document for no retries, replacement, overwrite, selective deletion, unsupported reliability claim, sensitive request logging, or configuration drift.
 
 ## Phase 6: Cross-Cutting Verification
 
-- [ ] T071 [TEST] Run full deterministic `python -m pytest` with live tests skipped by default and no endpoint/GPU/network requirement.
-- [ ] T072 [TEST] Run `python -m ruff check .` without weakening repository rules or excluding new files.
+- [X] T071 [TEST] Run full deterministic `python -m pytest` with live tests skipped by default and no endpoint/GPU/network requirement.
+- [X] T072 [TEST] Run `python -m ruff check .` without weakening repository rules or excluding new files.
 - [ ] T073 [TEST] Run strict `python -m mypy` over source and tests for immutable values, discriminated union projections, nested JSON mappings, scope permutations, exhaustive dispatch, and optional empty-catalog paths without convenience ignores.
-- [ ] T074 [TEST] Run `python -m pip check` and confirm no production dependency change.
-- [ ] T075 [TEST] Run `docker compose config`, validate the checked-in local profile/guide commands, and confirm Slice 7.2 requires no Compose image, volume, model, environment-variable, or configuration-format change.
-- [ ] T076 Inspect production imports and `pyproject.toml` for no provider SDK, retry/fallback/router, generic schema/rules engine, persistence, RAG, tools, UI, new model assignment, or domain-facing provider type.
-- [ ] T077 Review default logs, exception strings/reprs, observer data, and checked-in fixtures/docs for no credentials, endpoint details, complete payloads, generated schemas, raw outputs, exact sensitive markers, or private target keys.
-- [ ] T078 Review implementation against Slice 7.2 spec/plan/data model, Slice 4 Risk Reviewer, Slice 7 adapter, Slice 7.1 Critic correction, canonical docs, Constitution 1.1.0, ADR-0001, and ADR-0002.
-- [ ] T079 Confirm `LLMPort`, all domain models, all participants, orchestration, Review lifecycle, error taxonomy/messages, prompts, runtime configuration/composition, and three static-role semantics remain unchanged; confirm Critic remains Slice 7.1-equivalent.
+- [X] T074 [TEST] Run `python -m pip check` and confirm no production dependency change.
+- [X] T075 [TEST] Run `docker compose config`, validate the checked-in local profile/guide commands, and confirm Slice 7.2 requires no Compose image, volume, model, environment-variable, or configuration-format change.
+- [X] T076 Inspect production imports and `pyproject.toml` for no provider SDK, retry/fallback/router, generic schema/rules engine, persistence, RAG, tools, UI, new model assignment, or domain-facing provider type.
+- [X] T077 Review default logs, exception strings/reprs, observer data, and checked-in fixtures/docs for no credentials, endpoint details, complete payloads, generated schemas, raw outputs, exact sensitive markers, or private target keys.
+- [X] T078 Review implementation against Slice 7.2 spec/plan/data model, Slice 4 Risk Reviewer, Slice 7 adapter, Slice 7.1 Critic correction, canonical docs, Constitution 1.1.0, ADR-0001, and ADR-0002.
+- [X] T079 Confirm `LLMPort`, all domain models, all participants, orchestration, Review lifecycle, error taxonomy/messages, prompts, runtime configuration/composition, and three static-role semantics remain unchanged; confirm Critic remains Slice 7.1-equivalent.
 
 ### Phase 6 checkpoint
 
