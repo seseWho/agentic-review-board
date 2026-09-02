@@ -1,0 +1,34 @@
+{
+  "title": "Edge predictive-maintenance pilot for manufacturing plants",
+  "description": "A manufacturer operates twelve plants with mixed generations of pumps, motors, and packaging equipment. Maintenance is primarily calendar-based, while unexpected failures create lost production and emergency repair costs. The company wants to test predictive maintenance, but connectivity, sensor quality, and historical maintenance records differ substantially between plants.",
+  "objective": "Choose a safe pilot architecture and rollout plan that can demonstrate measurable maintenance value before any enterprise-wide commitment.",
+  "constraints": [
+    "The pilot must produce an evidence-based go or no-go recommendation within nine months.",
+    "The pilot may include at most three plants and 120 monitored assets.",
+    "No model or analytics component may directly control production equipment during the pilot.",
+    "Production networks must remain isolated from inbound public internet connections.",
+    "Local data collection must continue during connectivity losses of at least 48 hours.",
+    "Installation may require no more than two hours of planned downtime per monitored asset.",
+    "The total pilot budget is limited to 450000 euros, including sensors, integration, and training.",
+    "Maintenance technicians must be able to inspect the evidence behind every generated alert.",
+    "Raw high-frequency vibration data may leave a plant only after information-security approval.",
+    "The pilot must not replace the existing safety inspection schedule."
+  ],
+  "context": [
+    "Three plants have reliable fiber connectivity, six have intermittent wide-area connectivity, and three exchange operational data only through scheduled transfers.",
+    "Existing programmable logic controllers expose different industrial protocols and some are no longer supported by their vendors.",
+    "Fourteen months of maintenance work orders are available, but failure codes and asset identifiers are inconsistent across plants.",
+    "A previous sensor trial covered ten motors for eight weeks and did not include confirmed bearing failures.",
+    "The central data team has Python and time-series analytics experience but no production machine-learning operations platform.",
+    "Plant technicians already use a computerized maintenance management system for work orders.",
+    "Potential approaches include edge-only rules, edge feature extraction with centralized analytics, and centralized ingestion of raw sensor streams.",
+    "The financial cost of one hour of lost production has not been normalized across candidate plants."
+  ],
+  "stated_facts": [
+    "Historical work-order labels are inconsistent between plants.",
+    "The earlier sensor trial contained no confirmed bearing-failure example.",
+    "Three plants cannot continuously transmit operational data to a central service.",
+    "The existing maintenance system remains the authoritative source for work orders.",
+    "Pilot analytics are advisory and cannot operate production equipment."
+  ]
+}

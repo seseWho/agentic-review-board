@@ -1,0 +1,34 @@
+{
+  "title": "Regional migration of a SaaS transactional data platform",
+  "description": "A business-to-business SaaS provider runs its main transactional platform on a single self-managed PostgreSQL cluster in an EU data center. The platform serves customers in the EU and the United Kingdom, processes sustained write traffic, and has experienced two storage-related incidents in the last year. The organization must choose a migration strategy that improves resilience without causing a risky all-at-once rewrite.",
+  "objective": "Select a three-year database and deployment architecture that improves recovery capability, preserves regulatory boundaries, and can be introduced incrementally within the available team and budget.",
+  "constraints": [
+    "No planned migration event may interrupt writes for more than 5 minutes.",
+    "EU customer records must remain stored and backed up within the EU.",
+    "The target recovery point objective is at most 5 minutes.",
+    "The target recovery time objective is at most 30 minutes.",
+    "First-year infrastructure and migration spending may increase by no more than 25 percent over the current annual platform cost.",
+    "Eight platform engineers must continue supporting normal product delivery during the migration.",
+    "A tested rollback path must remain available until each migration phase is accepted.",
+    "The first migration phase cannot require customer-facing API or tenant-schema changes.",
+    "Security and administrative audit records must remain queryable for seven years.",
+    "The first production resilience improvement must be delivered within six months."
+  ],
+  "context": [
+    "The primary database contains approximately 9 TB and grows by about 180 GB per month.",
+    "Peak traffic reaches approximately 12000 writes per second for short periods.",
+    "The application is a modular monolith with 46 tenant-aware schemas and several cross-schema transactions.",
+    "A recent logical-replication test sustained 70 percent of observed peak write traffic before replication lag increased continuously.",
+    "Current backups are encrypted and copied to a second EU facility, but restoration of the full dataset has not been rehearsed in the last 12 months.",
+    "The team has strong PostgreSQL operational experience but limited production experience with sharding.",
+    "Candidate directions include a managed regional PostgreSQL service, a self-managed dual-site design, and gradual extraction of high-volume workloads into separate data stores.",
+    "Contractual requirements for UK customer data after a regional disaster have not yet been consolidated into one approved rule."
+  ],
+  "stated_facts": [
+    "The current production database is a single write-primary PostgreSQL cluster.",
+    "The existing application performs transactions across tenant-aware schemas.",
+    "The most recent full restore rehearsal is more than 12 months old.",
+    "Logical replication has not yet been demonstrated at the recorded peak write rate.",
+    "The approved first-year spending ceiling is 125 percent of current annual platform cost."
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "title": "Modernization of food cold-chain monitoring",
+  "description": "A food distributor operates three warehouses and forty refrigerated trucks. Temperature evidence is collected by a mixture of fixed probes, vehicle telematics, and standalone loggers that are downloaded manually. Alert delays and incomplete device records make incident investigation slow. The distributor must modernize monitoring without replacing every functioning device or depending on continuous mobile coverage.",
+  "objective": "Select a staged monitoring architecture that improves timely intervention and traceability across warehouses and vehicles while remaining operable during network outages.",
+  "constraints": [
+    "Warehouse and vehicle collection must continue through connectivity outages lasting at least 24 hours.",
+    "When connectivity is available, a confirmed threshold breach must reach the responsible operator within five minutes.",
+    "Existing calibrated probes may not be replaced solely because they use an older interface.",
+    "Temperature records and correction history must remain auditable for at least five years.",
+    "Drivers may not be required to interact with monitoring equipment while a vehicle is moving.",
+    "The first rollout phase must cover one warehouse and ten trucks within eight months.",
+    "The total first-phase budget is limited to 300000 euros.",
+    "A central service outage must not erase locally collected readings.",
+    "Device identity, calibration status, and sensor location must be associated with every accepted reading.",
+    "The transition must preserve access to historical records from the existing systems."
+  ],
+  "context": [
+    "The warehouses use two generations of fixed probes with different gateway protocols.",
+    "Twenty-two trucks stream telematics over mobile networks, while eighteen use loggers downloaded at the depot.",
+    "Mobile coverage is unreliable on two frequently used rural routes.",
+    "Device inventories maintained by operations and quality assurance disagree for 11 percent of sampled sensors.",
+    "Some current alerts are generated from a single out-of-range reading without confirmation from subsequent readings.",
+    "Quality staff investigate excursions using spreadsheets assembled from three export formats.",
+    "Candidate directions include protocol gateways feeding a central platform, replacement with one vendor ecosystem, and a hybrid design with local buffering and normalized central records.",
+    "Acceptable confirmation windows for different product categories have not yet been expressed as machine-readable rules."
+  ],
+  "stated_facts": [
+    "Eighteen trucks cannot currently stream temperature readings while away from the depot.",
+    "Two regular routes have unreliable mobile coverage.",
+    "The sampled device inventories contain discrepancies.",
+    "Current investigations require combining three export formats.",
+    "Product-specific alert confirmation rules are not yet machine-readable."
+  ]
+}

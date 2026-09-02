@@ -1,0 +1,34 @@
+{
+  "title": "Governed AI assistant for multilingual customer support",
+  "description": "A subscription-services company handles approximately two million customer-support conversations per year in five languages. Agents search several knowledge sources manually, response times are increasing, and policy mistakes create avoidable escalations. Leadership wants an AI assistant, but the system must not invent policy, expose personal information, or make irreversible customer decisions.",
+  "objective": "Choose an implementation and governance approach that improves agent productivity and answer consistency while retaining accountable human control.",
+  "constraints": [
+    "The assistant may draft responses but a human agent must approve every customer-facing message during the first release.",
+    "The assistant may not autonomously approve refunds, terminate accounts, change prices, or modify contractual terms.",
+    "Every policy or product claim in a draft must be traceable to an approved source visible to the agent.",
+    "Customer personal data must not be used for model training without an approved legal basis and documented retention rules.",
+    "The first production release must support English, Spanish, and German within six months.",
+    "The solution must integrate with the existing CRM without replacing it in the first year.",
+    "Median assistant latency must remain below eight seconds during normal operating load.",
+    "The first-year budget, including implementation and usage, is limited to 900000 euros.",
+    "Security reviewers must be able to reconstruct the sources and system version used for any generated draft.",
+    "Agents must have a simple way to reject and categorize unsafe or unhelpful drafts."
+  ],
+  "context": [
+    "Support knowledge is spread across a public help center, internal procedures, product release notes, and regional policy documents.",
+    "A content audit found that approximately 15 percent of sampled internal articles were outdated or had no named owner.",
+    "The CRM exposes APIs for reading cases, adding private notes, and submitting agent-approved responses.",
+    "Historic conversations include personal data and inconsistent resolution labels.",
+    "The security team permits approved external processing services when contractual controls and regional data handling are documented.",
+    "The engineering team has experience with APIs and search systems but limited experience evaluating generative models.",
+    "Candidate approaches include retrieval-augmented generation with a hosted model, a self-hosted smaller model, and a rules-first workflow with generation limited to rewriting approved content.",
+    "No accepted benchmark yet defines factuality, policy compliance, or productivity success for this project."
+  ],
+  "stated_facts": [
+    "The first release requires human approval for every outgoing response.",
+    "The current knowledge estate contains outdated and unowned material.",
+    "The existing CRM can store private notes and agent-approved responses through APIs.",
+    "Historic conversation labels are not consistently reliable.",
+    "A formal evaluation benchmark has not yet been approved."
+  ]
+}

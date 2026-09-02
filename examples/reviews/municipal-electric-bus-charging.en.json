@@ -1,0 +1,34 @@
+{
+  "title": "Expansion of electric-bus depot charging capacity",
+  "description": "A municipal transport operator will expand its electric-bus fleet from 45 to 120 vehicles over two years. All current buses return to one depot overnight, where the existing electrical connection and chargers already approach their contracted peak during winter. The operator must decide how to expand charging while protecting the morning service schedule and avoiding an infrastructure investment that becomes obsolete.",
+  "objective": "Select a staged charging and energy strategy that can support 120 buses reliably within two years while controlling grid, construction, and operational risk.",
+  "constraints": [
+    "At least 95 percent of scheduled buses must be ready for morning departure on normal service days.",
+    "The depot's current contracted import limit is 8 MW and may not be exceeded before an approved grid upgrade is commissioned.",
+    "No more than 15 parking bays may be unavailable simultaneously during construction.",
+    "The first 30 additional buses enter service in ten months.",
+    "Existing chargers must remain usable unless a documented safety or interoperability issue prevents it.",
+    "The capital budget authorized for the first phase is 6 million euros.",
+    "Charging plans must preserve emergency dispatch reserves defined by operations each day.",
+    "The strategy must tolerate the loss of one high-power charger without cancelling the next morning's base timetable.",
+    "Energy-management failure must have a documented manual operating procedure.",
+    "Any battery-storage proposal must include fire-safety, maintenance, and end-of-life responsibilities."
+  ],
+  "context": [
+    "The depot has 30 chargers rated at 150 kW and 15 chargers rated at 60 kW.",
+    "Winter energy consumption per route can be approximately 30 percent higher than the annual median.",
+    "Recorded overnight dwell times vary because 18 buses also support late-evening service.",
+    "The distribution operator estimates that a connection upgrade could take between 18 and 36 months, but no binding delivery date has been issued.",
+    "The operator has one year of charger-session data, including several gaps caused by an earlier software outage.",
+    "Candidate directions include managed charging under the existing grid limit, a grid upgrade, on-site battery storage, and partial opportunity charging away from the depot.",
+    "The procurement team can contract construction in phases, but the final locations of 20 future parking bays are not yet approved.",
+    "Electricity tariffs include a material charge based on the monthly peak demand."
+  ],
+  "stated_facts": [
+    "The present depot import limit is 8 MW.",
+    "The grid operator has not committed to an upgrade completion date.",
+    "Eighteen buses have shorter overnight dwell windows because of late-evening service.",
+    "Historical charging data contains gaps.",
+    "The first fleet increment arrives before the earliest uncommitted grid-upgrade estimate."
+  ]
+}
