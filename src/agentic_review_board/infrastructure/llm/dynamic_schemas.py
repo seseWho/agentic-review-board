@@ -45,12 +45,28 @@ from agentic_review_board.domain.risks import (
     SolutionAlternativeCharacteristicKind,
 )
 from agentic_review_board.domain.solutions import (
+    ConstraintReference,
+    ConstraintReferenceKind,
+    ConstraintSource,
     FindingReference,
     SolutionAlternative,
     SolutionAlternatives,
 )
 from agentic_review_board.infrastructure.llm.errors import LLMRequestSchemaError
 from agentic_review_board.infrastructure.llm.prompts import RolePromptDefinition
+
+_ANALYST_PAYLOAD_KEYS = frozenset(
+    {
+        "description",
+        "title",
+        "objective",
+        "constraints",
+        "context",
+        "stated_facts",
+    }
+)
+
+_SOLUTION_ARCHITECT_PAYLOAD_KEYS = frozenset({"review_input", "problem_analysis"})
 
 _RISK_PAYLOAD_KEYS = frozenset({"review_input", "problem_analysis", "solution_alternatives"})
 
@@ -89,6 +105,56 @@ def _detach_exact_payload(
     if not isinstance(detached, dict):
         raise TypeError("dynamic payload snapshot must be an object")
     return serialized_payload, detached
+
+
+@dataclass(frozen=True, slots=True)
+class AnalystPayloadSnapshot:
+    serialized_payload: str
+    review_input: ReviewInput
+
+
+def build_analyst_payload_snapshot(
+    payload: Mapping[str, object],
+) -> AnalystPayloadSnapshot:
+    try:
+        serialized_payload, detached = _detach_exact_payload(
+            payload,
+            expected_keys=_ANALYST_PAYLOAD_KEYS,
+        )
+        return AnalystPayloadSnapshot(
+            serialized_payload=serialized_payload,
+            review_input=ReviewInput.model_validate(detached),
+        )
+    except LLMRequestSchemaError:
+        raise
+    except Exception as error:
+        raise LLMRequestSchemaError() from error
+
+
+@dataclass(frozen=True, slots=True)
+class SolutionArchitectPayloadSnapshot:
+    serialized_payload: str
+    review_input: ReviewInput
+    problem_analysis: ProblemAnalysis
+
+
+def build_solution_architect_payload_snapshot(
+    payload: Mapping[str, object],
+) -> SolutionArchitectPayloadSnapshot:
+    try:
+        serialized_payload, detached = _detach_exact_payload(
+            payload,
+            expected_keys=_SOLUTION_ARCHITECT_PAYLOAD_KEYS,
+        )
+        return SolutionArchitectPayloadSnapshot(
+            serialized_payload=serialized_payload,
+            review_input=ReviewInput.model_validate(detached["review_input"]),
+            problem_analysis=ProblemAnalysis.model_validate(detached["problem_analysis"]),
+        )
+    except LLMRequestSchemaError:
+        raise
+    except Exception as error:
+        raise LLMRequestSchemaError() from error
 
 
 @dataclass(frozen=True, slots=True)
@@ -1212,6 +1278,225 @@ def _closed_exact_object_branch(
     }
 
 
+def narrow_analyst_schema(
+    base_schema: Mapping[str, object],
+    review_input: ReviewInput,
+) -> dict[str, object]:
+    try:
+        if not isinstance(review_input, ReviewInput):
+            raise TypeError("Analyst ReviewInput is invalid")
+        result = deepcopy(dict(base_schema))
+        properties = result.get("properties")
+        definitions = result.get("$defs")
+        if not isinstance(properties, dict) or not isinstance(definitions, dict):
+            raise TypeError("ProblemAnalysis schema shape is invalid")
+        if not isinstance(definitions.get("FactFinding"), dict):
+            raise TypeError("FactFinding definition is invalid")
+        if not isinstance(definitions.get("AnalysisFinding"), dict):
+            raise TypeError("AnalysisFinding definition is invalid")
+        for field in ("objective", "facts", "constraints"):
+            if not isinstance(properties.get(field), dict):
+                raise TypeError("ProblemAnalysis authoritative property is invalid")
+
+        facts = [
+            FactFinding(
+                id=f"FACT-{index:03d}",
+                text=text,
+                source_ref=ReviewInputSource.STATED_FACTS,
+            ).model_dump(mode="json")
+            for index, text in enumerate(review_input.stated_facts, start=1)
+        ]
+        constraints = [
+            AnalysisFinding(
+                id=f"CON-{index:03d}",
+                text=text,
+            ).model_dump(mode="json")
+            for index, text in enumerate(review_input.constraints, start=1)
+        ]
+        properties["facts"] = {"const": facts}
+        properties["constraints"] = {"const": constraints}
+        if review_input.objective is not None and review_input.objective.strip():
+            properties["objective"] = {"const": review_input.objective}
+        return strict_json_schema_document(result)
+    except LLMRequestSchemaError:
+        raise
+    except Exception as error:
+        raise LLMRequestSchemaError() from error
+
+
+def build_dynamic_analyst_schema(
+    snapshot: AnalystPayloadSnapshot,
+) -> dict[str, object]:
+    try:
+        return narrow_analyst_schema(
+            ProblemAnalysis.model_json_schema(),
+            snapshot.review_input,
+        )
+    except LLMRequestSchemaError:
+        raise
+    except Exception as error:
+        raise LLMRequestSchemaError() from error
+
+
+def build_allowed_solution_constraint_references(
+    snapshot: SolutionArchitectPayloadSnapshot,
+) -> tuple[ConstraintReference, ...]:
+    try:
+        candidates = [
+            ConstraintReference(
+                source=ConstraintSource.REVIEW_INPUT,
+                kind=ConstraintReferenceKind.TEXT,
+                value=value,
+            )
+            for value in snapshot.review_input.constraints
+        ]
+        constraint_texts = tuple(
+            constraint.text for constraint in snapshot.problem_analysis.constraints
+        )
+        for constraint in snapshot.problem_analysis.constraints:
+            if constraint.id is not None:
+                candidates.append(
+                    ConstraintReference(
+                        source=ConstraintSource.PROBLEM_ANALYSIS,
+                        kind=ConstraintReferenceKind.ID,
+                        value=constraint.id,
+                    )
+                )
+            if constraint_texts.count(constraint.text) == 1:
+                candidates.append(
+                    ConstraintReference(
+                        source=ConstraintSource.PROBLEM_ANALYSIS,
+                        kind=ConstraintReferenceKind.TEXT,
+                        value=constraint.text,
+                    )
+                )
+
+        normalized: dict[str, ConstraintReference] = {}
+        for candidate in candidates:
+            normalized.setdefault(candidate.model_dump_json(), candidate)
+        return tuple(normalized.values())
+    except LLMRequestSchemaError:
+        raise
+    except Exception as error:
+        raise LLMRequestSchemaError() from error
+
+
+def build_allowed_solution_blocker_references(
+    findings: Sequence[AnalysisFinding],
+) -> tuple[FindingReference, ...]:
+    try:
+        candidates: list[FindingReference] = []
+        for finding in findings:
+            if finding.id is None:
+                matches = sum(candidate.text == finding.text for candidate in findings)
+                if matches != 1:
+                    continue
+            candidates.append(FindingReference(id=finding.id, text=finding.text))
+        return tuple(candidates)
+    except LLMRequestSchemaError:
+        raise
+    except Exception as error:
+        raise LLMRequestSchemaError() from error
+
+
+def build_solution_reference_schema_branch(
+    reference: ConstraintReference | FindingReference,
+) -> dict[str, object]:
+    try:
+        if not isinstance(reference, (ConstraintReference, FindingReference)):
+            raise TypeError("Solution Architect reference is invalid")
+        return _closed_exact_object_branch(
+            reference.model_dump(mode="json", exclude_none=True)
+        )
+    except LLMRequestSchemaError:
+        raise
+    except Exception as error:
+        raise LLMRequestSchemaError() from error
+
+
+def narrow_solution_architect_schema(
+    base_schema: Mapping[str, object],
+    constraint_references: Iterable[ConstraintReference],
+    missing_information_references: Iterable[FindingReference],
+    uncertainty_references: Iterable[FindingReference],
+) -> dict[str, object]:
+    try:
+        owned_constraints = tuple(constraint_references)
+        owned_missing = tuple(missing_information_references)
+        owned_uncertainties = tuple(uncertainty_references)
+        result = deepcopy(dict(base_schema))
+        definitions = result.get("$defs")
+        if not isinstance(definitions, dict):
+            raise TypeError("SolutionAlternatives definitions are absent")
+        if not isinstance(definitions.get("ConstraintReference"), dict):
+            raise TypeError("ConstraintReference definition is invalid")
+        alternative = definitions.get("SolutionAlternative")
+        generation_notes = definitions.get("GenerationNotes")
+        if not isinstance(alternative, dict) or not isinstance(generation_notes, dict):
+            raise TypeError("Solution Architect definitions are invalid")
+        alternative_properties = alternative.get("properties")
+        notes_properties = generation_notes.get("properties")
+        if not isinstance(alternative_properties, dict) or not isinstance(
+            notes_properties, dict
+        ):
+            raise TypeError("Solution Architect definition properties are invalid")
+        relevant_constraints = alternative_properties.get("relevant_constraints")
+        if not isinstance(relevant_constraints, dict):
+            raise TypeError("relevant constraints schema is invalid")
+
+        if owned_constraints:
+            definitions["ConstraintReference"] = {
+                "oneOf": [
+                    build_solution_reference_schema_branch(reference)
+                    for reference in owned_constraints
+                ]
+            }
+        else:
+            alternative_properties["relevant_constraints"] = {"const": []}
+
+        for name, references in (
+            ("blocking_missing_information", owned_missing),
+            ("blocking_uncertainties", owned_uncertainties),
+        ):
+            property_schema = notes_properties.get(name)
+            if not isinstance(property_schema, dict):
+                raise TypeError("generation blocker schema is invalid")
+            if references:
+                property_schema["items"] = {
+                    "oneOf": [
+                        build_solution_reference_schema_branch(reference)
+                        for reference in references
+                    ]
+                }
+            else:
+                notes_properties[name] = {"const": []}
+        return strict_json_schema_document(result)
+    except LLMRequestSchemaError:
+        raise
+    except Exception as error:
+        raise LLMRequestSchemaError() from error
+
+
+def build_dynamic_solution_architect_schema(
+    snapshot: SolutionArchitectPayloadSnapshot,
+) -> dict[str, object]:
+    try:
+        return narrow_solution_architect_schema(
+            SolutionAlternatives.model_json_schema(),
+            build_allowed_solution_constraint_references(snapshot),
+            build_allowed_solution_blocker_references(
+                snapshot.problem_analysis.missing_information
+            ),
+            build_allowed_solution_blocker_references(
+                snapshot.problem_analysis.uncertainties
+            ),
+        )
+    except LLMRequestSchemaError:
+        raise
+    except Exception as error:
+        raise LLMRequestSchemaError() from error
+
+
 def build_coordinator_reference_schema_branch(
     reference: AllowedCoordinatorReference,
 ) -> dict[str, object]:
@@ -1577,6 +1862,30 @@ def build_critic_request_output_schema(
         raise LLMRequestSchemaError() from error
 
 
+def build_analyst_request_output_schema(
+    snapshot: AnalystPayloadSnapshot,
+) -> RequestOutputSchema:
+    try:
+        return _serialize_request_schema(build_dynamic_analyst_schema(snapshot))
+    except LLMRequestSchemaError:
+        raise
+    except Exception as error:
+        raise LLMRequestSchemaError() from error
+
+
+def build_solution_architect_request_output_schema(
+    snapshot: SolutionArchitectPayloadSnapshot,
+) -> RequestOutputSchema:
+    try:
+        return _serialize_request_schema(
+            build_dynamic_solution_architect_schema(snapshot)
+        )
+    except LLMRequestSchemaError:
+        raise
+    except Exception as error:
+        raise LLMRequestSchemaError() from error
+
+
 def build_risk_reviewer_request_output_schema(
     snapshot: RiskReviewerPayloadSnapshot,
 ) -> RequestOutputSchema:
@@ -1606,6 +1915,20 @@ def build_dynamic_request_context(
 ) -> DynamicRequestContext | None:
     try:
         role = definition.role.value
+        if role == "analyst":
+            analyst_snapshot = build_analyst_payload_snapshot(payload)
+            return DynamicRequestContext(
+                serialized_payload=analyst_snapshot.serialized_payload,
+                output_schema=build_analyst_request_output_schema(analyst_snapshot),
+            )
+        if role == "solution_architect":
+            solution_snapshot = build_solution_architect_payload_snapshot(payload)
+            return DynamicRequestContext(
+                serialized_payload=solution_snapshot.serialized_payload,
+                output_schema=build_solution_architect_request_output_schema(
+                    solution_snapshot
+                ),
+            )
         if role == "risk_reviewer":
             risk_snapshot = build_risk_reviewer_payload_snapshot(payload)
             return DynamicRequestContext(
@@ -1626,8 +1949,6 @@ def build_dynamic_request_context(
                     coordinator_snapshot
                 ),
             )
-        if role in {"analyst", "solution_architect"}:
-            return None
         raise ValueError("dynamic request role is invalid")
     except LLMRequestSchemaError:
         raise

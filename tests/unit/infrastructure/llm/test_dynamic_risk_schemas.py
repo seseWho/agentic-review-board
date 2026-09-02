@@ -1271,15 +1271,16 @@ def test_dynamic_request_context_owns_one_risk_snapshot_per_invocation() -> None
 
 
 @pytest.mark.parametrize("role", ["analyst", "solution_architect"])
-def test_dynamic_request_context_closed_dispatch_skips_static_payloads(role: str) -> None:
-    payload = SingleReadMapping({"must": "not be read"})
-    context = build_dynamic_request_context(
-        definition=get_role_prompt_definition(role),
-        payload=payload,
-    )
+def test_dynamic_request_context_rejects_invalid_new_dynamic_payloads(role: str) -> None:
+    payload = SingleReadMapping({"must": "be rejected"})
 
-    assert context is None
-    assert payload.iterations == 0
+    with pytest.raises(LLMRequestSchemaError):
+        build_dynamic_request_context(
+            definition=get_role_prompt_definition(role),
+            payload=payload,
+        )
+
+    assert payload.iterations == 1
 
 
 def test_dynamic_request_context_dispatches_existing_critic_path() -> None:

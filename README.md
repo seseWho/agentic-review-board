@@ -93,10 +93,11 @@ local model, hosted API, or network access:
 pytest
 ```
 
-Live smoke verification is operator-only. It checks every selected profile once with the
-synthetic Analyst payload `{"description":"Live LLM connectivity smoke check."}`. It checks
-connectivity and that a direct JSON object is returned; it does not execute a complete Review
-or assess latency, reasoning, or answer quality.
+Live smoke verification is operator-only. It checks every selected profile once with a
+complete synthetic `ReviewInput` for the Analyst, including empty constraints, context, and
+stated-fact collections. The request uses the Analyst's dynamic schema. It checks connectivity
+and that a direct JSON object is returned; it does not execute a complete Review or assess
+latency, reasoning, or answer quality.
 
 A live run requires all of the following:
 

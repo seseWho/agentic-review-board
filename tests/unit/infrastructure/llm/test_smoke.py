@@ -111,14 +111,17 @@ def test_smoke_uses_one_canonical_synthetic_role_and_payload_contract() -> None:
     for body in request_bodies:
         messages = body["messages"]
         assert isinstance(messages, list)
-        assert messages[1] == {
-            "role": "user",
-            "content": (
-                "UNTRUSTED_PAYLOAD_JSON_BEGIN\n"
-                '{"description":"Live LLM connectivity smoke check."}\n'
-                "UNTRUSTED_PAYLOAD_JSON_END"
-            ),
-        }
+        user_message = messages[1]
+        assert user_message["role"] == "user"
+        assert user_message["content"].startswith(
+            "UNTRUSTED_PAYLOAD_JSON_BEGIN\n"
+            '{"constraints":[],"context":[],"description":'
+            '"Live LLM connectivity smoke check.","objective":null,'
+            '"stated_facts":[],"title":null}\n'
+            "UNTRUSTED_PAYLOAD_JSON_END\n\n"
+            "UNTRUSTED_REQUEST_SCHEMA_JSON_BEGIN\n"
+        )
+        assert user_message["content"].endswith("\nUNTRUSTED_REQUEST_SCHEMA_JSON_END")
 
 
 def test_smoke_reports_only_safe_profile_names_and_closes_after_success() -> None:

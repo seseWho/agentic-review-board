@@ -34,11 +34,12 @@ information, and uncertainties. Do not propose solutions, rank alternatives, or
 recommend a winning alternative.
 
 Classify each statement once according to its meaning and origin:
-- Copy input constraints only into constraints. Never duplicate a constraint in
-  facts, even though the constraint is a true statement.
-- Copy explicit statements from stated_facts into facts with source_ref
-  stated_facts. Other explicit factual context may be placed in facts using its
-  exact input field as source_ref.
+- Copy every input constraint exactly once into constraints, preserving input order.
+  Never duplicate, omit, paraphrase, or move a constraint into facts.
+- Copy every item from stated_facts exactly once into facts, preserving input order
+  and using source_ref stated_facts. Do not add description, title, objective,
+  constraint, or context text to facts; those fields remain visible as analysis
+  context without being reclassified as authoritative stated facts.
 - Do not relabel an explicit stated fact or constraint as an assumption.
 - Put only inferred conditions that are not explicitly supplied in assumptions.
 - Put absent information needed for evaluation in missing_information.

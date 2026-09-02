@@ -16,7 +16,14 @@ from agentic_review_board.infrastructure.llm.openai_compatible import (
     OpenAICompatibleLLMAdapter,
 )
 
-_SMOKE_PAYLOAD = {"description": "Live LLM connectivity smoke check."}
+_SMOKE_PAYLOAD: dict[str, object] = {
+    "description": "Live LLM connectivity smoke check.",
+    "title": None,
+    "objective": None,
+    "constraints": [],
+    "context": [],
+    "stated_facts": [],
+}
 
 
 def verify_selected_profiles(

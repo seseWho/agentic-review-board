@@ -117,7 +117,8 @@ def test_analyst_instruction_requires_disjoint_classification_and_global_ids() -
         .split()
     )
 
-    assert "never duplicate a constraint in facts" in instruction
+    assert "never duplicate, omit, paraphrase, or move a constraint into facts" in instruction
+    assert "copy every item from stated_facts exactly once" in instruction
     assert "do not relabel an explicit stated fact or constraint as an assumption" in instruction
     assert "globally unique across the whole problemanalysis object" in instruction
     assert "never use bare numeric ids" in instruction

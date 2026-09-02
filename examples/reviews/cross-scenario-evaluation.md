@@ -81,3 +81,35 @@ The semantic audit also found quality issues that valid references alone cannot 
 
 This is a small fixed evaluation, not a general reliability score. Its purpose is to
 identify concrete agent behaviors for the next implementation slices.
+
+## Dynamic-contract correction and focused reruns
+
+The first two priorities above were implemented on 2026-09-02. Analyst now receives a
+request-specific schema that fixes every input constraint and `stated_facts` item, including
+stable IDs and input order. Its participant boundary independently rejects omitted,
+duplicated, mutated, reordered, or reclassified authoritative items. Solution Architect now
+receives exact request-specific catalogs for relevant constraints and separate catalogs for
+missing-information and uncertainty blockers. Existing contextual validation remains in
+place as a second fail-closed layer.
+
+Two fresh, non-retry diagnostic executions used vLLM 0.11.0, `Qwen/Qwen3-4B-AWQ`,
+temperature `0`, seed `0`, and the same RTX 3060 profile:
+
+| Scenario | Review | All five agents | Constraints exact | Stated facts exact | Blocker catalogs exact | Seconds |
+|---|---|---|---|---|---|---:|
+| Customer-support AI assistant | COMPLETED | Yes | 10/10, ordered | 5/5, ordered | Yes | 107.63 |
+| Municipal electric-bus charging | COMPLETED | Yes | 10/10, ordered and distinct | 5/5, ordered | Yes | 115.83 |
+
+The support scenario that previously stopped at Solution Architect now completed all five
+stages with three alternatives. Every emitted blocker matched the exact `id` and `text` pair
+in its own upstream collection. The bus scenario retained the previously omitted existing-
+charger compatibility constraint and emitted no duplicate charger-loss constraint.
+
+The preserved diagnostic basenames are:
+
+- `artifacts/scenario-customer-support-ai-assistant-v011-dynamic-contracts-01`
+- `artifacts/scenario-municipal-electric-bus-charging-v011-dynamic-contracts-01`
+
+These focused reruns demonstrate correction of the two observed contract failures. They do
+not revise the original fixed 4/5 reliability measurement and do not address the broader
+semantic-quality observations in priority 3.

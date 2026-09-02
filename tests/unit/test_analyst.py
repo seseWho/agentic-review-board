@@ -43,11 +43,11 @@ def valid_response() -> dict[str, object]:
             {
                 "id": "FACT-001",
                 "text": "A technical change is proposed.",
-                "source_ref": "description",
+                "source_ref": "stated_facts",
             }
         ],
         "constraints": [
-            {"text": "The initial review should stay small."},
+            {"id": "CON-001", "text": "Keep the initial review small."},
         ],
         "assumptions": [
             {"id": "ASM-001", "text": "The existing system can be changed."},
@@ -76,7 +76,7 @@ def test_analyst_returns_trusted_problem_analysis_from_valid_generated_output() 
 
     assert isinstance(analysis, ProblemAnalysis)
     assert analysis.objective == "Determine whether the proposal merits further evaluation."
-    assert analysis.facts[0].source_ref.value == "description"
+    assert analysis.facts[0].source_ref.value == "stated_facts"
     assert analysis.facts[0].id == "FACT-001"
     assert analysis.assumptions[0].id == "ASM-001"
     assert analysis.missing_information[0].id is None
@@ -106,7 +106,10 @@ def test_analyst_invokes_provider_neutral_boundary_once_with_current_review_inpu
 
 
 def test_analyst_happy_path_preserves_role_boundary() -> None:
-    Analyst(FakeLLM(valid_response())).analyze(
+    response = valid_response()
+    response["facts"] = []
+    response["constraints"] = []
+    Analyst(FakeLLM(response)).analyze(
         ReviewInput(description="A technical change is proposed.")
     )
 
@@ -134,6 +137,51 @@ def test_analyst_rejects_fact_reference_to_absent_review_input_field() -> None:
 
     with pytest.raises(AnalystOutputError, match="not applicable"):
         Analyst(FakeLLM(response)).analyze(ReviewInput(description="Review this."))
+
+
+@pytest.mark.parametrize(
+    "constraints",
+    [
+        [],
+        [
+            {"id": "CON-001", "text": "Keep the initial review small."},
+            {"id": "CON-002", "text": "Keep the initial review small."},
+        ],
+        [{"id": "CON-001", "text": "Paraphrased constraint."}],
+    ],
+)
+def test_analyst_rejects_omitted_duplicated_or_mutated_input_constraints(
+    constraints: list[dict[str, str]],
+) -> None:
+    response = valid_response()
+    response["constraints"] = constraints
+    review_input = ReviewInput(
+        description="A technical change is proposed.",
+        constraints=("Keep the initial review small.",),
+        stated_facts=("A technical change is proposed.",),
+    )
+
+    with pytest.raises(AnalystOutputError, match="authoritative constraints"):
+        Analyst(FakeLLM(response)).analyze(review_input)
+
+
+def test_analyst_rejects_reclassified_or_mutated_stated_facts() -> None:
+    response = valid_response()
+    response["facts"] = [
+        {
+            "id": "FACT-001",
+            "text": "A paraphrased technical change is proposed.",
+            "source_ref": "stated_facts",
+        }
+    ]
+    review_input = ReviewInput(
+        description="A technical change is proposed.",
+        constraints=("Keep the initial review small.",),
+        stated_facts=("A technical change is proposed.",),
+    )
+
+    with pytest.raises(AnalystOutputError, match="authoritative stated facts"):
+        Analyst(FakeLLM(response)).analyze(review_input)
 
 
 def test_analyst_normalizes_pydantic_contract_failure() -> None:

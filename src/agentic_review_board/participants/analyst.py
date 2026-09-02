@@ -3,7 +3,12 @@ from collections.abc import Mapping
 from pydantic import ValidationError
 
 from agentic_review_board.application.ports import LLMPort
-from agentic_review_board.domain.analysis import ProblemAnalysis, ReviewInputSource
+from agentic_review_board.domain.analysis import (
+    AnalysisFinding,
+    FactFinding,
+    ProblemAnalysis,
+    ReviewInputSource,
+)
 from agentic_review_board.domain.review import ReviewInput
 
 
@@ -32,6 +37,7 @@ class Analyst:
 
         analysis = self._validate_structure(raw)
         self._validate_fact_provenance(analysis, review_input)
+        self._validate_authoritative_inputs(analysis, review_input)
         return analysis
 
     @staticmethod
@@ -51,6 +57,29 @@ class Analyst:
                 raise AnalystOutputError(
                     f"fact source_ref is not applicable to current ReviewInput: {fact.source_ref.value}"
                 )
+
+    @staticmethod
+    def _validate_authoritative_inputs(
+        analysis: ProblemAnalysis,
+        review_input: ReviewInput,
+    ) -> None:
+        expected_facts = tuple(
+            FactFinding(
+                id=f"FACT-{index:03d}",
+                text=text,
+                source_ref=ReviewInputSource.STATED_FACTS,
+            )
+            for index, text in enumerate(review_input.stated_facts, start=1)
+        )
+        if analysis.facts != expected_facts:
+            raise AnalystOutputError("Analyst did not preserve authoritative stated facts")
+
+        expected_constraints = tuple(
+            AnalysisFinding(id=f"CON-{index:03d}", text=text)
+            for index, text in enumerate(review_input.constraints, start=1)
+        )
+        if analysis.constraints != expected_constraints:
+            raise AnalystOutputError("Analyst did not preserve authoritative constraints")
 
     @staticmethod
     def _source_is_applicable(source: ReviewInputSource, review_input: ReviewInput) -> bool:

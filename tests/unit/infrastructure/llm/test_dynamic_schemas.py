@@ -23,7 +23,6 @@ from agentic_review_board.infrastructure.llm.dynamic_schemas import (
     AllowedContradictionSide,
     AllowedCriticReference,
     CriticPayloadSnapshot,
-    RequestOutputSchema,
     build_allowed_contradiction_sides,
     build_allowed_critic_references,
     build_contradiction_side_schema_branch,
@@ -855,27 +854,17 @@ def test_dynamic_schema_preserves_strict_outer_critical_review_contract() -> Non
     )
 
 
-@pytest.mark.parametrize(
-    "role",
-    [
-        LLMRole.ANALYST,
-        LLMRole.SOLUTION_ARCHITECT,
-    ],
-)
-def test_remaining_static_roles_bypass_dynamic_payloads_and_keep_strict_schema(
+@pytest.mark.parametrize("role", [LLMRole.ANALYST, LLMRole.SOLUTION_ARCHITECT])
+def test_new_dynamic_roles_reject_payloads_outside_their_exact_contract(
     role: LLMRole,
 ) -> None:
     definition = get_role_prompt_definition(role.value)
 
-    request_schema = build_request_output_schema(
-        definition=definition,
-        payload={"not": "a Critic payload"},
-    )
-
-    assert isinstance(request_schema, RequestOutputSchema)
-    assert request_schema.new_document() == _strict_json_schema(
-        definition.output_model.model_json_schema()
-    )
+    with pytest.raises(LLMRequestSchemaError):
+        build_request_output_schema(
+            definition=definition,
+            payload={"not": "an exact dynamic-role payload"},
+        )
 
 
 def test_request_output_schema_is_deterministic_and_has_no_mutable_alias() -> None:

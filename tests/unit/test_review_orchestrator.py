@@ -664,6 +664,7 @@ def test_checked_in_invalid_risk_reference_remains_fail_closed() -> None:
     assert isinstance(problem_analysis, dict)
     assert isinstance(solution_alternatives, dict)
     assert isinstance(invalid_reference, dict)
+    review_input["constraints"] = ["Must work offline."]
     invalid_output = {
         "risks": [
             {

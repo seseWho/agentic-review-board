@@ -15,7 +15,14 @@ from agentic_review_board.infrastructure.llm.openai_compatible import (
 def invoke_through_unchanged_port(port: LLMPort) -> Mapping[str, object]:
     return port.generate_structured(
         role="analyst",
-        payload={"description": "structural contract marker"},
+        payload={
+            "description": "structural contract marker",
+            "title": None,
+            "objective": None,
+            "constraints": [],
+            "context": [],
+            "stated_facts": [],
+        },
     )
 
 

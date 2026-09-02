@@ -24,6 +24,15 @@ from agentic_review_board.infrastructure.llm.openai_compatible import (
 
 Handler = Callable[[httpx.Request], httpx.Response]
 
+_ANALYST_PAYLOAD: dict[str, object] = {
+    "description": "payload-marker",
+    "title": None,
+    "objective": None,
+    "constraints": [],
+    "context": [],
+    "stated_facts": [],
+}
+
 
 def resolved_profile() -> ResolvedLLMProfile:
     profile_name = "selected"
@@ -61,7 +70,7 @@ def invoke(
         )
         return adapter.generate_structured(
             role="analyst",
-            payload=payload if payload is not None else {"input": "payload-marker"},
+            payload=payload if payload is not None else _ANALYST_PAYLOAD,
         )
 
 
