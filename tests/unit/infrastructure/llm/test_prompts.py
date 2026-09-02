@@ -119,6 +119,8 @@ def test_analyst_instruction_requires_disjoint_classification_and_global_ids() -
 
     assert "never duplicate, omit, paraphrase, or move a constraint into facts" in instruction
     assert "copy every item from stated_facts exactly once" in instruction
+    assert "copy every context item exactly once" in instruction
+    assert "never say that a supplied quantity or detail is absent" in instruction
     assert "do not relabel an explicit stated fact or constraint as an assumption" in instruction
     assert "globally unique across the whole problemanalysis object" in instruction
     assert "never use bare numeric ids" in instruction
@@ -142,6 +144,9 @@ def test_solution_architect_instruction_requires_exact_typed_references() -> Non
     assert "only exact id-and-text pairs" in instruction
     assert "never place an unc-* finding in blocking_missing_information" in instruction
     assert "its corresponding blocking collection must be empty" in instruction
+    assert "prospective proposals, not validated implementations" in instruction
+    assert "do not claim that an alternative `ensures`" in instruction
+    assert "is not evidence of achieved compliance" in instruction
 
 
 def test_risk_reviewer_instruction_forbids_composed_or_invented_references() -> None:
@@ -171,6 +176,11 @@ def test_critic_instruction_bounds_output_and_requires_exact_references() -> Non
     assert "target_reference identifies the challenged item" in instruction
     assert "must never be repeated in basis_references" in instruction
     assert "only distinct additional evidence" in instruction
+    assert "target must be the item directly challenged" in instruction
+    assert "cannot both be true in the same scope and time" in instruction
+    assert "not contradictory merely because their numbers differ" in instruction
+    assert "both opposing propositions must be explicitly present" in instruction
+    assert "do not add an unstated assumption, downtime" in instruction
 
 
 def test_coordinator_instruction_requires_consistent_criticism_dispositions() -> None:
@@ -188,6 +198,11 @@ def test_coordinator_instruction_requires_consistent_criticism_dispositions() ->
     assert "non-empty reflected_in" in instruction
     assert "outcome dismissed requires an empty reflected_in" in instruction
     assert "choose reflected" in instruction
+    assert "preserve the modality of upstream evidence" in instruction
+    assert "is not proof that it already does" in instruction
+    assert "is a proposal, not validation evidence" in instruction
+    assert "you do not modify them" in instruction
+    assert "never say an alternative `is adjusted`" in instruction
 
 
 @pytest.mark.parametrize(("role", "output_model"), ROLE_MODELS.items())

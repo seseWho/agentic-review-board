@@ -36,13 +36,17 @@ recommend a winning alternative.
 Classify each statement once according to its meaning and origin:
 - Copy every input constraint exactly once into constraints, preserving input order.
   Never duplicate, omit, paraphrase, or move a constraint into facts.
-- Copy every item from stated_facts exactly once into facts, preserving input order
-  and using source_ref stated_facts. Do not add description, title, objective,
-  constraint, or context text to facts; those fields remain visible as analysis
-  context without being reclassified as authoritative stated facts.
+- Copy every item from stated_facts exactly once into facts first, preserving input
+  order and using source_ref stated_facts. Then copy every context item exactly once,
+  preserving input order and using source_ref context. Do not add description, title,
+  objective, or constraint text to facts.
 - Do not relabel an explicit stated fact or constraint as an assumption.
 - Put only inferred conditions that are not explicitly supplied in assumptions.
-- Put absent information needed for evaluation in missing_information.
+- Put absent information needed for evaluation in missing_information. Before doing
+  so, check description, objective, constraints, context, and stated_facts. Never say
+  that a supplied quantity or detail is absent, unknown, not provided, or unspecified.
+  If greater precision is genuinely needed, name only the exact additional detail
+  that is absent and preserve the information already supplied.
 - Put unresolved outcomes or effects in uncertainties.
 
 Every optional id that you choose to emit must be globally unique across the whole
@@ -68,6 +72,13 @@ Return exactly two or three alternatives when viable alternatives can be produce
 never return exactly one alternative. Return an empty alternatives collection only
 when genuine blockers make every alternative impossible, and then explain those
 blockers in generation_notes.
+
+Alternatives are prospective proposals, not validated implementations. Describe
+mechanisms, intended outcomes, and conditions using language such as `designed to`,
+`would`, `could`, `requires`, or `must be validated`. Do not claim that an alternative
+`ensures`, `guarantees`, `proves`, has demonstrated, or fully complies with a required
+outcome. A requirement or relevant_constraints reference is not evidence of achieved
+compliance.
 
 Use alternative ids ALT-001, ALT-002, and ALT-003. For every relevant_constraints
 item, copy an exact existing constraint reference: REVIEW_INPUT supports only kind
@@ -131,7 +142,18 @@ never combine an id with its value or text.
 
 Within each criticism, target_reference identifies the challenged item and must never
 be repeated in basis_references. Basis references may contain only distinct additional
-evidence. Omit a redundant basis item instead of duplicating target_reference.
+evidence. The target must be the item directly challenged by the issue; do not choose
+an unrelated item merely to avoid repeating a basis reference. For a two-item conflict,
+target one side and use the other as basis. Omit a redundant basis item instead of
+duplicating target_reference.
+
+Emit a contradiction only when its two exact propositions cannot both be true in the
+same scope and time. Different deadlines, retention periods, targets, or planning
+horizons are not contradictory merely because their numbers differ. When coexistence
+is possible or scope is unclear, use unresolved_issues or omit the claim. Both opposing
+propositions must be explicitly present in the exact referenced values. Do not add an
+unstated assumption, downtime, capability, deadline, or outcome in the contradiction
+rationale to manufacture opposition between otherwise compatible statements.
 """.strip()
 
 _COORDINATOR_INSTRUCTION: Final = """
@@ -151,6 +173,19 @@ section that incorporates the criticism. Outcome DISMISSED requires an empty
 reflected_in collection. If the criticism changes, qualifies, or is acknowledged in
 any visible final section, choose REFLECTED rather than DISMISSED. Use DISMISSED only
 when the rationale explains why the criticism does not affect any final section.
+
+Preserve the modality of upstream evidence. A requirement that a solution must,
+should, may, or is intended to achieve something is not proof that it already does.
+Do not change `must ensure`, `must support`, or equivalent requirements into claims
+that an alternative `ensures`, `guarantees`, or has demonstrated the outcome unless
+the supplied artifacts contain explicit validation evidence. A SolutionAlternative
+description, advantage, assumption, or constraint reference is a proposal, not
+validation evidence. State unvalidated compliance as a condition or validation need.
+You synthesize existing alternatives;
+you do not modify them. Never say an alternative `is adjusted`, a concern `is being
+addressed`, or a risk `is managed` unless an exact supplied artifact reports that
+completed or ongoing action. Use `must be adjusted`, `must be addressed`, `requires
+mitigation`, or `requires validation` when the action is only proposed.
 """.strip()
 
 

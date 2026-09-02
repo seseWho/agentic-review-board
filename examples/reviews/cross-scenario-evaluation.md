@@ -113,3 +113,37 @@ The preserved diagnostic basenames are:
 These focused reruns demonstrate correction of the two observed contract failures. They do
 not revise the original fixed 4/5 reliability measurement and do not address the broader
 semantic-quality observations in priority 3.
+
+## Semantic-grounding diagnostic
+
+A follow-up slice made every explicit `context` item an exact, ordered Analyst fact after
+the `stated_facts` items. The participant validates the same invariant independently of the
+provider schema. Prompts were also strengthened so that missing-information claims must
+account for supplied quantities, contradictions require two explicit opposing propositions,
+and prospective alternatives must not be described as proven compliance.
+
+The SaaS diagnostic `semantic-contracts-01` completed all five stages in 120.56 seconds.
+Analyst emitted all 13 explicit facts, including 9 TB, 180 GB monthly growth, 12000 writes
+per second, and the 70-percent replication result. It returned no missing-information
+findings, and Critic did not repeat the former seven-year/six-month conflict. It did,
+however, invent a five-minute sharding outage not stated by its exact references. A second
+run after a stricter Critic instruction reproduced that unsupported inference; Coordinator
+then failed closed for unrelated invalid principal-risk identifiers. The preserved
+basenames are:
+
+- `artifacts/scenario-regional-saas-data-platform-migration-v011-semantic-contracts-01`
+- `artifacts/scenario-regional-saas-data-platform-migration-v011-semantic-contracts-02`
+
+Cold-chain diagnostics before and after prospective-language instructions both completed
+all five stages, in 134.05 and 102.67 seconds respectively. Both still promoted proposed
+capabilities into assertions such as `ensures data integrity` or `ensures auditability`.
+Their basenames are:
+
+- `artifacts/scenario-cold-chain-monitoring-modernization-v011-semantic-contracts-01`
+- `artifacts/scenario-cold-chain-monitoring-modernization-v011-semantic-contracts-02`
+
+Therefore the known-versus-missing defect is structurally corrected for explicit context,
+but logical contradiction validity and modal preservation are not yet guaranteed. Repeated
+prompt tightening did not close those gaps on Qwen3-4B-AWQ. The next functional slice should
+represent proposed-versus-evidenced compliance and contradiction support as typed data that
+participants can validate, rather than relying on unrestricted rationale prose.

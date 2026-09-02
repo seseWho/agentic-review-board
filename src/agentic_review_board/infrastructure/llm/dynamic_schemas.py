@@ -13,6 +13,8 @@ from agentic_review_board.domain.analysis import (
     FactFinding,
     ProblemAnalysis,
     ReviewInputSource,
+    build_authoritative_constraints,
+    build_authoritative_facts,
 )
 from agentic_review_board.domain.critics import (
     CriticalReview,
@@ -1299,19 +1301,12 @@ def narrow_analyst_schema(
                 raise TypeError("ProblemAnalysis authoritative property is invalid")
 
         facts = [
-            FactFinding(
-                id=f"FACT-{index:03d}",
-                text=text,
-                source_ref=ReviewInputSource.STATED_FACTS,
-            ).model_dump(mode="json")
-            for index, text in enumerate(review_input.stated_facts, start=1)
+            fact.model_dump(mode="json")
+            for fact in build_authoritative_facts(review_input)
         ]
         constraints = [
-            AnalysisFinding(
-                id=f"CON-{index:03d}",
-                text=text,
-            ).model_dump(mode="json")
-            for index, text in enumerate(review_input.constraints, start=1)
+            constraint.model_dump(mode="json")
+            for constraint in build_authoritative_constraints(review_input)
         ]
         properties["facts"] = {"const": facts}
         properties["constraints"] = {"const": constraints}

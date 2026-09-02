@@ -3,6 +3,8 @@ from typing import Self
 
 from pydantic import BaseModel, ConfigDict, StrictStr, field_validator, model_validator
 
+from agentic_review_board.domain.review import ReviewInput
+
 
 class ReviewInputSource(StrEnum):
     """ReviewInput fields that may provide structural provenance for a fact."""
@@ -103,3 +105,27 @@ class ProblemAnalysis(BaseModel):
             raise ValueError("finding ids must be unique within ProblemAnalysis when provided")
 
         return self
+
+
+def build_authoritative_facts(review_input: ReviewInput) -> tuple[FactFinding, ...]:
+    """Return every explicit input fact with stable provenance and identifiers."""
+
+    values = (
+        *((text, ReviewInputSource.STATED_FACTS) for text in review_input.stated_facts),
+        *((text, ReviewInputSource.CONTEXT) for text in review_input.context),
+    )
+    return tuple(
+        FactFinding(id=f"FACT-{index:03d}", text=text, source_ref=source)
+        for index, (text, source) in enumerate(values, start=1)
+    )
+
+
+def build_authoritative_constraints(
+    review_input: ReviewInput,
+) -> tuple[AnalysisFinding, ...]:
+    """Return every explicit input constraint with stable identifiers."""
+
+    return tuple(
+        AnalysisFinding(id=f"CON-{index:03d}", text=text)
+        for index, text in enumerate(review_input.constraints, start=1)
+    )

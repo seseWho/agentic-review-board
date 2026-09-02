@@ -36,18 +36,32 @@ class FailingLLM:
         raise ProviderFailure("provider unavailable")
 
 
-def valid_response() -> dict[str, object]:
+def valid_response(
+    *,
+    context: tuple[str, ...] = (),
+    stated_facts: tuple[str, ...] = ("A technical change is proposed.",),
+    constraints: tuple[str, ...] = ("Keep the initial review small.",),
+) -> dict[str, object]:
+    facts = [
+        {
+            "id": f"FACT-{index:03d}",
+            "text": text,
+            "source_ref": source,
+        }
+        for index, (text, source) in enumerate(
+            (
+                *((text, "stated_facts") for text in stated_facts),
+                *((text, "context") for text in context),
+            ),
+            start=1,
+        )
+    ]
     return {
         "objective": "Determine whether the proposal merits further evaluation.",
-        "facts": [
-            {
-                "id": "FACT-001",
-                "text": "A technical change is proposed.",
-                "source_ref": "stated_facts",
-            }
-        ],
+        "facts": facts,
         "constraints": [
-            {"id": "CON-001", "text": "Keep the initial review small."},
+            {"id": f"CON-{index:03d}", "text": text}
+            for index, text in enumerate(constraints, start=1)
         ],
         "assumptions": [
             {"id": "ASM-001", "text": "The existing system can be changed."},
@@ -62,7 +76,7 @@ def valid_response() -> dict[str, object]:
 
 
 def test_analyst_returns_trusted_problem_analysis_from_valid_generated_output() -> None:
-    llm = FakeLLM(valid_response())
+    llm = FakeLLM(valid_response(context=("The change affects an existing system.",)))
     review_input = ReviewInput(
         description="A technical change is proposed.",
         title="Technical change review",
@@ -78,12 +92,14 @@ def test_analyst_returns_trusted_problem_analysis_from_valid_generated_output() 
     assert analysis.objective == "Determine whether the proposal merits further evaluation."
     assert analysis.facts[0].source_ref.value == "stated_facts"
     assert analysis.facts[0].id == "FACT-001"
+    assert analysis.facts[1].source_ref.value == "context"
+    assert analysis.facts[1].id == "FACT-002"
     assert analysis.assumptions[0].id == "ASM-001"
     assert analysis.missing_information[0].id is None
 
 
 def test_analyst_invokes_provider_neutral_boundary_once_with_current_review_input() -> None:
-    llm = FakeLLM(valid_response())
+    llm = FakeLLM(valid_response(context=("Existing system.",)))
     review_input = ReviewInput(
         description="A technical change is proposed.",
         title="Technical change review",
@@ -106,9 +122,7 @@ def test_analyst_invokes_provider_neutral_boundary_once_with_current_review_inpu
 
 
 def test_analyst_happy_path_preserves_role_boundary() -> None:
-    response = valid_response()
-    response["facts"] = []
-    response["constraints"] = []
+    response = valid_response(stated_facts=(), constraints=())
     Analyst(FakeLLM(response)).analyze(
         ReviewInput(description="A technical change is proposed.")
     )
@@ -180,7 +194,27 @@ def test_analyst_rejects_reclassified_or_mutated_stated_facts() -> None:
         stated_facts=("A technical change is proposed.",),
     )
 
-    with pytest.raises(AnalystOutputError, match="authoritative stated facts"):
+    with pytest.raises(AnalystOutputError, match="authoritative input facts"):
+        Analyst(FakeLLM(response)).analyze(review_input)
+
+
+def test_analyst_rejects_omitted_or_mutated_context_facts() -> None:
+    response = valid_response(context=("Exact capacity is 9 TB.",))
+    facts = response["facts"]
+    assert isinstance(facts, list)
+    facts[-1] = {
+        "id": "FACT-002",
+        "text": "Capacity is unspecified.",
+        "source_ref": "context",
+    }
+    review_input = ReviewInput(
+        description="A technical change is proposed.",
+        constraints=("Keep the initial review small.",),
+        context=("Exact capacity is 9 TB.",),
+        stated_facts=("A technical change is proposed.",),
+    )
+
+    with pytest.raises(AnalystOutputError, match="authoritative input facts"):
         Analyst(FakeLLM(response)).analyze(review_input)
 
 

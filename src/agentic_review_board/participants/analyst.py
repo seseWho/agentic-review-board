@@ -4,10 +4,10 @@ from pydantic import ValidationError
 
 from agentic_review_board.application.ports import LLMPort
 from agentic_review_board.domain.analysis import (
-    AnalysisFinding,
-    FactFinding,
     ProblemAnalysis,
     ReviewInputSource,
+    build_authoritative_constraints,
+    build_authoritative_facts,
 )
 from agentic_review_board.domain.review import ReviewInput
 
@@ -63,21 +63,11 @@ class Analyst:
         analysis: ProblemAnalysis,
         review_input: ReviewInput,
     ) -> None:
-        expected_facts = tuple(
-            FactFinding(
-                id=f"FACT-{index:03d}",
-                text=text,
-                source_ref=ReviewInputSource.STATED_FACTS,
-            )
-            for index, text in enumerate(review_input.stated_facts, start=1)
-        )
+        expected_facts = build_authoritative_facts(review_input)
         if analysis.facts != expected_facts:
-            raise AnalystOutputError("Analyst did not preserve authoritative stated facts")
+            raise AnalystOutputError("Analyst did not preserve authoritative input facts")
 
-        expected_constraints = tuple(
-            AnalysisFinding(id=f"CON-{index:03d}", text=text)
-            for index, text in enumerate(review_input.constraints, start=1)
-        )
+        expected_constraints = build_authoritative_constraints(review_input)
         if analysis.constraints != expected_constraints:
             raise AnalystOutputError("Analyst did not preserve authoritative constraints")
 

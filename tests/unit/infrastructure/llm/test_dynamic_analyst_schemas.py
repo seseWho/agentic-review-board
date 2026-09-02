@@ -90,6 +90,11 @@ def test_dynamic_analyst_schema_preserves_authoritative_input_exactly_once() -> 
                 "source_ref": "stated_facts",
                 "id": "FACT-002",
             },
+            {
+                "text": "The grid-upgrade date is not committed.",
+                "source_ref": "context",
+                "id": "FACT-003",
+            },
         ]
     }
     assert properties["constraints"] == {

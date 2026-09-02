@@ -206,6 +206,12 @@ Statements explicitly supported by ReviewInput.
 
 A fact SHALL NOT be introduced solely because it appears plausible.
 
+For the executable local-LLM contract, every `stated_facts` item SHALL be copied first
+and every `context` item SHALL then be copied into `facts[]`, preserving the order within
+each source collection. Text, provenance, and deterministic `FACT-*` identifiers SHALL
+be preserved exactly. This makes quantitative and operational context visible to all
+downstream participants rather than leaving it only in the raw input.
+
 ### constraints[]
 
 Explicit restrictions, boundaries, obligations, or conditions relevant to the problem.
@@ -231,10 +237,11 @@ Known ambiguities or areas where available information permits more than one rea
 The Analyst SHALL satisfy all of the following:
 
 1. Every item in `facts[]` is traceable to ReviewInput.
-2. Assumptions are explicitly separated from facts.
-3. Missing information is not silently filled with invented content.
-4. The objective is consistent with the user's stated problem.
-5. The Analyst does not choose a preferred solution.
+2. Every explicit `stated_facts` and `context` item appears exactly once in `facts[]`.
+3. Assumptions are explicitly separated from facts.
+4. Missing information is not silently filled with invented content.
+5. The objective is consistent with the user's stated problem.
+6. The Analyst does not choose a preferred solution.
 
 ## 4.6 Prohibited Behavior
 
