@@ -147,6 +147,8 @@ def test_solution_architect_instruction_requires_exact_typed_references() -> Non
     assert "prospective proposals, not validated implementations" in instruction
     assert "do not claim that an alternative `ensures`" in instruction
     assert "is not evidence of achieved compliance" in instruction
+    assert "set every alternative validation_status to proposed" in instruction
+    assert "no authority or validation evidence" in instruction
 
 
 def test_risk_reviewer_instruction_forbids_composed_or_invented_references() -> None:
@@ -181,6 +183,7 @@ def test_critic_instruction_bounds_output_and_requires_exact_references() -> Non
     assert "not contradictory merely because their numbers differ" in instruction
     assert "both opposing propositions must be explicitly present" in instruction
     assert "do not add an unstated assumption, downtime" in instruction
+    assert "set every contradiction support_status to unverified" in instruction
 
 
 def test_coordinator_instruction_requires_consistent_criticism_dispositions() -> None:
@@ -203,6 +206,9 @@ def test_coordinator_instruction_requires_consistent_criticism_dispositions() ->
     assert "is a proposal, not validation evidence" in instruction
     assert "you do not modify them" in instruction
     assert "never say an alternative `is adjusted`" in instruction
+    assert "copy validation_status exactly" in instruction
+    assert "never promote proposed to evidenced" in instruction
+    assert "support_status is unverified" in instruction
 
 
 @pytest.mark.parametrize(("role", "output_model"), ROLE_MODELS.items())

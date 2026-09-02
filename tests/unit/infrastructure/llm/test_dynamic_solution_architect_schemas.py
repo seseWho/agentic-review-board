@@ -157,6 +157,18 @@ def test_solution_schema_uses_exact_constraint_branches() -> None:
     ] == expected
 
 
+def test_solution_schema_requires_proposed_validation_status() -> None:
+    schema = build_dynamic_solution_architect_schema(
+        build_solution_architect_payload_snapshot(solution_payload())
+    )
+    definitions = as_object(schema["$defs"])
+    alternative = as_object(definitions["SolutionAlternative"])
+    properties = as_object(alternative["properties"])
+
+    assert properties["validation_status"] == {"const": "PROPOSED"}
+    assert "validation_status" in alternative["required"]
+
+
 def test_solution_schema_closes_empty_reference_collections() -> None:
     review_input = ReviewInput(description="Review an underspecified choice.")
     problem_analysis = ProblemAnalysis(

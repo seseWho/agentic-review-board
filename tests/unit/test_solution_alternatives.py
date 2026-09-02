@@ -4,6 +4,7 @@ from pydantic import ValidationError
 import agentic_review_board.domain.solutions as solution_contracts
 from agentic_review_board.domain.shared import QualitativeLevel
 from agentic_review_board.domain.solutions import (
+    AlternativeValidationStatus,
     ConstraintReference,
     ConstraintReferenceKind,
     ConstraintSource,
@@ -74,6 +75,10 @@ def test_shared_solution_vocabularies_are_closed() -> None:
         "PROBLEM_ANALYSIS",
     }
     assert {kind.value for kind in ConstraintReferenceKind} == {"TEXT", "ID"}
+    assert {status.value for status in AlternativeValidationStatus} == {
+        "PROPOSED",
+        "EVIDENCED",
+    }
 
 
 def test_constraint_reference_accepts_only_supported_source_kind_combinations() -> None:
@@ -138,6 +143,20 @@ def test_solution_alternative_preserves_explicit_tradeoffs_and_immutable_collect
     assert isinstance(alternative.assumptions, tuple)
     assert isinstance(alternative.relevant_constraints, tuple)
     assert alternative.relevant_constraints[0].source is ConstraintSource.REVIEW_INPUT
+    assert alternative.validation_status is AlternativeValidationStatus.PROPOSED
+
+
+def test_solution_alternative_accepts_only_closed_validation_status() -> None:
+    data = valid_alternative_data()
+    data["validation_status"] = "EVIDENCED"
+
+    evidenced = SolutionAlternative.model_validate(data)
+
+    assert evidenced.validation_status is AlternativeValidationStatus.EVIDENCED
+
+    data["validation_status"] = "VALIDATED"
+    with pytest.raises(ValidationError):
+        SolutionAlternative.model_validate(data)
 
 
 def test_solution_alternatives_accepts_two_or_three_unique_alternatives() -> None:

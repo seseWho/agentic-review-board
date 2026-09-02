@@ -78,7 +78,8 @@ mechanisms, intended outcomes, and conditions using language such as `designed t
 `would`, `could`, `requires`, or `must be validated`. Do not claim that an alternative
 `ensures`, `guarantees`, `proves`, has demonstrated, or fully complies with a required
 outcome. A requirement or relevant_constraints reference is not evidence of achieved
-compliance.
+compliance. Set every alternative validation_status to PROPOSED. This role has no
+authority or validation evidence with which to emit EVIDENCED.
 
 Use alternative ids ALT-001, ALT-002, and ALT-003. For every relevant_constraints
 item, copy an exact existing constraint reference: REVIEW_INPUT supports only kind
@@ -153,7 +154,9 @@ horizons are not contradictory merely because their numbers differ. When coexist
 is possible or scope is unclear, use unresolved_issues or omit the claim. Both opposing
 propositions must be explicitly present in the exact referenced values. Do not add an
 unstated assumption, downtime, capability, deadline, or outcome in the contradiction
-rationale to manufacture opposition between otherwise compatible statements.
+rationale to manufacture opposition between otherwise compatible statements. Set every
+contradiction support_status to UNVERIFIED. Critic identifies a claim for later human or
+external validation; it has no authority to emit EVIDENCED.
 """.strip()
 
 _COORDINATOR_INSTRUCTION: Final = """
@@ -162,6 +165,11 @@ Alternatives, Risk Assessment, and Critical Review. Rank alternatives and recomm
 the justified preferred option while preserving uncertainty, dissent, and conditions.
 Support human decision authority: do not make an autonomous external decision,
 execute the recommendation, or perform any external action.
+
+For each ranked alternative, copy validation_status exactly from the corresponding
+SolutionAlternative. Never promote PROPOSED to EVIDENCED. Treat every Critic contradiction
+whose support_status is UNVERIFIED as an assertion requiring validation, not as an
+established conflict that by itself excludes an alternative.
 
 Return exactly one criticism_dispositions item for every item in
 critical_review.criticisms and no others, copying its criticism id exactly. Create

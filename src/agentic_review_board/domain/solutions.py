@@ -20,6 +20,13 @@ class ConstraintReferenceKind(StrEnum):
     ID = "ID"
 
 
+class AlternativeValidationStatus(StrEnum):
+    """Whether an alternative is merely proposed or backed by validation evidence."""
+
+    PROPOSED = "PROPOSED"
+    EVIDENCED = "EVIDENCED"
+
+
 class ConstraintReference(BaseModel):
     """Explicit review-local reference to a known upstream constraint."""
 
@@ -89,6 +96,7 @@ class SolutionAlternative(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     id: StrictStr
+    validation_status: AlternativeValidationStatus = AlternativeValidationStatus.PROPOSED
     name: StrictStr
     description: StrictStr
     advantages: tuple[StrictStr, ...]

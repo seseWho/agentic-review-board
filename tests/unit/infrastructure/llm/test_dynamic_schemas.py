@@ -829,8 +829,18 @@ def test_dynamic_schema_preserves_strict_outer_critical_review_contract() -> Non
         for name in generated_definitions
     )
     for name, definition in strict_definitions.items():
-        if name not in {"Criticism", "CriticReference", "ContradictionSide"}:
+        if name not in {
+            "Contradiction",
+            "Criticism",
+            "CriticReference",
+            "ContradictionSide",
+        }:
             assert definitions[name] == definition
+
+    contradiction = as_json_object(definitions["Contradiction"])
+    contradiction_properties = as_json_object(contradiction["properties"])
+    assert contradiction_properties["support_status"] == {"const": "UNVERIFIED"}
+    assert "support_status" in contradiction["required"]
 
     criticism = as_json_object(definitions["Criticism"])
     assert len(as_json_array(criticism["oneOf"])) == len(

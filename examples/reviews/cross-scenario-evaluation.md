@@ -147,3 +147,25 @@ but logical contradiction validity and modal preservation are not yet guaranteed
 prompt tightening did not close those gaps on Qwen3-4B-AWQ. The next functional slice should
 represent proposed-versus-evidenced compliance and contradiction support as typed data that
 participants can validate, rather than relying on unrestricted rationale prose.
+
+## Typed evidence-state diagnostic
+
+That next slice was implemented and exercised once against the cold-chain scenario with
+vLLM 0.11.0, `Qwen/Qwen3-4B-AWQ`, temperature `0`, seed `0`, and the RTX 3060 profile. The
+review completed all five stages in 119.31 seconds. Its preserved basename is:
+
+- `artifacts/scenario-cold-chain-monitoring-modernization-v011-evidence-status-01`
+
+All three Solution Architect alternatives were explicitly `PROPOSED`. The single Critic
+contradiction was explicitly `UNVERIFIED`. Coordinator copied `PROPOSED` for all three
+ranked alternatives, with zero identifier/status mismatches. Provider schemas constrain
+these values before generation, and participant boundaries independently reject an
+Architect or Critic self-promotion and any Coordinator status change.
+
+The diagnostic also defines the remaining limitation precisely: free-form descriptions and
+ranking justifications still contained phrases such as `ensures data integrity`. The typed
+consumer-visible state remained `PROPOSED`, so this wording no longer silently promotes the
+alternative at the contract level, but modal correctness inside unrestricted prose is not
+solved. Likewise, `UNVERIFIED` prevents the generated contradiction from being represented
+as established evidence; it does not prove that the contradiction's rationale is logically
+sound. A future evidence-authorized stage would be required to produce `EVIDENCED`.

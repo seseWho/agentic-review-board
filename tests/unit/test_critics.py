@@ -4,6 +4,7 @@ from pydantic import ValidationError
 from agentic_review_board.domain.critics import (
     Contradiction,
     ContradictionSide,
+    ContradictionSupportStatus,
     CriticalReview,
     Criticism,
     CriticismImportance,
@@ -623,6 +624,21 @@ def test_contradiction_does_not_decide_which_side_is_true() -> None:
     payload = contradiction_payload()
     payload["winner"] = "side_a"
 
+    with pytest.raises(ValidationError):
+        Contradiction.model_validate(payload)
+
+
+def test_contradiction_support_status_is_closed_and_defaults_to_unverified() -> None:
+    contradiction = Contradiction.model_validate(contradiction_payload())
+
+    assert contradiction.support_status is ContradictionSupportStatus.UNVERIFIED
+
+    payload = contradiction_payload()
+    payload["support_status"] = "EVIDENCED"
+    evidenced = Contradiction.model_validate(payload)
+    assert evidenced.support_status is ContradictionSupportStatus.EVIDENCED
+
+    payload["support_status"] = "CONFIRMED"
     with pytest.raises(ValidationError):
         Contradiction.model_validate(payload)
 

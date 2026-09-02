@@ -10,6 +10,7 @@ from agentic_review_board.domain.analysis import (
     ProblemAnalysis,
 )
 from agentic_review_board.domain.critics import (
+    ContradictionSupportStatus,
     CriticalReview,
     Criticism,
     CriticismTargetType,
@@ -105,6 +106,8 @@ class Critic:
                 resolve(reference)
 
         for contradiction in critical_review.contradictions:
+            if contradiction.support_status is not ContradictionSupportStatus.UNVERIFIED:
+                raise CriticOutputError("Critic cannot claim contradiction evidence")
             side_a = resolve(contradiction.side_a.reference)
             side_b = resolve(contradiction.side_b.reference)
             if contradiction.side_a.statement != side_a.visible_value:

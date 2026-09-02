@@ -17,6 +17,7 @@ from agentic_review_board.domain.analysis import (
     build_authoritative_facts,
 )
 from agentic_review_board.domain.critics import (
+    ContradictionSupportStatus,
     CriticalReview,
     CriticismTargetType,
     CriticReference,
@@ -47,6 +48,7 @@ from agentic_review_board.domain.risks import (
     SolutionAlternativeCharacteristicKind,
 )
 from agentic_review_board.domain.solutions import (
+    AlternativeValidationStatus,
     ConstraintReference,
     ConstraintReferenceKind,
     ConstraintSource,
@@ -1438,6 +1440,14 @@ def narrow_solution_architect_schema(
         relevant_constraints = alternative_properties.get("relevant_constraints")
         if not isinstance(relevant_constraints, dict):
             raise TypeError("relevant constraints schema is invalid")
+        alternative_properties["validation_status"] = {
+            "const": AlternativeValidationStatus.PROPOSED.value
+        }
+        alternative_required = alternative.get("required")
+        if not isinstance(alternative_required, list):
+            raise TypeError("SolutionAlternative required fields are invalid")
+        if "validation_status" not in alternative_required:
+            alternative_required.append("validation_status")
 
         if owned_constraints:
             definitions["ConstraintReference"] = {
@@ -1674,14 +1684,23 @@ def narrow_coordinator_schema(
     base_schema: Mapping[str, object],
     references: Iterable[AllowedCoordinatorReference],
     criticism_ids: Iterable[str],
+    alternative_statuses: Iterable[tuple[str, AlternativeValidationStatus]],
 ) -> dict[str, object]:
     try:
         owned_references = tuple(references)
         owned_criticism_ids = tuple(criticism_ids)
+        owned_alternative_statuses = tuple(alternative_statuses)
         if any(not criticism_id for criticism_id in owned_criticism_ids):
             raise ValueError("criticism id must not be empty")
         if len(owned_criticism_ids) != len(set(owned_criticism_ids)):
             raise ValueError("criticism ids must be unique")
+        alternative_ids = tuple(
+            alternative_id for alternative_id, _status in owned_alternative_statuses
+        )
+        if any(not alternative_id for alternative_id in alternative_ids):
+            raise ValueError("alternative id must not be empty")
+        if len(alternative_ids) != len(set(alternative_ids)):
+            raise ValueError("alternative ids must be unique")
 
         result = deepcopy(dict(base_schema))
         definitions = result.get("$defs")
@@ -1696,6 +1715,30 @@ def narrow_coordinator_schema(
             raise TypeError("UnresolvedQuestion properties are invalid")
         if not isinstance(definitions.get("CriticismDisposition"), dict):
             raise TypeError("CriticismDisposition definition is invalid")
+        ranked_definition = definitions.get("RankedAlternative")
+        if not isinstance(ranked_definition, dict):
+            raise TypeError("RankedAlternative definition is invalid")
+
+        if owned_alternative_statuses:
+            ranked_branches: list[dict[str, object]] = []
+            for alternative_id, status in owned_alternative_statuses:
+                if not isinstance(status, AlternativeValidationStatus):
+                    raise TypeError("alternative validation status is invalid")
+                branch = deepcopy(ranked_definition)
+                branch_properties = branch.get("properties")
+                branch_required = branch.get("required")
+                if not isinstance(branch_properties, dict) or not isinstance(
+                    branch_required, list
+                ):
+                    raise TypeError("RankedAlternative branch shape is invalid")
+                branch_properties["alternative_id"] = {"const": alternative_id}
+                branch_properties["validation_status"] = {"const": status.value}
+                if "validation_status" not in branch_required:
+                    branch_required.append("validation_status")
+                ranked_branches.append(branch)
+            definitions["RankedAlternative"] = {"oneOf": ranked_branches}
+        else:
+            properties["ranked_alternatives"] = {"const": []}
 
         if owned_references:
             unresolved_properties["reference"] = {
@@ -1747,6 +1790,10 @@ def build_dynamic_coordinator_schema(
             FinalReview.model_json_schema(),
             references,
             criticism_ids,
+            tuple(
+                (alternative.id, alternative.validation_status)
+                for alternative in snapshot.solution_alternatives.alternatives
+            ),
         )
     except LLMRequestSchemaError:
         raise
@@ -1770,6 +1817,20 @@ def narrow_critic_schema(
             raise TypeError("CriticReference definition is invalid")
         if not isinstance(definitions.get("ContradictionSide"), dict):
             raise TypeError("ContradictionSide definition is invalid")
+        contradiction_definition = definitions.get("Contradiction")
+        if not isinstance(contradiction_definition, dict):
+            raise TypeError("Contradiction definition is invalid")
+        contradiction_properties = contradiction_definition.get("properties")
+        contradiction_required = contradiction_definition.get("required")
+        if not isinstance(contradiction_properties, dict) or not isinstance(
+            contradiction_required, list
+        ):
+            raise TypeError("Contradiction schema shape is invalid")
+        contradiction_properties["support_status"] = {
+            "const": ContradictionSupportStatus.UNVERIFIED.value
+        }
+        if "support_status" not in contradiction_required:
+            contradiction_required.append("support_status")
         criticism_definition = definitions.get("Criticism")
         if not isinstance(criticism_definition, dict):
             raise TypeError("Criticism definition is invalid")

@@ -324,6 +324,13 @@ class ContradictionSide(BaseModel):
         return value
 
 
+class ContradictionSupportStatus(StrEnum):
+    """Whether a contradiction is an unverified assertion or externally evidenced."""
+
+    UNVERIFIED = "UNVERIFIED"
+    EVIDENCED = "EVIDENCED"
+
+
 class Contradiction(BaseModel):
     """Two visible propositions that cannot comfortably coexist as expressed."""
 
@@ -334,6 +341,7 @@ class Contradiction(BaseModel):
     )
 
     id: str
+    support_status: ContradictionSupportStatus = ContradictionSupportStatus.UNVERIFIED
     side_a: ContradictionSide
     side_b: ContradictionSide
     rationale: str

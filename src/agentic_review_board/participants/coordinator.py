@@ -96,6 +96,19 @@ class Coordinator:
         if ranked_alternative_ids != current_alternative_ids:
             raise CoordinatorOutputError("invalid Coordinator output")
 
+        current_validation_statuses = {
+            alternative.id: alternative.validation_status
+            for alternative in solution_alternatives.alternatives
+        }
+        if any(
+            ranked.validation_status
+            is not current_validation_statuses[ranked.alternative_id]
+            for ranked in final_review.ranked_alternatives
+        ):
+            raise CoordinatorOutputError(
+                "Coordinator cannot change alternative validation status"
+            )
+
         if not current_alternative_ids:
             if final_review.recommendation_outcome.value != "INSUFFICIENT_EVIDENCE":
                 raise CoordinatorOutputError("invalid Coordinator output")

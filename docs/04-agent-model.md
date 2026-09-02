@@ -318,6 +318,7 @@ SolutionAlternative
 - assumptions[]
 - implementation_complexity
 - relevant_constraints[]
+- validation_status
 ```
 
 ### name
@@ -352,6 +353,13 @@ It SHALL be treated as a relative engineering judgment, not a measured project e
 
 References to known constraints that materially shape or limit the alternative.
 
+### validation_status
+
+Typed evidence state for the alternative. `PROPOSED` means that the approach is a
+candidate whose claimed capabilities still require validation; `EVIDENCED` is reserved
+for a future participant or process with explicit evidence authority. The Solution
+Architect SHALL emit only `PROPOSED` and SHALL NOT self-promote an alternative.
+
 ## 5.5 No-Alternative Case
 
 If the available problem frame does not support multiple meaningful alternatives, the Solution Architect SHALL NOT fabricate artificial variants merely to satisfy a count.
@@ -373,6 +381,7 @@ The Solution Architect SHALL satisfy all of the following:
 4. New assumptions remain explicitly identified.
 5. Advantages and disadvantages are attached to a specific alternative.
 6. No alternative is declared the final winner.
+7. Every generated alternative has `validation_status=PROPOSED`.
 
 ## 5.7 Prohibited Behavior
 
@@ -384,6 +393,7 @@ The Solution Architect SHALL NOT:
 - invent user facts to make an alternative viable;
 - duplicate the same approach under superficial wording changes;
 - treat implementation complexity as a statistically measured probability or duration estimate.
+- claim `EVIDENCED` status for an alternative.
 
 ## 5.8 Downstream Consumers
 
@@ -644,6 +654,12 @@ The Critic SHALL identify contradictions between explicit artifacts when present
 - advantages and disadvantages;
 - multiple upstream conclusions.
 
+Each contradiction SHALL expose a `support_status`. `UNVERIFIED` means that the Critic
+has identified a possible conflict but no evidence-authorized process has established it
+as a true contradiction. `EVIDENCED` is reserved for such a future process. The Critic
+SHALL emit only `UNVERIFIED`; the Coordinator SHALL treat it as a validation target, not
+as an established reason to exclude an alternative.
+
 ## 7.8 Critic Invariants
 
 The Critic SHALL satisfy all of the following:
@@ -654,6 +670,7 @@ The Critic SHALL satisfy all of the following:
 4. The Critic does not silently rewrite upstream artifacts.
 5. Newly identified uncertainty remains explicit.
 6. Criticism occurs before the Coordinator may produce a complete final review.
+7. Every contradiction has `support_status=UNVERIFIED`.
 
 ## 7.9 Prohibited Behavior
 
@@ -666,6 +683,7 @@ The Critic SHALL NOT:
 - introduce fabricated facts;
 - rely on hidden reasoning not represented in the structured output;
 - dismiss a valid conclusion solely because it originated from another participant.
+- claim `EVIDENCED` support for a contradiction.
 
 ## 7.10 Downstream Consumer
 
@@ -733,6 +751,7 @@ Each `RankedAlternative` SHALL contain:
 ```text
 RankedAlternative
 - alternative_reference
+- validation_status
 - position
 - justification
 - considerations[]
@@ -746,6 +765,9 @@ Concise summary of the decision context, preserving material uncertainty.
 ### ranked_alternatives[]
 
 When multiple alternatives are available, the Coordinator SHALL rank them from most suitable to least suitable.
+
+Every ranked item SHALL copy the exact `validation_status` of its referenced upstream
+alternative. Ranking an alternative does not validate its claimed capabilities.
 
 ### justification
 
@@ -829,6 +851,7 @@ The Coordinator SHALL satisfy all of the following:
 6. The final result remains recognizable as decision support.
 7. A preferred alternative is omitted when evidence is insufficient.
 8. Confidence remains qualitative unless a future validated methodology is introduced.
+9. Ranked alternatives preserve their upstream validation status exactly.
 
 ## 8.8 Prohibited Behavior
 
@@ -841,6 +864,7 @@ The Coordinator SHALL NOT:
 - claim final authority over the human decision;
 - hide unresolved questions solely to make the recommendation appear stronger;
 - silently create a new alternative that was never reviewed.
+- promote an alternative from `PROPOSED` to `EVIDENCED`.
 
 ## 8.9 Downstream Consumer
 

@@ -20,6 +20,7 @@ from agentic_review_board.domain.final_reviews import (
     UnresolvedQuestionSource,
 )
 from agentic_review_board.domain.shared import QualitativeLevel
+from agentic_review_board.domain.solutions import AlternativeValidationStatus
 
 
 def ranked_alternative(**overrides: object) -> RankedAlternative:
@@ -73,6 +74,7 @@ def test_ranked_alternative_accepts_valid_immutable_closed_contract() -> None:
 
     assert ranked.alternative_id == "ALT-001"
     assert ranked.position == 1
+    assert ranked.validation_status is AlternativeValidationStatus.PROPOSED
     assert ranked.considerations == (
         "Confirm ownership.",
         "Validate support effort.",
@@ -91,6 +93,15 @@ def test_ranked_alternative_accepts_valid_immutable_closed_contract() -> None:
                 "unexpected": "forbidden",
             }
         )
+
+
+def test_ranked_alternative_validation_status_uses_closed_solution_vocabulary() -> None:
+    evidenced = ranked_alternative(validation_status="EVIDENCED")
+
+    assert evidenced.validation_status is AlternativeValidationStatus.EVIDENCED
+
+    with pytest.raises(ValidationError):
+        ranked_alternative(validation_status="VALIDATED")
 
 
 @pytest.mark.parametrize("position", [True, False, 0, -1, 1.0, "1"])

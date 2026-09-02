@@ -6,6 +6,7 @@ from agentic_review_board.application.ports import LLMPort
 from agentic_review_board.domain.analysis import AnalysisFinding, ProblemAnalysis
 from agentic_review_board.domain.review import ReviewInput
 from agentic_review_board.domain.solutions import (
+    AlternativeValidationStatus,
     ConstraintReference,
     ConstraintReferenceKind,
     ConstraintSource,
@@ -38,9 +39,20 @@ class SolutionArchitect:
         )
 
         alternatives = self._validate_structure(raw)
+        self._validate_proposal_status(alternatives)
         self._validate_constraint_references(alternatives, review_input, problem_analysis)
         self._validate_generation_notes(alternatives, problem_analysis)
         return alternatives
+
+    @staticmethod
+    def _validate_proposal_status(alternatives: SolutionAlternatives) -> None:
+        if any(
+            alternative.validation_status is not AlternativeValidationStatus.PROPOSED
+            for alternative in alternatives.alternatives
+        ):
+            raise SolutionArchitectOutputError(
+                "Solution Architect cannot claim validation evidence"
+            )
 
     @staticmethod
     def _validate_structure(raw: Mapping[str, object]) -> SolutionAlternatives:

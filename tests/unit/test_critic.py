@@ -9,6 +9,7 @@ from agentic_review_board.domain.analysis import (
     ReviewInputSource,
 )
 from agentic_review_board.domain.critics import (
+    ContradictionSupportStatus,
     CriticalReview,
     CriticReferenceKind,
 )
@@ -1182,6 +1183,23 @@ def test_contradiction_statements_match_resolved_id_primary_visible_values() -> 
     contradiction = result.contradictions[0]
     assert contradiction.side_a.statement == "Local deployment"
     assert contradiction.side_b.statement == "Operational ownership is not established."
+    assert contradiction.support_status is ContradictionSupportStatus.UNVERIFIED
+
+
+def test_critic_cannot_self_promote_contradiction_to_evidenced() -> None:
+    response = contradiction_response()
+    contradictions = response["contradictions"]
+    assert isinstance(contradictions, list)
+    contradiction = contradictions[0]
+    assert isinstance(contradiction, dict)
+    contradiction["support_status"] = "EVIDENCED"
+
+    with pytest.raises(CriticOutputError, match="cannot claim contradiction evidence"):
+        run_critic(
+            response,
+            alternatives=populated_solution_alternatives(),
+            risks=populated_risk_assessment(),
+        )
 
 
 def test_contradiction_statement_rejects_incompatible_visible_value() -> None:

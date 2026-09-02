@@ -20,6 +20,7 @@ from agentic_review_board.domain.risks import (
 )
 from agentic_review_board.domain.shared import QualitativeLevel
 from agentic_review_board.domain.solutions import (
+    AlternativeValidationStatus,
     FindingReference,
     GenerationNotes,
     SolutionAlternative,
@@ -155,6 +156,10 @@ def test_coordinator_calls_exact_boundary_and_returns_separate_trusted_review() 
 
     assert isinstance(result, FinalReview)
     assert result.preferred_alternative_id == "ALT-001"
+    assert all(
+        item.validation_status is AlternativeValidationStatus.PROPOSED
+        for item in result.ranked_alternatives
+    )
     assert id(result) not in {id(artifact) for artifact in upstream}
     assert tuple(artifact.model_dump(mode="json") for artifact in upstream) == before
 
@@ -170,6 +175,18 @@ def test_coordinator_calls_exact_boundary_and_returns_separate_trusted_review() 
             },
         )
     ]
+
+
+def test_coordinator_cannot_promote_upstream_alternative_validation_status() -> None:
+    response = recommended_response()
+    ranking = response["ranked_alternatives"]
+    assert isinstance(ranking, list)
+    first = ranking[0]
+    assert isinstance(first, dict)
+    first["validation_status"] = "EVIDENCED"
+
+    with pytest.raises(CoordinatorOutputError, match="validation status"):
+        run_coordinator(response)
 
 
 

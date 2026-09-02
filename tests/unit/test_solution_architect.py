@@ -4,7 +4,11 @@ import pytest
 
 from agentic_review_board.domain.analysis import AnalysisFinding, ProblemAnalysis
 from agentic_review_board.domain.review import ReviewInput
-from agentic_review_board.domain.solutions import SolutionAlternative, SolutionAlternatives
+from agentic_review_board.domain.solutions import (
+    AlternativeValidationStatus,
+    SolutionAlternative,
+    SolutionAlternatives,
+)
 from agentic_review_board.participants.solution_architect import (
     SolutionArchitect,
     SolutionArchitectOutputError,
@@ -184,6 +188,24 @@ def test_solution_architect_returns_trusted_two_alternative_result() -> None:
     assert len(result.alternatives) == 2
     assert result.alternatives[0].id == "ALT-001"
     assert result.alternatives[1].id == "ALT-002"
+    assert all(
+        item.validation_status is AlternativeValidationStatus.PROPOSED
+        for item in result.alternatives
+    )
+
+
+def test_solution_architect_cannot_self_promote_alternative_to_evidenced() -> None:
+    alternatives = base_alternatives()
+    alternatives[0]["validation_status"] = "EVIDENCED"
+
+    with pytest.raises(
+        SolutionArchitectOutputError,
+        match="cannot claim validation evidence",
+    ):
+        SolutionArchitect(FakeLLM(response_from(alternatives))).propose(
+            review_input(),
+            problem_analysis(),
+        )
 
 
 def test_solution_architect_accepts_valid_three_alternative_result() -> None:

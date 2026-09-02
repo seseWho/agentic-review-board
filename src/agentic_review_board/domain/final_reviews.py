@@ -4,6 +4,7 @@ from typing import Annotated, Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator, model_validator
 
 from agentic_review_board.domain.shared import QualitativeLevel
+from agentic_review_board.domain.solutions import AlternativeValidationStatus
 
 
 class RecommendationOutcome(StrEnum):
@@ -42,6 +43,7 @@ class RankedAlternative(BaseModel):
     )
 
     alternative_id: str
+    validation_status: AlternativeValidationStatus = AlternativeValidationStatus.PROPOSED
     position: StrictInt
     justification: str
     considerations: tuple[str, ...]

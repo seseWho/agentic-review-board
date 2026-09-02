@@ -169,6 +169,25 @@ def test_dynamic_coordinator_schema_excludes_non_criticism_dispositions() -> Non
     assert "uniqueItems" not in str(schema)
 
 
+def test_dynamic_coordinator_schema_correlates_alternative_and_validation_status() -> None:
+    schema = build_dynamic_coordinator_schema(
+        build_coordinator_payload_snapshot(coordinator_payload())
+    )
+    definitions = as_object(schema["$defs"])
+    ranked = as_object(definitions["RankedAlternative"])
+    branches = as_array(ranked["oneOf"])
+    pairs = {
+        (
+            exact_branch_value(branch)["alternative_id"],
+            exact_branch_value(branch)["validation_status"],
+        )
+        for branch in branches
+    }
+
+    assert pairs == {("ALT-001", "PROPOSED"), ("ALT-002", "PROPOSED")}
+    assert all("validation_status" in as_object(branch)["required"] for branch in branches)
+
+
 def test_coordinator_request_context_uses_dynamic_schema_and_detached_payload() -> None:
     payload = coordinator_payload()
     definition = get_role_prompt_definition(LLMRole.COORDINATOR.value)
