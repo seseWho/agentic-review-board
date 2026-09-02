@@ -233,3 +233,33 @@ This diagnostic does not replace any campaign row or change the recorded 4/5 cam
 result. It demonstrates that vLLM 0.11.0 on the RTX 3060 enforces the new Critic
 cross-field schema and that Analyst, Solution Architect, Risk Reviewer, Critic, and
 Coordinator still complete together without retries, automatic repair, or fallback.
+
+## Post-fix five-run repeatability campaign
+
+On 2026-09-02, a new fixed five-run campaign evaluated the provider-enforced Critic
+cross-field schema. It used the same `Qwen/Qwen3-4B-AWQ` model, vLLM 0.11.0 container,
+RTX 3060, configuration, English desktop-migration input, temperature `0`, seed `0`,
+and 4096-token output limit as the preceding diagnostic. Every run was initiated as an
+independent process with a fresh aggregate path and raw-output directory. No failed or
+incomplete run would have been retried or replaced.
+
+| Run | Review | Analyst | Solution Architect | Risk Reviewer | Critic | Coordinator | Seconds | Preserved ignored artifacts |
+|---|---|---|---|---|---|---|---:|---|
+| 01 | COMPLETED | COMPLETED | COMPLETED | COMPLETED | COMPLETED | COMPLETED | 122.71 | `artifacts/slice-7.2-v011-critic-schema-run-01.json`, `.raw/` |
+| 02 | COMPLETED | COMPLETED | COMPLETED | COMPLETED | COMPLETED | COMPLETED | 112.96 | `artifacts/slice-7.2-v011-critic-schema-run-02.json`, `.raw/` |
+| 03 | COMPLETED | COMPLETED | COMPLETED | COMPLETED | COMPLETED | COMPLETED | 122.31 | `artifacts/slice-7.2-v011-critic-schema-run-03.json`, `.raw/` |
+| 04 | COMPLETED | COMPLETED | COMPLETED | COMPLETED | COMPLETED | COMPLETED | 117.27 | `artifacts/slice-7.2-v011-critic-schema-run-04.json`, `.raw/` |
+| 05 | COMPLETED | COMPLETED | COMPLETED | COMPLETED | COMPLETED | COMPLETED | 112.66 | `artifacts/slice-7.2-v011-critic-schema-run-05.json`, `.raw/` |
+
+All five reviews and all 25 participant stages completed, yielding an observed 5/5
+(100%) end-to-end completion rate for this fixed campaign. Mean elapsed time was
+117.58 seconds, with a 112.66-second minimum and 122.71-second maximum. Each Critic
+output contained one criticism. Direct inspection of all five raw Critic artifacts
+found zero exact target/basis repetitions and zero criticism basis arrays containing
+exact duplicates.
+
+This campaign is new post-fix evidence and does not rewrite the preceding 4/5 campaign
+or its failed run 01. Together, the results isolate the earlier failure mode and show
+that it did not recur after provider enforcement. The sample remains intentionally
+small and scenario-specific; 5/5 is not a general reliability guarantee for the model,
+hardware, or other review inputs.
