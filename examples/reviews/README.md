@@ -26,3 +26,6 @@ Run one scenario against a configured local provider:
 
 Use fresh output paths for every evaluation. Preserve incomplete and failed runs; do
 not replace them with retries when measuring reliability.
+
+The first fixed cross-scenario execution is recorded in
+[`cross-scenario-evaluation.md`](cross-scenario-evaluation.md).
