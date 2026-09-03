@@ -91,13 +91,14 @@ dirección manualmente.
 
 Realiza el recorrido:
 
-1. Comprueba que aparecen seis campos y las cinco tarjetas del proceso.
-2. Escribe una descripción no vacía; los otros campos son opcionales.
-3. Pulsa una sola vez **Start Review**.
-4. Espera al estado global **Completed**.
-5. Abre el detalle de cada participante.
-6. Comprueba que aparece la sección independiente **Final result**.
-7. Pulsa **New Review** y verifica que se limpian formulario, estados y resultado.
+1. Comprueba que el editor del caso aparece en la barra lateral.
+2. Importa `examples\reviews\critical-desktop-migration.en.md` o escribe una descripción.
+3. Revisa los seis campos; importar el archivo no debe iniciar ningún agente.
+4. Comprueba que Coordinator aparece arriba y los especialistas en una cuadrícula 2x2.
+5. Pulsa una sola vez **Start Review** y verifica que el editor deja paso al resumen colapsado.
+6. Espera al estado global **Completed** y abre las tarjetas de los participantes.
+7. Comprueba que aparece el **Decision workspace** independiente con sus pestañas.
+8. Pulsa **New Review** y verifica que se limpian formulario, importación, estados y resultado.
 
 El orden visible debe ser Analyst, Solution Architect, Risk Reviewer, Critic y Coordinator.
 Cada participante completado debe tener un artefacto confiable. Detén Streamlit con `Ctrl+C`.
@@ -160,9 +161,42 @@ $env:NO_PROXY = "localhost,127.0.0.1"
 Abre <http://localhost:8501>. Cargar la página no llama al modelo; la ejecución comienza
 únicamente al pulsar **Start Review**.
 
-Usa como entrada de referencia
-[`../examples/reviews/critical-desktop-migration.en.json`](../examples/reviews/critical-desktop-migration.en.json).
-Para consultar sus valores cómodamente:
+Importa directamente esta entrada de referencia desde la barra lateral:
+
+[`../examples/reviews/critical-desktop-migration.en.md`](../examples/reviews/critical-desktop-migration.en.md)
+
+El formato aceptado es:
+
+```markdown
+# Optional title
+
+## Description
+
+Required problem statement.
+
+## Objective
+
+Optional objective.
+
+## Constraints
+
+- One flat item per line
+
+## Context
+
+- One flat item per line
+
+## Stated facts
+
+- One flat item per line
+```
+
+También se aceptan los encabezados españoles `Descripción`, `Objetivo`, `Restricciones`,
+`Contexto` y `Hechos declarados`. El archivo debe utilizar UTF-8 y no puede superar 1 MiB.
+Los encabezados desconocidos o duplicados y las listas mal formadas se rechazan sin alterar
+el borrador actual.
+
+Como alternativa, consulta los valores JSON y rellena el editor manualmente:
 
 ```powershell
 $scenario = Get-Content `
@@ -181,6 +215,7 @@ Copia `title`, `description` y `objective` en sus campos. Copia cada elemento de
 Antes de empezar:
 
 - confirma que los cinco agentes están en estado **Pending**;
+- confirma que importar o editar no ha ejecutado el modelo;
 - anota la hora de inicio;
 - pulsa **Start Review** una sola vez;
 - no recargues ni cierres la pestaña mientras se ejecuta.
@@ -196,7 +231,7 @@ Una ejecución completa pasa cuando:
 - el estado global termina en **Completed**;
 - los cinco agentes terminan en **Completed** y en el orden canónico;
 - cada etapa completada muestra su artefacto confiable;
-- Coordinator produce la sección **Final result**;
+- Coordinator produce el **Decision workspace** con la sección **Final result**;
 - el resultado conserva riesgos, incertidumbres y estado de la evidencia;
 - la UI no muestra prompts, respuestas crudas, credenciales ni detalles internos de errores.
 

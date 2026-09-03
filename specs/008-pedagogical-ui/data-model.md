@@ -5,7 +5,7 @@
 **Specification:** `specs/008-pedagogical-ui/spec.md` — Approved
 **Plan:** `specs/008-pedagogical-ui/plan.md` — Approved
 **ADR:** `docs/adr/ADR-0003-streamlit-for-pedagogical-review-ui.md` — Accepted
-**Status:** Approved — jointly reviewed on 2026-09-03, including preservation amendment
+**Status:** Approved — jointly reviewed on 2026-09-03, including dashboard/import revision
 
 **Approved amendment:** During `tasks.md` consistency review, input normalization was corrected to
 preserve every non-empty user value exactly, as required by US1. Whitespace is inspected
@@ -23,8 +23,9 @@ domain contracts remain the only semantic source of truth. New types are limited
 2. one UI-local execution boundary;
 3. one normalized form draft;
 4. one small UI session-state model;
-5. one derived stage-presentation model; and
-6. one sanitized UI-error model.
+5. one bounded Markdown import projection;
+6. one derived stage-presentation model; and
+7. one sanitized UI-error model.
 
 No database schema, persistence DTO, API payload, event store, workflow graph, provider
 response type, or duplicate Review aggregate is introduced.
@@ -232,6 +233,19 @@ semantic cleanup, or placeholder submission occurs.
 The resulting values are passed to the existing `ReviewInput` constructor. Any domain
 validation failure keeps the UI in form state and does not create or start a Review.
 
+### 5.3 Markdown import projection
+
+`MarkdownReviewCase` is one frozen transient projection with the same six conceptual values
+as the editor. `decode_markdown_case` accepts at most 1 MiB, requires UTF-8 (with an
+optional BOM), and parses only the documented level-one title, level-two semantic sections,
+and flat collection bullets. It returns a complete value or raises `MarkdownCaseError`; no
+partial projection exists.
+
+The projection populates widget strings before those widgets are rendered. It never creates
+a `Review`, starts an executor, or enters trusted domain state. A SHA-256 content digest in
+widget session state prevents an unchanged upload from overwriting subsequent manual edits;
+the imported bytes and digest are cleared with New Review.
+
 ## 6. UI Session State
 
 ### 6.1 Types
@@ -261,7 +275,6 @@ class UiError:
 class ReviewUiState:
     phase: UiPhase = UiPhase.FORM
     review: Review | None = None
-    selected_stage: StageIdentity | None = None
     error: UiError | None = None
 ```
 
@@ -273,20 +286,19 @@ stored.
 
 ### 6.2 State invariants
 
-| Phase | `review` | `selected_stage` | `error` |
-|---|---|---|---|
-| `FORM` | `None` | `None` | `None` |
-| `EXECUTING` | latest trusted Review; normally `CREATED` or `RUNNING`, briefly terminal after the final notification | `None` or an identity in that Review | `None` |
-| `RESULT` | `COMPLETED` or `INCOMPLETE` | `None` or an identity in that Review | `None` |
-| `APPLICATION_ERROR` before first observation | `None` | `None` | `STARTUP` |
-| `APPLICATION_ERROR` after observation | latest trusted Review or `None` | optional valid identity | `APPLICATION` |
+| Phase | `review` | `error` |
+|---|---|---|
+| `FORM` | `None` | `None` |
+| `EXECUTING` | latest trusted Review; normally `CREATED` or `RUNNING`, briefly terminal after the final notification | `None` |
+| `RESULT` | `COMPLETED` or `INCOMPLETE` | `None` |
+| `APPLICATION_ERROR` before first observation | `None` | `STARTUP` |
+| `APPLICATION_ERROR` after observation | latest trusted Review or `None` | `APPLICATION` |
 
 Additional invariants:
 
 - A `FinalReview` view exists only for a `COMPLETED` Review whose Coordinator stage is
   `COMPLETED`; existing domain validation guarantees the output type.
 - An `INCOMPLETE` Review never exposes a final-result view.
-- `selected_stage` never changes orchestration or trusted state.
 - Widget values are not copied into `ReviewUiState`; after start, submitted input is
   available through `review.review_input`.
 - Raw exceptions, model output, prompts, credentials, clients, runtimes, and configuration
@@ -436,14 +448,16 @@ Transition rules:
 5. A terminal return replaces `state.review` and changes phase to `RESULT`.
 6. A second Start event while not in `FORM` performs no execution.
 7. New Review replaces the entire `ReviewUiState` with its default and removes all six
-   form-widget keys plus any detail-widget keys.
-8. No transition reuses the prior Review, selected stage, error, or draft values.
+   form-widget keys plus Markdown upload, digest, and feedback keys.
+8. No transition reuses the prior Review, error, imported case, or draft values.
 
 ## 9. Data Lifecycle and Trust Matrix
 
 | Data | Created by | Stored where | Lifetime | Trusted for semantic display |
 |---|---|---|---|---|
 | Form strings | User/Streamlit widgets | Session widget state | Until start/reset/session loss | No |
+| Markdown upload bytes and digest | User/Streamlit uploader | Session widget state | Until upload replacement/reset/session loss | No |
+| `MarkdownReviewCase` | Pure bounded parser | Local call stack | Import projection only | No |
 | `ReviewInputDraft` | UI mapping | Local call stack | Input conversion only | No |
 | `ReviewInput` | Existing domain validation | Inside Review | Active Review/session | Yes |
 | `Review` snapshot | Existing domain transitions | One UI session-state slot | Active Review/session | Yes |
@@ -468,6 +482,7 @@ src/agentic_review_board/
 └── ui/
     ├── __init__.py              # public render entry only
     ├── app.py                   # ReviewExecutor, draft/session/error state, Streamlit shell
+    ├── markdown_case.py         # bounded dependency-free Markdown import projection
     └── presentation.py          # descriptors, StagePresentation, pure mappings/render helpers
 
 streamlit_app.py                 # concrete executor composition and deterministic cleanup
@@ -485,6 +500,7 @@ application modules never import them.
 | Observer exception propagation | Orchestrator unit test |
 | Runtime forwarding and close behavior | Composition unit tests |
 | Draft normalization and duplicate/order preservation | Pure UI unit tests |
+| Markdown encoding, structure, atomicity, and widget projection | Pure parser tests plus `AppTest` |
 | Exhaustive descriptors and status labels | Pure presentation unit tests |
 | Blocked-stage derivation | Pure presentation unit tests |
 | Completed-only output dispatch | Pure presentation unit tests |
@@ -519,7 +535,7 @@ Slice 8 deliberately defines none of the following:
 - [x] One session Review slot prevents latest/terminal divergence.
 - [x] Final-result availability is derived only from trusted terminal state.
 - [x] Blocked status is presentation-only and derived from canonical failure state.
-- [x] Reset removes prior Review, input, selection, and error state.
+- [x] Reset removes prior Review, input, Markdown import, and error state.
 - [x] Secrets, runtime objects, raw output, and exception text cannot enter UI state.
 - [x] No unresolved clarification marker remains.
 

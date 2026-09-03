@@ -2,12 +2,14 @@
 
 import streamlit as st
 
-from agentic_review_board.ui import render_app
+from agentic_review_board.ui import configure_page, render_app
 from tests.ui.fixtures.review_scenarios import (
     ScenarioExecutor,
     ScenarioKind,
     scenario_executor,
 )
+
+configure_page()
 
 SCENARIO_KEY = "_arb_test_scenario"
 EXECUTOR_KEY = "_arb_test_executor"

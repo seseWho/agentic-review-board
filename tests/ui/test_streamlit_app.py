@@ -32,18 +32,21 @@ def visible_text(at: AppTest) -> str:
         at.error,
         at.success,
     )
-    return "\n".join(
+    values = [
         str(element.value)
         for collection in collections
         for element in collection
-    )
+    ]
+    values.extend(f"{element.label}: {element.value}" for element in at.metric)
+    values.extend(str(element.label) for element in at.expander)
+    return "\n".join(values)
 
 
 def all_rendered_text(at: AppTest) -> str:
     values = [visible_text(at)]
     values.extend(str(element.value) for element in at.code)
     values.extend(str(element.value) for element in at.json)
-    values.extend(str(element.label) for element in at.expander)
+    values.extend(str(element.label) for element in at.tabs)
     return "\n".join(values)
 
 
@@ -79,6 +82,8 @@ def test_initial_form_is_explicit_complete_and_inert() -> None:
     assert at.text_area(key="arb_context").label == "Context (optional, one per line)"
     assert at.text_area(key="arb_stated_facts").label == "Stated facts (optional, one per line)"
     assert at.button(key="arb_start").label == "Start Review"
+    assert at.file_uploader(key="arb_markdown_upload").allowed_type == [".md", ".markdown"]
+    assert len(at.sidebar.text_area) == 5
     assert executor(at).calls == ()
     assert all(name in text for name in (
         "Analyst",
@@ -88,6 +93,7 @@ def test_initial_form_is_explicit_complete_and_inert() -> None:
         "Coordinator",
     ))
     assert "Not started" in text
+    assert len(at.columns) == 7
 
     at.text_area(key="arb_description").set_value("Editing is not submission.").run()
     assert executor(at).execution_count == 0
@@ -100,6 +106,83 @@ def test_invalid_input_never_starts_agents() -> None:
 
     assert executor(at).calls == ()
     assert "Description is required" in visible_text(at)
+
+
+def test_markdown_import_populates_editable_fields_without_starting_agents() -> None:
+    at = app()
+    markdown = b"""# Imported case
+
+## Description
+
+Imported description.
+
+## Objective
+
+Imported objective.
+
+## Constraints
+
+- First constraint
+- First constraint
+
+## Context
+
+- Imported context
+
+## Stated facts
+
+- Imported fact
+"""
+
+    at.file_uploader(key="arb_markdown_upload").set_value(
+        ("case.md", markdown, "text/markdown")
+    ).run()
+
+    assert at.text_input(key="arb_title").value == "Imported case"
+    assert at.text_area(key="arb_description").value == "Imported description."
+    assert at.text_area(key="arb_objective").value == "Imported objective."
+    assert at.text_area(key="arb_constraints").value == (
+        "First constraint\nFirst constraint"
+    )
+    assert at.text_area(key="arb_context").value == "Imported context"
+    assert at.text_area(key="arb_stated_facts").value == "Imported fact"
+    assert "Case imported" in visible_text(at)
+    assert executor(at).execution_count == 0
+
+    at.button(key="arb_start").click().run()
+
+    assert executor(at).execution_count == 1
+    assert executor(at).calls[0][1]["description"] == "Imported description."
+    assert executor(at).calls[0][1]["constraints"] == (
+        "First constraint",
+        "First constraint",
+    )
+
+    at.button(key="arb_new_review").click().run()
+
+    assert at.text_input(key="arb_title").value == ""
+    assert at.text_area(key="arb_description").value == ""
+    assert "Case imported" not in visible_text(at)
+
+
+def test_invalid_markdown_import_is_atomic_and_safe() -> None:
+    at = app()
+    at.text_input(key="arb_title").set_value("Existing title")
+    at.text_area(key="arb_description").set_value("Existing description").run()
+
+    at.file_uploader(key="arb_markdown_upload").set_value(
+        (
+            "invalid.md",
+            b"## Description\nValid\n## Unknown\nMust not disappear",
+            "text/markdown",
+        )
+    ).run()
+
+    assert at.text_input(key="arb_title").value == "Existing title"
+    assert at.text_area(key="arb_description").value == "Existing description"
+    assert "Unknown Markdown section" in visible_text(at)
+    assert "Must not disappear" not in visible_text(at)
+    assert executor(at).execution_count == 0
 
 
 def test_explicit_start_preserves_input_and_executes_once_across_reruns() -> None:
@@ -122,7 +205,12 @@ def test_explicit_start_preserves_input_and_executes_once_across_reruns() -> Non
         "stated_facts": ("The workflow contains five agents.",),
     }
     assert at.text_input == []
+    assert at.file_uploader == []
     assert all(button.key != "arb_start" for button in at.button)
+    assert any(
+        str(expander.label).startswith("Submitted case ·")
+        for expander in at.sidebar.expander
+    )
     at.run()
     assert executor(at).execution_count == 1
     assert len(executor(at).calls) == 5
@@ -132,31 +220,19 @@ def test_complete_process_uses_canonical_agent_order_and_trusted_states() -> Non
     at = submit_complete_form(app())
     text = visible_text(at)
 
-    stage_headings = [
-        str(element.value).removeprefix("### ")
-        for element in at.markdown
-        if str(element.value).startswith("### ")
+    stage_cards = [
+        str(element.label) for element in at.expander if "Step " in str(element.label)
     ]
-    assert stage_headings == [
-        "Analyst",
-        "Solution Architect",
-        "Risk Reviewer",
-        "Critic",
-        "Coordinator",
+    assert stage_cards == [
+        "✓ Step 5 · Coordinator · Completed — trusted output",
+        "✓ Step 1 · Analyst · Completed — trusted output",
+        "✓ Step 2 · Solution Architect · Completed — trusted output",
+        "✓ Step 3 · Risk Reviewer · Completed — trusted output",
+        "✓ Step 4 · Critic · Completed — trusted output",
     ]
-    positions = [
-        text.index(name)
-        for name in (
-            "Analyst",
-            "Solution Architect",
-            "Risk Reviewer",
-            "Critic",
-            "Coordinator",
-        )
-    ]
-    assert positions == sorted(positions)
     assert text.count("Completed — trusted output") >= 5
-    assert "Review completed" in text
+    assert "Review status: Completed" in text
+    assert "Canonical execution: 1 Analyst → 2 Solution Architect" in text
     assert "ProblemAnalysis" in text
     assert "SolutionAlternatives" in text
     assert "RiskAssessment" in text
@@ -190,7 +266,7 @@ def test_process_is_driven_by_the_exact_sequential_observer_history() -> None:
             assert next_started.stage(CANONICAL_STAGE_ORDER[index + 1]).status is StageStatus.RUNNING
 
     text = visible_text(at)
-    assert "Sequential dependency:" in text
+    assert "Canonical execution:" in text
     assert "Structure the problem" in text
     assert "ReviewInput" in text
     assert "ProblemAnalysis" in text
@@ -237,11 +313,11 @@ def test_all_role_artifacts_and_evidence_states_are_human_readable() -> None:
     ):
         assert section in text
     assert "No items" in text
-    assert "Trusted technical detail (JSON)" in text
+    assert "Technical" in text
     assert "EVIDENCED" not in text
 
 
-def test_each_agent_detail_shows_declared_and_actual_trusted_inputs() -> None:
+def test_each_collapsible_agent_card_shows_declared_and_actual_trusted_inputs() -> None:
     at = submit_complete_form(app())
     expectations = {
         StageIdentity.ANALYST: ("Analyst", ("ReviewInput",)),
@@ -274,20 +350,31 @@ def test_each_agent_detail_shows_declared_and_actual_trusted_inputs() -> None:
         ),
     }
 
+    text = all_rendered_text(at)
     for identity, (name, artifact_labels) in expectations.items():
-        at.selectbox(key="arb_stage_select").set_value(identity).run()
-        text = all_rendered_text(at)
-        assert f"Agent detail: {name}" in text
-        assert "Input artifact types" in text
-        assert "Inspect trusted stage inputs" in text
+        step = CANONICAL_STAGE_ORDER.index(identity) + 1
+        assert any(
+            f"Step {step} · {name}" in str(expander.label)
+            for expander in at.expander
+        )
         assert all(label in text for label in artifact_labels)
+    assert "Inputs" in {str(tab.label) for tab in at.tabs}
+    assert at.selectbox == []
 
 
 def test_final_result_is_distinct_advisory_and_complete() -> None:
     at = submit_complete_form(app())
     text = all_rendered_text(at)
 
+    assert "Decision workspace" in text
     assert "Final result" in text
+    assert [str(tab.label) for tab in at.tabs[-5:]] == [
+        "Overview",
+        "Alternatives",
+        "Risks",
+        "Evidence & next steps",
+        "Technical",
+    ]
     assert "RECOMMENDED" in text
     assert text.index("ALT-001") < text.index("ALT-002")
     assert "Preferred alternative" in text
@@ -317,12 +404,12 @@ def test_fixture_can_select_another_real_agent_scenario() -> None:
     assert len(executor(at).calls) == 5
     text = all_rendered_text(at)
     assert "INSUFFICIENT_EVIDENCE" in text
-    assert "Review completed" in text
+    assert "Review status: Completed" in text
     assert "Preferred alternative" in text
     assert "Not provided" in text
     assert "Current evidence does not support a preferred alternative." in text
     assert "Final result" in text
-    assert "Process" in text
+    assert "Agent workspace" in text
 
 
 def _submit_scenario(kind: ScenarioKind) -> AppTest:
@@ -351,6 +438,7 @@ def test_output_validation_failure_preserves_upstream_and_blocks_coordinator() -
     assert "Not executed because the mandatory upstream Critic stage failed." in text
     assert "ProblemAnalysis" in text
     assert "RiskAssessment" in text
+    assert "Decision workspace" not in text
     assert "Final result" not in text
 
 
@@ -392,7 +480,6 @@ def test_new_review_clears_complete_and_incomplete_session_state() -> None:
         ScenarioKind.CRITIC_OUTPUT_VALIDATION_FAILURE,
     ):
         at = _submit_scenario(first_kind)
-        at.selectbox(key="arb_stage_select").set_value(StageIdentity.RISK_REVIEWER).run()
         assert "RISK-001" in all_rendered_text(at)
 
         at.session_state[SCENARIO_KEY] = ScenarioKind.COMPLETE

@@ -87,7 +87,8 @@ For step-by-step local validation—from the deterministic walkthrough through t
 execution—see the [`local UI testing runbook`](docs/local-ui-test-runbook.md).
 
 Loading the page is inert: configuration, the HTTP client, and the five participants are
-created only after an explicit **Start Review**. The form uses six fields:
+created only after an explicit **Start Review**. The wide dashboard keeps the editable case
+in a sidebar and uses six fields:
 
 - **Title** is optional and single-line.
 - **Description** is required.
@@ -96,27 +97,31 @@ created only after an explicit **Start Review**. The form uses six fields:
 - **Context** is optional and accepts one item per line.
 - **Stated facts** is optional and accepts one item per line.
 
+The sidebar can also import a bounded UTF-8 Markdown case. Import only populates the editable
+draft; it never starts agents. A ready-to-use example is available at
+[`examples/reviews/critical-desktop-migration.en.md`](examples/reviews/critical-desktop-migration.en.md).
+
 Blank optional values and blank collection lines are omitted. Every accepted non-blank
 value, including its meaningful outer whitespace, order, duplicates, and Unicode, is passed
 to the domain input unchanged; commas and JSON syntax receive no special interpretation.
 
-The **Process** view presents the canonical sequential collaboration—Analyst, Solution
-Architect, Risk Reviewer, Critic, and Coordinator—with textual statuses, responsibilities,
-input artifact types, and completed trusted outputs. A failed stage has no trusted output;
-its completed predecessors remain inspectable and mandatory downstream stages are shown as
-not executed. Runtime setup/interface faults use fixed public messages and do not expose raw
-provider responses, prompts, endpoints, credentials, or exception details.
+The **Agent workspace** presents Coordinator as the prominent final synthesis card and the
+four specialist agents in a compact 2x2 grid. Numbered labels preserve the canonical
+sequential collaboration—Analyst, Solution Architect, Risk Reviewer, Critic, and
+Coordinator. Every card is collapsible and exposes status, responsibility, input artifact
+types, and trusted output. A failed stage has no trusted output; its completed predecessors
+remain inspectable and mandatory downstream stages are shown as not executed.
 
-A successfully completed Coordinator stage adds a separate **Final result** view containing
-ranked alternatives, preserved evidence status, risks, unresolved questions, qualitative
-confidence, and an advisory next validation step. `INSUFFICIENT_EVIDENCE` is a valid
-completed outcome and never invents a preferred alternative. The result supports human
-decision-making; the UI provides no action to execute its recommendation.
+A successfully completed Coordinator stage adds a separate tabbed **Decision workspace**
+containing the final result, ranked alternatives, preserved evidence status, risks,
+unresolved questions, qualitative confidence, and an advisory next validation step.
+`INSUFFICIENT_EVIDENCE` is a valid completed outcome and never invents a preferred
+alternative. The result supports human decision-making; the UI provides no action to execute
+its recommendation.
 
-**New Review** clears the six form values, selected detail, current Review, output, and error
-from the current Streamlit session before showing a fresh form. This PoC has no database,
-history, durable persistence, browser-refresh recovery, or resume behavior. Closing or
-restarting the application can discard the current Review.
+**New Review** clears the six form values, Markdown upload, current Review, output, and error
+from the current Streamlit session before showing a fresh editor. This PoC has no database,
+history, durable persistence, browser-refresh recovery, or resume behavior.
 
 ### Proxy and certificate environment
 

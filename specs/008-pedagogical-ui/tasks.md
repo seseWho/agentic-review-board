@@ -526,13 +526,44 @@ No task authorizes:
 - [x] Live-vLLM work is isolated, opt-in, no-retry, and evidence-only.
 - [x] No unresolved clarification marker remains.
 
-**Author review result:** READY FOR JOINT REVIEW.
+**Author review result:** APPROVED AND IMPLEMENTED.
+
+## Phase 10: Approved Compact Dashboard Revision
+
+**Purpose:** Improve spatial hierarchy and add safe Markdown case import without changing
+orchestration, trust, or failure semantics.
+
+- [X] T064 [SPEC] Record the approved wide dashboard, sidebar, Coordinator-first spatial
+  hierarchy, collapsible agent cards, final-result workspace, and Markdown import contract.
+- [X] T065 [TEST] Add pure parser tests for canonical and Spanish headings, Unicode, BOM,
+  optional sections, ordered duplicate list values, malformed lists, duplicate/unknown
+  headings, invalid UTF-8, and bounded input.
+- [X] T066 [US1] Implement the dependency-free Markdown case parser outside Streamlit and add
+  a committed importable reference case.
+- [X] T067 [TEST] Add Streamlit tests proving import populates editable controls atomically,
+  never starts execution, surfaces safe errors, and is cleared by New Review.
+- [X] T068 [US1] Add the Markdown uploader and collapsible case editor to the sidebar; replace
+  it with a collapsed immutable submitted-case summary after start.
+- [X] T069 [TEST] Update layout assertions for Coordinator as numbered step 5 above a 2x2
+  specialist grid while retaining the visible canonical dependency sequence.
+- [X] T070 [US2] Replace the vertical process list and separate agent selector with native
+  collapsible participant cards, authentic progress summary, and active/failure emphasis.
+- [X] T071 [TEST] Add assertions for the dedicated grouped final-result workspace and the
+  continued visibility of trusted intermediate artifacts and fail-closed outcomes.
+- [X] T072 [US4] Render the final result below the topology using native bordered containers
+  and tabs, without duplicating execution or trust logic.
+- [X] T073 [UI] Add a fixed modern Streamlit theme and wide page configuration without raw
+  HTML, custom JavaScript, or an external styling framework.
+- [X] T074 [DOC] Update README, the local UI runbook, and example documentation with the
+  Markdown format and revised interaction.
+- [X] T075 [TEST] Run focused UI/parser tests, architecture checks, full pytest, Ruff, strict
+  mypy, pip check, and diff validation.
 
 ## Approval Gate
 
-Implementation SHALL NOT begin until:
+The original gate and the Phase 10 revision gate are satisfied:
 
-1. the user reviews this `tasks.md`;
-2. requested changes are incorporated;
-3. this document is marked approved; and
-4. the author performs one final cross-artifact consistency check.
+1. the user jointly reviewed and approved the original task set;
+2. the user approved the compact dashboard and modern-style proposal on 2026-09-03;
+3. the approved revision is represented by T064–T075; and
+4. the final cross-artifact and verification checks pass.

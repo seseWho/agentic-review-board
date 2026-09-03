@@ -1,0 +1,40 @@
+# Migration of a critical desktop application
+
+## Description
+
+The organization uses a WPF application based on .NET Framework 4.8 to manage technical operations on approximately 500 Windows tablets. The application must continue operating offline for several hours and synchronize data when connectivity is restored. The current solution uses Oracle XE as its local database and has installation, maintenance, resource consumption, and ARM64 support problems. A modernization strategy must be selected for the next four years.
+
+## Objective
+
+Select an architecture that reduces operating costs and simplifies maintenance without compromising offline operation, data integrity, or progressive deployment.
+
+## Constraints
+
+- The application must operate fully offline for at least 8 hours.
+- It must run natively on Windows 11 ARM64.
+- The deployment affects approximately 500 devices.
+- The migration must be incremental.
+- Service cannot be interrupted during the transition.
+- The team primarily works with C# and .NET.
+- Normal operation must not depend on cloud services.
+- Locally stored data may contain sensitive information.
+- The budget and team are limited.
+- The first operational release must be available within 9 months.
+
+## Context
+
+- The current application is built with WPF and .NET Framework 4.8.
+- It uses Oracle XE as its local database.
+- The persistence layer uses NHibernate.
+- A partially automated functional test suite exists.
+- The devices periodically connect to the corporate network.
+- The central server will remain available during the migration.
+- Three initial approaches are being evaluated: migrate to .NET 8 WPF and replace Oracle XE with SQLite; build a local web application that runs on each device; develop a cross-platform application with .NET MAUI.
+
+## Stated facts
+
+- WPF on .NET 8 can run on Windows ARM64.
+- SQLite can run as an embedded database without an independent service.
+- A purely remote web application does not satisfy the offline requirement.
+- The team already has significant WPF experience.
+- Not all current functionality is covered by automated tests.

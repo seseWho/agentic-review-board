@@ -10,7 +10,7 @@ from agentic_review_board.infrastructure.llm.composition import (
     ConfiguredReviewRuntime,
 )
 from agentic_review_board.infrastructure.llm.config import load_llm_runtime_config
-from agentic_review_board.ui import render_app
+from agentic_review_board.ui import configure_page, render_app
 
 
 def execute_review(
@@ -29,6 +29,7 @@ def execute_review(
 def main() -> None:
     """Render the inert UI shell; runtime construction occurs only after Start."""
 
+    configure_page()
     render_app(execute_review)
 
 

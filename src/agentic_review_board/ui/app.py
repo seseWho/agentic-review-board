@@ -2,10 +2,12 @@
 
 from dataclasses import dataclass, replace
 from enum import StrEnum
+from hashlib import sha256
 from typing import Protocol
 
 import streamlit as st
 from pydantic import BaseModel, ValidationError
+from streamlit.runtime.uploaded_file_manager import UploadedFile
 
 from agentic_review_board.application.observation import ReviewObserver
 from agentic_review_board.domain.execution import (
@@ -15,11 +17,16 @@ from agentic_review_board.domain.execution import (
     StageStatus,
 )
 from agentic_review_board.domain.review import ReviewInput
+from agentic_review_board.ui.markdown_case import (
+    MarkdownCaseError,
+    MarkdownReviewCase,
+    decode_markdown_case,
+)
 from agentic_review_board.ui.presentation import (
-    REVIEW_STATUS_LABELS,
     STAGE_DESCRIPTORS,
     STAGE_STATUS_LABELS,
     OutputSection,
+    StagePresentation,
     final_result,
     output_sections,
     stage_presentations,
@@ -33,8 +40,11 @@ CONSTRAINTS_KEY = "arb_constraints"
 CONTEXT_KEY = "arb_context"
 STATED_FACTS_KEY = "arb_stated_facts"
 START_KEY = "arb_start"
-STAGE_SELECT_KEY = "arb_stage_select"
 NEW_REVIEW_KEY = "arb_new_review"
+MARKDOWN_UPLOAD_KEY = "arb_markdown_upload"
+MARKDOWN_DIGEST_KEY = "arb_markdown_digest"
+MARKDOWN_ERROR_KEY = "arb_markdown_error"
+MARKDOWN_SUCCESS_KEY = "arb_markdown_success"
 
 FORM_WIDGET_KEYS = (
     TITLE_KEY,
@@ -43,6 +53,16 @@ FORM_WIDGET_KEYS = (
     CONSTRAINTS_KEY,
     CONTEXT_KEY,
     STATED_FACTS_KEY,
+)
+
+RESET_WIDGET_KEYS = (
+    *FORM_WIDGET_KEYS,
+    MARKDOWN_UPLOAD_KEY,
+    MARKDOWN_DIGEST_KEY,
+    MARKDOWN_ERROR_KEY,
+    MARKDOWN_SUCCESS_KEY,
+    STATE_KEY,
+    NEW_REVIEW_KEY,
 )
 
 
@@ -115,19 +135,11 @@ class ReviewUiState:
 
     phase: UiPhase = UiPhase.FORM
     review: Review | None = None
-    selected_stage: StageIdentity | None = None
     error: UiError | None = None
 
     def __post_init__(self) -> None:
-        if self.selected_stage is not None and self.review is None:
-            raise ValueError("inconsistent UI state")
-
         if self.phase is UiPhase.FORM:
-            valid = (
-                self.review is None
-                and self.selected_stage is None
-                and self.error is None
-            )
+            valid = self.review is None and self.error is None
         elif self.phase is UiPhase.EXECUTING:
             valid = self.review is not None and self.error is None
         elif self.phase is UiPhase.RESULT:
@@ -202,13 +214,6 @@ def finish_review(state: ReviewUiState, review: Review) -> ReviewUiState:
     return ReviewUiState(phase=UiPhase.RESULT, review=review)
 
 
-def select_stage(state: ReviewUiState, identity: StageIdentity) -> ReviewUiState:
-    if state.review is None:
-        raise ValueError("a stage cannot be selected without a Review")
-    state.review.stage(identity)
-    return replace(state, selected_stage=identity)
-
-
 def startup_failure(state: ReviewUiState) -> ReviewUiState:
     if (
         state.phase is not UiPhase.EXECUTING
@@ -225,7 +230,6 @@ def application_failure(state: ReviewUiState) -> ReviewUiState:
     return ReviewUiState(
         phase=UiPhase.APPLICATION_ERROR,
         review=state.review,
-        selected_stage=state.selected_stage,
         error=APPLICATION_ERROR,
     )
 
@@ -247,10 +251,6 @@ def _session_state() -> ReviewUiState:
 
 def _store_state(state: ReviewUiState) -> None:
     st.session_state[STATE_KEY] = state
-
-
-def _stage_name(identity: StageIdentity) -> str:
-    return STAGE_DESCRIPTORS[identity].display_name
 
 
 def _humanize_field(name: str) -> str:
@@ -293,35 +293,105 @@ def _render_sections(sections: tuple[OutputSection, ...]) -> None:
             _render_value(section.value)
 
 
-def _render_topology_preview() -> None:
-    st.subheader("Process")
-    st.markdown(f"**Overall status:** {REVIEW_STATUS_LABELS[ReviewStatus.CREATED]}")
-    for identity in STAGE_DESCRIPTORS:
-        descriptor = STAGE_DESCRIPTORS[identity]
-        with st.container(border=True):
-            st.markdown(f"### {descriptor.display_name}")
-            st.markdown(f"**Status:** {STAGE_STATUS_LABELS[StageStatus.PENDING]}")
-            st.caption(descriptor.responsibility)
-            st.caption(f"Produces: {descriptor.output_artifact_label}")
+_STAGE_STATUS_SYMBOLS = {
+    StageStatus.PENDING: "○",
+    StageStatus.RUNNING: "◉",
+    StageStatus.COMPLETED: "✓",
+    StageStatus.FAILED: "!",
+}
+_REVIEW_STATUS_SUMMARIES = {
+    ReviewStatus.CREATED: "Not started",
+    ReviewStatus.RUNNING: "Running",
+    ReviewStatus.COMPLETED: "Completed",
+    ReviewStatus.INCOMPLETE: "Incomplete",
+}
 
 
-def _render_process(review: Review) -> None:
-    st.subheader("Process")
-    st.markdown(f"**Overall status:** {REVIEW_STATUS_LABELS[review.status]}")
-    st.markdown(
-        "**Sequential dependency:** Analyst → Solution Architect → "
-        "Risk Reviewer → Critic → Coordinator"
+def configure_page() -> None:
+    """Apply the fixed modern page configuration owned by this adapter."""
+
+    st.set_page_config(
+        page_title="Agentic Review Board",
+        page_icon="🧭",
+        layout="wide",
+        initial_sidebar_state="expanded",
     )
-    for presentation in stage_presentations(review):
-        stage = presentation.execution
-        descriptor = presentation.descriptor
-        with st.container(border=True):
-            st.markdown(f"### {descriptor.display_name}")
-            st.markdown(f"**Status:** {STAGE_STATUS_LABELS[stage.status]}")
+
+
+def _stage_step(identity: StageIdentity) -> int:
+    return tuple(STAGE_DESCRIPTORS).index(identity) + 1
+
+
+def _active_stage_name(review: Review | None) -> str:
+    if review is None:
+        return STAGE_DESCRIPTORS[StageIdentity.ANALYST].display_name
+    running = next(
+        (stage for stage in review.stages if stage.status is StageStatus.RUNNING),
+        None,
+    )
+    if running is not None:
+        return STAGE_DESCRIPTORS[running.identity].display_name
+    if review.status is ReviewStatus.COMPLETED:
+        return "Complete"
+    failed = next(
+        (stage for stage in review.stages if stage.status is StageStatus.FAILED),
+        None,
+    )
+    if failed is not None:
+        return f"Stopped at {STAGE_DESCRIPTORS[failed.identity].display_name}"
+    return STAGE_DESCRIPTORS[StageIdentity.ANALYST].display_name
+
+
+def _render_review_summary(review: Review | None) -> None:
+    status = ReviewStatus.CREATED if review is None else review.status
+    resolved = (
+        0
+        if review is None
+        else sum(
+            stage.status in {StageStatus.COMPLETED, StageStatus.FAILED}
+            for stage in review.stages
+        )
+    )
+    status_column, progress_column, active_column = st.columns((1.4, 1.0, 1.4))
+    status_column.metric("Review status", _REVIEW_STATUS_SUMMARIES[status])
+    progress_column.metric("Resolved stages", f"{resolved} / 5")
+    active_column.metric("Current focus", _active_stage_name(review))
+    st.progress(resolved / 5, text=f"{resolved} of 5 agent stages resolved")
+    st.caption(
+        "Canonical execution: 1 Analyst → 2 Solution Architect → 3 Risk Reviewer → "
+        "4 Critic → 5 Coordinator"
+    )
+
+
+def _render_preview_card(identity: StageIdentity) -> None:
+    descriptor = STAGE_DESCRIPTORS[identity]
+    label = f"○ Step {_stage_step(identity)} · {descriptor.display_name} · Pending"
+    with st.expander(label, expanded=False):
+        st.caption(descriptor.responsibility)
+        st.markdown("**Consumes:** " + ", ".join(descriptor.input_artifact_labels))
+        st.markdown(f"**Produces:** {descriptor.output_artifact_label}")
+        st.info("This agent has not started.")
+
+
+def _render_stage_card(presentation: StagePresentation) -> None:
+    stage = presentation.execution
+    descriptor = presentation.descriptor
+    step = _stage_step(stage.identity)
+    status_label = STAGE_STATUS_LABELS[stage.status]
+    label = (
+        f"{_STAGE_STATUS_SYMBOLS[stage.status]} Step {step} · "
+        f"{descriptor.display_name} · {status_label}"
+    )
+    expanded = stage.status in {StageStatus.RUNNING, StageStatus.FAILED}
+
+    with st.expander(label, expanded=expanded):
+        overview_tab, output_tab, inputs_tab, technical_tab = st.tabs(
+            ("Overview", "Trusted output", "Inputs", "Technical")
+        )
+        with overview_tab:
             st.caption(descriptor.responsibility)
-            st.markdown(
-                "**Consumes:** " + ", ".join(descriptor.input_artifact_labels)
-            )
+            st.markdown(f"**Status:** {status_label}")
+            st.markdown("**Consumes:** " + ", ".join(descriptor.input_artifact_labels))
             st.markdown(f"**Produces:** {descriptor.output_artifact_label}")
             if presentation.blocked_by is not None:
                 blocker = STAGE_DESCRIPTORS[presentation.blocked_by].display_name
@@ -330,17 +400,85 @@ def _render_process(review: Review) -> None:
                 )
             if stage.status is StageStatus.FAILED and stage.error is not None:
                 st.error(f"{stage.error.kind.value}: {stage.error.message}")
+
+        with output_tab:
             if stage.status is StageStatus.COMPLETED:
-                with st.expander(
-                    f"Inspect trusted {descriptor.output_artifact_label}",
-                    expanded=False,
-                ):
-                    _render_sections(output_sections(stage))
+                _render_sections(output_sections(stage))
+            elif stage.status is StageStatus.FAILED:
+                st.info("No trusted output is available for this failed stage.")
+            else:
+                st.info("No trusted output is available for this stage.")
+
+        with inputs_tab:
+            if stage.inputs is None:
+                st.info("This agent has not received an input snapshot.")
+            else:
+                _render_value(stage.inputs)
+
+        with technical_tab:
+            if stage.status in {StageStatus.COMPLETED, StageStatus.FAILED}:
+                st.json(stage.model_dump(mode="json"))
+            else:
+                st.info("Technical detail becomes available after the stage is reached.")
+
+
+def _render_agent_grid(review: Review | None) -> None:
+    st.markdown("#### Final synthesis")
+    if review is None:
+        _render_preview_card(StageIdentity.COORDINATOR)
+    else:
+        coordinator = next(
+            item
+            for item in stage_presentations(review)
+            if item.execution.identity is StageIdentity.COORDINATOR
+        )
+        _render_stage_card(coordinator)
+
+    st.markdown("#### Specialist workspace")
+    specialist_identities = (
+        StageIdentity.ANALYST,
+        StageIdentity.SOLUTION_ARCHITECT,
+        StageIdentity.RISK_REVIEWER,
+        StageIdentity.CRITIC,
+    )
+    presentations = (
+        {}
+        if review is None
+        else {item.execution.identity: item for item in stage_presentations(review)}
+    )
+    for first, second in (
+        specialist_identities[:2],
+        specialist_identities[2:],
+    ):
+        left, right = st.columns(2, gap="medium")
+        with left:
+            if review is None:
+                _render_preview_card(first)
+            else:
+                _render_stage_card(presentations[first])
+        with right:
+            if review is None:
+                _render_preview_card(second)
+            else:
+                _render_stage_card(presentations[second])
+
+
+def _render_topology_preview() -> None:
+    st.subheader("Agent workspace")
+    _render_review_summary(None)
+    _render_agent_grid(None)
+
+
+def _render_process(review: Review) -> None:
+    st.subheader("Agent workspace")
+    _render_review_summary(review)
+    _render_agent_grid(review)
 
 
 def _render_submitted_input(review: Review) -> None:
     review_input = review.review_input
-    with st.expander("Submitted Review input", expanded=False):
+    case_label = review_input.title or "Untitled review case"
+    with st.expander(f"Submitted case · {case_label}", expanded=False):
         st.markdown("**Description**")
         st.write(review_input.description)
         st.markdown("**Title**")
@@ -355,83 +493,65 @@ def _render_submitted_input(review: Review) -> None:
         _render_value(review_input.stated_facts)
 
 
-def _render_stage_detail(state: ReviewUiState) -> ReviewUiState:
-    review = state.review
-    if review is None:
-        return state
-    default_identity = state.selected_stage or StageIdentity.ANALYST
-    selected = st.selectbox(
-        "Inspect an agent",
-        options=tuple(STAGE_DESCRIPTORS),
-        index=tuple(STAGE_DESCRIPTORS).index(default_identity),
-        format_func=_stage_name,
-        key=STAGE_SELECT_KEY,
-    )
-    if selected is None:
-        return state
-    state = select_stage(state, selected)
-    _store_state(state)
-    stage = review.stage(selected)
-    descriptor = STAGE_DESCRIPTORS[selected]
-    st.subheader(f"Agent detail: {descriptor.display_name}")
-    st.write(descriptor.responsibility)
-    st.markdown("**Input artifact types**")
-    for label in descriptor.input_artifact_labels:
-        st.markdown(f"- {label}")
-    if stage.inputs is None:
-        st.info("This agent has not received an input snapshot.")
-    else:
-        with st.expander("Inspect trusted stage inputs", expanded=False):
-            _render_value(stage.inputs)
-    if stage.status is StageStatus.COMPLETED:
-        _render_sections(output_sections(stage))
-    elif stage.status is StageStatus.FAILED and stage.error is not None:
-        st.error(f"{stage.error.kind.value}: {stage.error.message}")
-        st.info("No trusted output is available for this failed stage.")
-    else:
-        st.info("No trusted output is available for this stage.")
-    if stage.status in {StageStatus.COMPLETED, StageStatus.FAILED}:
-        with st.expander("Trusted technical detail (JSON)", expanded=False):
-            st.json(stage.model_dump(mode="json"))
-    return state
-
-
 def _render_final(review: Review) -> None:
     final = final_result(review)
     if final is None:
         return
-    st.header("Final result")
-    st.markdown(f"**Recommendation outcome:** `{final.recommendation_outcome.value}`")
-    st.markdown("**Situation summary**")
-    st.write(final.situation_summary)
-    st.markdown("**Ranked alternatives**")
-    _render_value(final.ranked_alternatives)
-    st.markdown("**Preferred alternative**")
-    _render_value(final.preferred_alternative_id)
-    st.markdown("**Conclusion rationale**")
-    st.write(final.conclusion_rationale)
-    st.markdown("**Principal risks**")
-    _render_value(final.principal_risks)
-    st.markdown("**Unresolved questions**")
-    _render_value(final.unresolved_questions)
-    st.markdown("**Criticism dispositions**")
-    _render_value(final.criticism_dispositions)
-    st.markdown("**Next validation step (advisory)**")
-    st.write(final.next_validation_step)
-    st.markdown("**Qualitative confidence**")
-    st.code(final.confidence.value)
-    st.warning(final.decision_support_notice)
+    st.header("Decision workspace")
+    with st.container(border=True):
+        st.markdown("### Final result")
+        overview_tab, alternatives_tab, risks_tab, evidence_tab, technical_tab = st.tabs(
+            ("Overview", "Alternatives", "Risks", "Evidence & next steps", "Technical")
+        )
+        with overview_tab:
+            st.markdown(
+                f"**Recommendation outcome:** `{final.recommendation_outcome.value}`"
+            )
+            st.markdown("**Situation summary**")
+            st.write(final.situation_summary)
+            st.markdown("**Preferred alternative**")
+            _render_value(final.preferred_alternative_id)
+            st.markdown("**Conclusion rationale**")
+            st.write(final.conclusion_rationale)
+            st.markdown("**Qualitative confidence**")
+            st.code(final.confidence.value)
+            st.warning(final.decision_support_notice)
+        with alternatives_tab:
+            st.markdown("**Ranked alternatives**")
+            _render_value(final.ranked_alternatives)
+        with risks_tab:
+            st.markdown("**Principal risks**")
+            _render_value(final.principal_risks)
+        with evidence_tab:
+            st.markdown("**Unresolved questions**")
+            _render_value(final.unresolved_questions)
+            st.markdown("**Criticism dispositions**")
+            _render_value(final.criticism_dispositions)
+            st.markdown("**Next validation step (advisory)**")
+            st.write(final.next_validation_step)
+        with technical_tab:
+            st.json(final.model_dump(mode="json"))
 
 
 def _render_new_review() -> None:
     st.caption(
         "Starting a new Review clears the current in-memory result. No history is retained."
     )
-    if st.button("New Review", key=NEW_REVIEW_KEY):
-        for key in (*FORM_WIDGET_KEYS, STAGE_SELECT_KEY, STATE_KEY, NEW_REVIEW_KEY):
+    if st.button("New Review", key=NEW_REVIEW_KEY, use_container_width=True):
+        for key in RESET_WIDGET_KEYS:
             if key in st.session_state:
                 del st.session_state[key]
         st.rerun()
+
+
+def _render_active_case_sidebar(state: ReviewUiState) -> None:
+    with st.sidebar:
+        st.header("Review case")
+        if state.review is None:
+            st.info("No submitted case is available for this run.")
+        else:
+            _render_submitted_input(state.review)
+        _render_new_review()
 
 
 def _render_active_state(state: ReviewUiState) -> None:
@@ -439,15 +559,11 @@ def _render_active_state(state: ReviewUiState) -> None:
         st.error(state.error.public_message)
     review = state.review
     if review is None:
-        _render_new_review()
+        _render_topology_preview()
         return
-    _render_submitted_input(review)
     _render_process(review)
-    if state.phase is not UiPhase.EXECUTING:
-        state = _render_stage_detail(state)
-        if state.phase is UiPhase.RESULT:
-            _render_final(review)
-        _render_new_review()
+    if state.phase is UiPhase.RESULT:
+        _render_final(review)
 
 
 def _draft_from_widgets() -> ReviewInputDraft:
@@ -461,32 +577,90 @@ def _draft_from_widgets() -> ReviewInputDraft:
     )
 
 
-def _render_form(executor: ReviewExecutor) -> None:
-    with st.form("arb_review_form"):
-        st.text_input("Title (optional)", key=TITLE_KEY)
-        st.text_area("Description (required)", key=DESCRIPTION_KEY)
-        st.text_area("Objective (optional)", key=OBJECTIVE_KEY)
-        st.text_area(
-            "Constraints (optional, one per line)",
-            key=CONSTRAINTS_KEY,
-        )
-        st.text_area("Context (optional, one per line)", key=CONTEXT_KEY)
-        st.text_area(
-            "Stated facts (optional, one per line)",
-            key=STATED_FACTS_KEY,
-        )
-        submitted = st.form_submit_button("Start Review", key=START_KEY)
-    if not submitted:
-        _render_topology_preview()
+def _apply_imported_case(case: MarkdownReviewCase) -> None:
+    st.session_state[TITLE_KEY] = case.title
+    st.session_state[DESCRIPTION_KEY] = case.description
+    st.session_state[OBJECTIVE_KEY] = case.objective
+    st.session_state[CONSTRAINTS_KEY] = "\n".join(case.constraints)
+    st.session_state[CONTEXT_KEY] = "\n".join(case.context)
+    st.session_state[STATED_FACTS_KEY] = "\n".join(case.stated_facts)
+
+
+def _process_markdown_upload(uploaded: UploadedFile | None) -> None:
+    if uploaded is None:
+        for key in (MARKDOWN_DIGEST_KEY, MARKDOWN_ERROR_KEY, MARKDOWN_SUCCESS_KEY):
+            st.session_state.pop(key, None)
         return
 
+    content = uploaded.getvalue()
+    digest = sha256(content).hexdigest()
+    if st.session_state.get(MARKDOWN_DIGEST_KEY) == digest:
+        return
+    st.session_state[MARKDOWN_DIGEST_KEY] = digest
+    st.session_state.pop(MARKDOWN_ERROR_KEY, None)
+    st.session_state.pop(MARKDOWN_SUCCESS_KEY, None)
     try:
-        state = begin_review(_session_state(), _draft_from_widgets())
-    except (ValidationError, ValueError):
-        st.error("Description is required before the Review can start.")
+        imported = decode_markdown_case(content)
+    except MarkdownCaseError as error:
+        st.session_state[MARKDOWN_ERROR_KEY] = str(error)
         return
+    _apply_imported_case(imported)
+    st.session_state[MARKDOWN_SUCCESS_KEY] = (
+        "Case imported. Review the editable fields before starting."
+    )
 
-    _store_state(state)
+
+def _render_case_editor_sidebar() -> ReviewInputDraft | None:
+    submitted = False
+    with st.sidebar:
+        st.header("Review case")
+        st.caption("Import a UTF-8 Markdown case or complete the fields manually.")
+        uploaded = st.file_uploader(
+            "Import Markdown",
+            type=("md", "markdown"),
+            accept_multiple_files=False,
+            max_upload_size=1,
+            key=MARKDOWN_UPLOAD_KEY,
+        )
+        _process_markdown_upload(uploaded)
+        import_error = st.session_state.get(MARKDOWN_ERROR_KEY)
+        import_success = st.session_state.get(MARKDOWN_SUCCESS_KEY)
+        if isinstance(import_error, str):
+            st.error(import_error)
+        elif isinstance(import_success, str):
+            st.success(import_success)
+
+        with st.expander("Case editor", expanded=True):
+            with st.form("arb_review_form"):
+                st.text_input("Title (optional)", key=TITLE_KEY)
+                st.text_area("Description (required)", key=DESCRIPTION_KEY, height=140)
+                st.text_area("Objective (optional)", key=OBJECTIVE_KEY, height=100)
+                st.text_area(
+                    "Constraints (optional, one per line)",
+                    key=CONSTRAINTS_KEY,
+                    height=110,
+                )
+                st.text_area(
+                    "Context (optional, one per line)",
+                    key=CONTEXT_KEY,
+                    height=110,
+                )
+                st.text_area(
+                    "Stated facts (optional, one per line)",
+                    key=STATED_FACTS_KEY,
+                    height=110,
+                )
+                submitted = st.form_submit_button(
+                    "Start Review",
+                    key=START_KEY,
+                    type="primary",
+                    use_container_width=True,
+                )
+        st.caption("Importing or editing never starts agents automatically.")
+    return _draft_from_widgets() if submitted else None
+
+
+def _execute_review(state: ReviewUiState, executor: ReviewExecutor) -> None:
     created_review = state.review
     assert created_review is not None
     process_slot = st.empty()
@@ -520,11 +694,26 @@ def render_app(executor: ReviewExecutor) -> None:
 
     st.title("Agentic Review Board")
     st.caption(
-        "Inspect how five specialized agents transform trusted artifacts into advisory "
+        "Trace five specialized agents from evidence-rich case input to transparent "
         "decision support."
     )
     state = _session_state()
     if state.phase is UiPhase.FORM:
-        _render_form(executor)
-    else:
-        _render_active_state(state)
+        draft = _render_case_editor_sidebar()
+        if draft is not None:
+            try:
+                state = begin_review(state, draft)
+            except (ValidationError, ValueError):
+                with st.sidebar:
+                    st.error("Description is required before the Review can start.")
+            else:
+                _store_state(state)
+                st.rerun()
+        _render_topology_preview()
+        return
+
+    _render_active_case_sidebar(state)
+    if state.phase is UiPhase.EXECUTING:
+        _execute_review(state, executor)
+        return
+    _render_active_state(state)

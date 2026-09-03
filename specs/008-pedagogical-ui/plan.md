@@ -3,7 +3,7 @@
 **Branch:** `008-pedagogical-ui`  
 **Date:** 2026-09-03  
 **Specification:** `specs/008-pedagogical-ui/spec.md` — Approved  
-**Status:** Approved — jointly reviewed on 2026-09-03
+**Status:** Approved — compact dashboard and Markdown-import revision reviewed 2026-09-03
 **Companion decision:** `docs/adr/ADR-0003-streamlit-for-pedagogical-review-ui.md`
 
 ## 1. Objective
@@ -12,16 +12,15 @@ Implement the smallest local web UI that makes the existing five-agent review vi
 and pedagogically inspectable:
 
 ```text
-Review input
-    ↓ explicit start
+Markdown/manual input → collapsible case sidebar
+    ↓ explicit start and editor collapse
 ReviewOrchestrator
     ↓ immutable trusted Review snapshots
-Process view
-    Analyst → Solution Architect → Risk Reviewer → Critic → Coordinator
-       ↓              ↓                ↓              ↓            ↓
-    analysis      alternatives       risks         review       decision
+Wide agent workspace
+    Coordinator synthesis card above a 2x2 specialist grid
+    numbered execution: Analyst → Solution Architect → Risk Reviewer → Critic → Coordinator
     ↓
-Separate final-result view when and only when FinalReview exists
+Separate tabbed decision workspace when and only when FinalReview exists
 ```
 
 The implementation will retain the current synchronous sequential orchestrator, add a
@@ -203,14 +202,17 @@ Modules inside `agentic_review_board.ui` shall not import concrete LLM adapters 
 
 ### 5.2 Single-page interaction model
 
-Use one Streamlit page with three conditional surfaces rather than a multipage router:
+Use one wide Streamlit page with three conditional surfaces rather than a multipage router:
 
-1. **New review** — input form before execution;
-2. **Process** — primary view during execution and first view after completion/failure;
-3. **Final result** — separate section/tab available only with trusted `FinalReview`.
+1. **Review case sidebar** — Markdown import and collapsible editor before execution, then a
+   collapsed submitted-case summary;
+2. **Agent workspace** — Coordinator above the four specialists in a 2x2 grid, with numbered
+   collapsible cards and authentic progress;
+3. **Decision workspace** — separate bordered tab group available only with trusted
+   `FinalReview`.
 
-Completed agent detail remains reachable from the Process view. A separate application
-route or browser URL is not needed.
+Completed agent detail remains reachable inside its card. A separate selector, application
+route, or browser URL is not needed.
 
 ### 5.3 No background execution
 
@@ -299,7 +301,7 @@ Streamlit session state will hold only the minimum presentation state:
 - accepted current `ReviewInput` or created `Review` while executing;
 - latest trusted `Review` snapshot;
 - terminal trusted `Review` when execution returns;
-- current selected stage/detail panel if needed;
+- bounded Markdown-upload digest and safe import feedback while editing;
 - a boolean or equivalent guard preventing duplicate start interaction;
 - non-secret participant profile-name mapping when safely available;
 - one sanitized UI-level startup/presentation error when applicable.
@@ -450,6 +452,7 @@ src/agentic_review_board/
 └── ui/
     ├── __init__.py
     ├── app.py                               # Streamlit interaction/session rendering
+    ├── markdown_case.py                     # bounded deterministic Markdown projection
     └── presentation.py                      # pure role/status/view mapping
 ```
 
@@ -466,7 +469,8 @@ tests/
 │   ├── infrastructure/llm/
 │   │   └── test_composition.py              # observer forwarding and closed runtime
 │   └── ui/
-│       └── test_presentation.py             # pure mappings for all five outputs/states
+│       ├── test_markdown_case.py             # import grammar, encoding, and bounds
+│       └── test_presentation.py              # pure mappings for all five outputs/states
 ├── ui/
 │   ├── test_streamlit_app.py                # AppTest interactions and rendered outcomes
 │   └── fixtures/
@@ -480,6 +484,8 @@ Expected documentation/configuration changes:
 ```text
 docs/adr/ADR-0003-streamlit-for-pedagogical-review-ui.md
 README.md                                     # installation and local launch
+.streamlit/config.toml                        # fixed modern project theme
+examples/reviews/critical-desktop-migration.en.md
 pyproject.toml                                # constrained Streamlit dependency
 .github/workflows/...                        # only if launch/test dependency setup changes
 specs/008-pedagogical-ui/

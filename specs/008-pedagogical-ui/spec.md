@@ -2,7 +2,7 @@
 
 **Branch:** `008-pedagogical-ui`  
 **Date:** 2026-09-03  
-**Status:** Approved — jointly reviewed on 2026-09-03
+**Status:** Approved — layout and Markdown-import revision jointly reviewed on 2026-09-03
 **Depends on:** Slices 1–7.2 and the validated five-participant runtime baseline  
 **Canonical sources:** `docs/01-product-vision.md`, `docs/02-requirements.md`,
 `docs/03-architecture.md`, `docs/04-agent-model.md`, `docs/05-quality-security.md`,
@@ -58,7 +58,7 @@ Slice 8 SHALL add the minimum user-visible behavior required to:
 
 1. enter every current `ReviewInput` field, with only description mandatory;
 2. validate input and explicitly start one review;
-3. show all five participants in their real dependency order;
+3. show all five participants and communicate their real dependency order;
 4. update the process view from authentic application execution state as stages move
    between `PENDING`, `RUNNING`, `COMPLETED`, and `FAILED`;
 5. identify the active stage without simulating progress through timers or animations;
@@ -77,7 +77,16 @@ Slice 8 SHALL add the minimum user-visible behavior required to:
     restarting the application;
 14. remain usable with deterministic participant substitutes so the primary UI
     behavior can be tested without a live model;
-15. keep concrete UI concerns outside domain, participant, and provider-adapter code.
+15. keep concrete UI concerns outside domain, participant, and provider-adapter code;
+16. import a user-authored review case from a constrained Markdown document into the
+    editable input draft without starting execution;
+17. use a wide dashboard layout with the editable case in a sidebar;
+18. present Coordinator as the prominent synthesis participant while preserving an
+    unambiguous numbered canonical execution order;
+19. present Analyst, Solution Architect, Risk Reviewer, and Critic in a compact two-column
+    specialist grid; and
+20. collapse verbose case, agent, and result detail by default when it is not the current
+    focus.
 
 ### 3.2 Out of Scope
 
@@ -137,7 +146,8 @@ states so that I can understand specialization, ordering, and dependency enforce
 
 1. The process view always identifies Analyst, Solution Architect, Risk Reviewer,
    Critic, and Coordinator as five distinct participants.
-2. Participants appear in the canonical dependency order.
+2. Numbered labels and an explicit dependency summary communicate the canonical order even
+   when spatial hierarchy places Coordinator first as the final synthesis participant.
 3. Every participant displays one exact current stage state: `PENDING`, `RUNNING`,
    `COMPLETED`, or `FAILED`.
 4. Status is communicated through text or another non-color-only signal; color MAY be
@@ -154,7 +164,7 @@ states so that I can understand specialization, ordering, and dependency enforce
 
 ### US3 — Learn what each agent contributes
 
-As a learner, I want to select a participant and inspect its responsibility, inputs,
+As a learner, I want to open a participant and inspect its responsibility, inputs,
 and validated output so that I can understand genuine information propagation rather
 than seeing five unrelated answers.
 
@@ -277,7 +287,8 @@ model execution.
 
 ### UI-FR-006 — Canonical Process Topology
 
-The process view SHALL show exactly the five mandatory stages in this order:
+The process view SHALL show exactly the five mandatory stages and communicate this execution
+order:
 
 ```text
 Analyst
@@ -287,8 +298,11 @@ Analyst
   → Coordinator
 ```
 
-The view SHALL communicate dependency flow and SHALL NOT imply parallelism, optional
-stages, agent-to-agent invocation, or participant-owned orchestration.
+The spatial dashboard MAY place Coordinator above the four specialists to communicate its
+final synthesis responsibility, provided Coordinator is explicitly identified as step 5 and
+the canonical sequence remains visible. The view SHALL communicate dependency flow and SHALL
+NOT imply parallelism, optional stages, agent-to-agent invocation, or participant-owned
+orchestration.
 
 ### UI-FR-007 — Authentic Progress Source
 
@@ -422,6 +436,33 @@ types SHALL not enter domain or participant contracts.
 This specification does not select a UI framework. The technical plan SHALL compare the
 smallest credible options and the selected framework SHALL be recorded in an ADR because
 the canonical architecture explicitly defers that material dependency choice.
+
+### UI-FR-024 — Markdown Case Import
+
+The UI SHALL accept a bounded UTF-8 Markdown file containing one optional level-one title and
+the exact level-two sections `Description`, `Objective`, `Constraints`, `Context`, and
+`Stated facts`. Description is mandatory; collection sections contain flat bullet items.
+Spanish heading aliases MAY be accepted, but aliases for the same section SHALL be treated as
+duplicates. Unknown or duplicate headings, invalid encoding, oversized files, and malformed
+collections SHALL fail atomically with a concise message and SHALL NOT alter the current
+draft. A successful import SHALL populate editable controls and SHALL NOT start a Review.
+
+### UI-FR-025 — Compact Dashboard Layout
+
+The editable case SHALL occupy a collapsible sidebar rather than the primary process canvas.
+After explicit start, the editor SHALL be replaced with a collapsed submitted-case summary.
+Coordinator SHALL occupy one prominent full-width synthesis card. Analyst, Solution
+Architect, Risk Reviewer, and Critic SHALL occupy a two-column specialist grid on wide
+screens. Every participant card SHALL expose its detail through a native collapsible control,
+and textual step/status labels SHALL remain available independently of color or position.
+
+### UI-FR-026 — Dedicated Result Workspace
+
+The final Coordinator artifact SHALL render below the process topology in a distinct bordered
+workspace. Its principal concerns SHALL be grouped into concise native tabs or equivalent
+sections, while the process topology and participant artifacts remain inspectable. A fixed
+project theme MAY improve hierarchy and spacing, but custom JavaScript, unsafe HTML, and a
+general-purpose styling system remain out of scope.
 
 ## 6. Process-View Semantics
 
@@ -593,7 +634,7 @@ validated, confirmed, proven, or evidenced by presentation copy.
 
 **Given** a completed or incomplete active review,  
 **when** the user starts a new review and submits different valid input,  
-**then** no previous input, output, error, stage selection, or result SHALL implicitly
+**then** no previous input, output, error, expanded detail, or result SHALL implicitly
 influence the new execution.
 
 ### UI-AC-007 — No live model dependency in UI tests

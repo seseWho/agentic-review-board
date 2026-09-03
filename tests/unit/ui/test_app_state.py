@@ -6,7 +6,6 @@ from agentic_review_board.domain.execution import (
     ReviewError,
     ReviewErrorKind,
     ReviewStatus,
-    StageIdentity,
 )
 from agentic_review_board.ui.app import (
     APPLICATION_ERROR,
@@ -22,7 +21,6 @@ from agentic_review_board.ui.app import (
     finish_review,
     observe_review,
     reset_review,
-    select_stage,
     startup_failure,
     to_review_input,
 )
@@ -103,11 +101,7 @@ def test_state_transitions_keep_one_exact_review_snapshot() -> None:
     result = finish_review(terminal_observed, terminal)
     assert result.phase is UiPhase.RESULT
     assert result.review is terminal
-
-    selected = select_stage(result, StageIdentity.ANALYST)
-    assert selected.selected_stage is StageIdentity.ANALYST
-
-    assert reset_review(selected) == ReviewUiState()
+    assert reset_review(result) == ReviewUiState()
 
 
 def test_duplicate_start_and_cross_review_observation_are_rejected() -> None:

@@ -11,13 +11,13 @@ network access
 
 ## Verification baseline
 
-- Full deterministic suite: `1267 passed, 3 skipped` including the delayed acceptance cases.
-- Focused Slice 8 checkpoint: `54 passed`.
+- Full deterministic suite: `1284 passed, 3 skipped` including the delayed acceptance cases.
+- Focused UI/parser checkpoint: `60 passed`.
 - Delayed deterministic walkthroughs: `2 passed`.
 - Architecture suite: `14 passed`.
 - Ruff: pass.
 - `pip check`: pass.
-- Repository-wide strict mypy: pass over all 85 analyzed source, test, and support files.
+- Repository-wide strict mypy: pass over all 87 analyzed source, test, and support files.
   The pre-existing diagnostics in the dynamic risk-schema tests and audit helper were
   eliminated through explicit type narrowing without changing production behavior.
 
@@ -84,11 +84,35 @@ or fabricated replacement result exists.
   injected provider secret marker.
 - Rendered-content denylist checks cover private-reasoning labels, prompts, raw output/body,
   authorization material, credentials, and autonomous recommendation controls.
-- New Review was verified after both complete and incomplete outcomes; it clears all six
-  widget values, trusted Review/output/error state, selected detail, and the execution guard
-  before a different input runs.
+- New Review was verified after complete, incomplete, and Markdown-imported input; it clears
+  all six widget values, uploaded case state, trusted Review/output/error state, and the
+  execution guard before a different input runs.
 - No persistence, history, resume, retry, polling, thread, queue, workflow engine, API
   service, raw HTML, or provider SDK was introduced in the UI boundary.
+
+## Compact dashboard and Markdown import revision
+
+**Import verification:** the dependency-free parser accepts the documented English and
+Spanish headings, UTF-8 with optional BOM, Unicode, optional sections, and ordered duplicate
+list values. It rejects invalid encoding, files above 1 MiB, null characters, unknown or
+duplicate sections, nested/unsupported headings, and non-bullet collection content. AppTest
+proves successful import populates all six editable controls without execution, invalid
+import leaves the existing draft unchanged, and New Review clears imported state.
+
+**Layout verification:** Coordinator renders first spatially as the full-width step-5 final
+synthesis card. Analyst, Solution Architect, Risk Reviewer, and Critic render below in a 2x2
+specialist grid with numbered collapsible cards. The canonical sequential dependency remains
+visible. Starting a Review removes the uploader/editor and replaces it with a collapsed
+submitted-case summary. Completed Coordinator output renders below the topology in a bordered
+Decision workspace with Overview, Alternatives, Risks, Evidence & next steps, and Technical
+tabs.
+
+**Browser observation:** a clean deterministic Streamlit session was inspected in headless
+Edge at a 1600x1200 window. The hydrated document reported a 1576-pixel client and scroll
+width, 1108-pixel client and scroll height, and zero remaining skeletons. The complete initial
+agent workspace therefore fit without horizontal overflow or main-canvas scrolling. The
+sidebar remained independently scrollable for the editor and displayed the enforced 1 MB
+upload limit.
 
 ## Live vLLM acceptance
 
