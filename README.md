@@ -28,8 +28,8 @@ python3.12 -m venv .venv
 .venv/bin/python -m mypy
 ```
 
-Runtime dependencies are constrained in `pyproject.toml` to Pydantic and HTTPX. Development
-tooling is provided through the `dev` optional dependency group.
+Runtime dependencies are constrained in `pyproject.toml` to Pydantic, HTTPX, and Streamlit.
+Development tooling is provided through the `dev` optional dependency group.
 
 ## LLM configuration
 
@@ -69,6 +69,51 @@ export ARB_LLM_CONFIG_PATH='/path/to/llm.json'
 Local profiles may omit `api_key_env`. A selected authenticated profile fails closed when
 its referenced credential is absent, blank, or surrounded by whitespace. Credentials
 referenced only by unselected profiles are not read.
+
+## Pedagogical Review UI
+
+After installing the normal project dependencies and setting `ARB_LLM_CONFIG_PATH`, launch
+the local UI from the repository root:
+
+```powershell
+.\.venv\Scripts\python.exe -m streamlit run streamlit_app.py
+```
+
+```bash
+.venv/bin/python -m streamlit run streamlit_app.py
+```
+
+Loading the page is inert: configuration, the HTTP client, and the five participants are
+created only after an explicit **Start Review**. The form uses six fields:
+
+- **Title** is optional and single-line.
+- **Description** is required.
+- **Objective** is optional.
+- **Constraints** is optional and accepts one item per line.
+- **Context** is optional and accepts one item per line.
+- **Stated facts** is optional and accepts one item per line.
+
+Blank optional values and blank collection lines are omitted. Every accepted non-blank
+value, including its meaningful outer whitespace, order, duplicates, and Unicode, is passed
+to the domain input unchanged; commas and JSON syntax receive no special interpretation.
+
+The **Process** view presents the canonical sequential collaboration—Analyst, Solution
+Architect, Risk Reviewer, Critic, and Coordinator—with textual statuses, responsibilities,
+input artifact types, and completed trusted outputs. A failed stage has no trusted output;
+its completed predecessors remain inspectable and mandatory downstream stages are shown as
+not executed. Runtime setup/interface faults use fixed public messages and do not expose raw
+provider responses, prompts, endpoints, credentials, or exception details.
+
+A successfully completed Coordinator stage adds a separate **Final result** view containing
+ranked alternatives, preserved evidence status, risks, unresolved questions, qualitative
+confidence, and an advisory next validation step. `INSUFFICIENT_EVIDENCE` is a valid
+completed outcome and never invents a preferred alternative. The result supports human
+decision-making; the UI provides no action to execute its recommendation.
+
+**New Review** clears the six form values, selected detail, current Review, output, and error
+from the current Streamlit session before showing a fresh form. This PoC has no database,
+history, durable persistence, browser-refresh recovery, or resume behavior. Closing or
+restarting the application can discard the current Review.
 
 ### Proxy and certificate environment
 

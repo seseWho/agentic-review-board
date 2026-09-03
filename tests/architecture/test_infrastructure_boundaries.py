@@ -11,9 +11,15 @@ PRODUCTION_PACKAGE = (
     Path(__file__).resolve().parents[2] / "src" / "agentic_review_board"
 )
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+UI_PACKAGE = PRODUCTION_PACKAGE / "ui"
 FORBIDDEN_PREFIXES = (
     "httpx",
     "agentic_review_board.infrastructure",
+)
+UI_FORBIDDEN_PREFIXES = (
+    "httpx",
+    "agentic_review_board.infrastructure",
+    "agentic_review_board.participants",
 )
 EXTERNAL_PROTOCOL_MARKERS = (
     "/chat/completions",
@@ -37,7 +43,6 @@ FORBIDDEN_RUNTIME_IMPORTS = {
     "openai",
     "requests",
     "sqlalchemy",
-    "streamlit",
 }
 FORBIDDEN_EXECUTABLE_TOKENS = {
     "browse",
@@ -136,7 +141,7 @@ def test_only_infrastructure_owns_external_protocol_markers(marker: str) -> None
     assert violations == []
 
 
-def test_runtime_dependencies_remain_exactly_pydantic_and_httpx() -> None:
+def test_runtime_dependencies_remain_exactly_pydantic_httpx_and_streamlit() -> None:
     pyproject = tomllib.loads(
         (PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     )
@@ -146,7 +151,8 @@ def test_runtime_dependencies_remain_exactly_pydantic_and_httpx() -> None:
         for dependency in dependencies
     }
 
-    assert names == {"pydantic", "httpx"}
+    assert names == {"pydantic", "httpx", "streamlit"}
+    assert "streamlit>=1.63,<2" in dependencies
 
 
 def test_production_imports_no_provider_sdk_or_out_of_scope_framework() -> None:
@@ -163,11 +169,46 @@ def test_production_imports_no_provider_sdk_or_out_of_scope_framework() -> None:
     assert violations == []
 
 
+def test_only_ui_adapter_imports_streamlit() -> None:
+    violations = [
+        str(path.relative_to(PROJECT_ROOT))
+        for path in sorted(PRODUCTION_PACKAGE.rglob("*.py"))
+        if not path.is_relative_to(UI_PACKAGE)
+        if any(
+            module == "streamlit" or module.startswith("streamlit.")
+            for module in imported_modules(path)
+        )
+    ]
+
+    assert violations == []
+
+
+def test_ui_adapter_does_not_import_infrastructure_or_participants() -> None:
+    violations = [
+        f"{path.relative_to(PRODUCTION_PACKAGE)}: {module}"
+        for path in sorted(UI_PACKAGE.rglob("*.py"))
+        for module in imported_modules(path)
+        if any(
+            module == prefix or module.startswith(f"{prefix}.")
+            for prefix in UI_FORBIDDEN_PREFIXES
+        )
+    ]
+
+    assert violations == []
+
+
 def test_production_defines_no_out_of_scope_executable_capability() -> None:
     violations = [
         f"{path.relative_to(PRODUCTION_PACKAGE)}: {sorted(tokens)}"
         for path in sorted(PRODUCTION_PACKAGE.rglob("*.py"))
-        if (tokens := definition_tokens(path) & FORBIDDEN_EXECUTABLE_TOKENS)
+        if (
+            tokens := definition_tokens(path)
+            & (
+                FORBIDDEN_EXECUTABLE_TOKENS - {"ui"}
+                if path.is_relative_to(UI_PACKAGE)
+                else FORBIDDEN_EXECUTABLE_TOKENS
+            )
+        )
     ]
 
     assert violations == []

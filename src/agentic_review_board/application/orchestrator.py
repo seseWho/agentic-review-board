@@ -1,3 +1,4 @@
+from agentic_review_board.application.observation import ReviewObserver
 from agentic_review_board.domain.analysis import ProblemAnalysis
 from agentic_review_board.domain.critics import CriticalReview
 from agentic_review_board.domain.execution import (
@@ -41,29 +42,42 @@ class ReviewOrchestrator:
         self._critic = critic
         self._coordinator = coordinator
 
-    def execute(self, created_review: Review) -> Review:
+    def execute(
+        self,
+        created_review: Review,
+        *,
+        observer: ReviewObserver | None = None,
+    ) -> Review:
         review = created_review.start()
+        self._notify(observer, review)
 
         review = review.start_analyst()
+        self._notify(observer, review)
         try:
             problem_analysis = self._analyst.analyze(review.review_input)
         except AnalystOutputError:
-            return review.fail_analyst(
+            review = review.fail_analyst(
                 ReviewError(
                     kind=ReviewErrorKind.OUTPUT_VALIDATION,
                     message="Analyst output validation failed",
                 )
             )
+            self._notify(observer, review)
+            return review
         except Exception:
-            return review.fail_analyst(
+            review = review.fail_analyst(
                 ReviewError(
                     kind=ReviewErrorKind.EXECUTION,
                     message="Analyst execution failed",
                 )
             )
+            self._notify(observer, review)
+            return review
         review = review.complete_analyst(problem_analysis)
+        self._notify(observer, review)
 
         review = review.start_solution_architect()
+        self._notify(observer, review)
         analyst_stage = review.stage(StageIdentity.ANALYST)
         if not isinstance(analyst_stage.output, ProblemAnalysis):
             raise ValueError("completed Analyst stage must expose trusted ProblemAnalysis")
@@ -73,22 +87,28 @@ class ReviewOrchestrator:
                 analyst_stage.output,
             )
         except SolutionArchitectOutputError:
-            return review.fail_solution_architect(
+            review = review.fail_solution_architect(
                 ReviewError(
                     kind=ReviewErrorKind.OUTPUT_VALIDATION,
                     message="Solution Architect output validation failed",
                 )
             )
+            self._notify(observer, review)
+            return review
         except Exception:
-            return review.fail_solution_architect(
+            review = review.fail_solution_architect(
                 ReviewError(
                     kind=ReviewErrorKind.EXECUTION,
                     message="Solution Architect execution failed",
                 )
             )
+            self._notify(observer, review)
+            return review
         review = review.complete_solution_architect(solution_alternatives)
+        self._notify(observer, review)
 
         review = review.start_risk_reviewer()
+        self._notify(observer, review)
         analyst_stage = review.stage(StageIdentity.ANALYST)
         architect_stage = review.stage(StageIdentity.SOLUTION_ARCHITECT)
         if not isinstance(analyst_stage.output, ProblemAnalysis):
@@ -104,22 +124,28 @@ class ReviewOrchestrator:
                 architect_stage.output,
             )
         except RiskReviewerOutputError:
-            return review.fail_risk_reviewer(
+            review = review.fail_risk_reviewer(
                 ReviewError(
                     kind=ReviewErrorKind.OUTPUT_VALIDATION,
                     message="Risk Reviewer output validation failed",
                 )
             )
+            self._notify(observer, review)
+            return review
         except Exception:
-            return review.fail_risk_reviewer(
+            review = review.fail_risk_reviewer(
                 ReviewError(
                     kind=ReviewErrorKind.EXECUTION,
                     message="Risk Reviewer execution failed",
                 )
             )
+            self._notify(observer, review)
+            return review
         review = review.complete_risk_reviewer(risk_assessment)
+        self._notify(observer, review)
 
         review = review.start_critic()
+        self._notify(observer, review)
         analyst_stage = review.stage(StageIdentity.ANALYST)
         architect_stage = review.stage(StageIdentity.SOLUTION_ARCHITECT)
         reviewer_stage = review.stage(StageIdentity.RISK_REVIEWER)
@@ -141,22 +167,28 @@ class ReviewOrchestrator:
                 reviewer_stage.output,
             )
         except CriticOutputError:
-            return review.fail_critic(
+            review = review.fail_critic(
                 ReviewError(
                     kind=ReviewErrorKind.OUTPUT_VALIDATION,
                     message="Critic output validation failed",
                 )
             )
+            self._notify(observer, review)
+            return review
         except Exception:
-            return review.fail_critic(
+            review = review.fail_critic(
                 ReviewError(
                     kind=ReviewErrorKind.EXECUTION,
                     message="Critic execution failed",
                 )
             )
+            self._notify(observer, review)
+            return review
         review = review.complete_critic(critical_review)
+        self._notify(observer, review)
 
         review = review.start_coordinator()
+        self._notify(observer, review)
         analyst_stage = review.stage(StageIdentity.ANALYST)
         architect_stage = review.stage(StageIdentity.SOLUTION_ARCHITECT)
         reviewer_stage = review.stage(StageIdentity.RISK_REVIEWER)
@@ -184,17 +216,28 @@ class ReviewOrchestrator:
                 critic_stage.output,
             )
         except CoordinatorOutputError:
-            return review.fail_coordinator(
+            review = review.fail_coordinator(
                 ReviewError(
                     kind=ReviewErrorKind.OUTPUT_VALIDATION,
                     message="Coordinator output validation failed",
                 )
             )
+            self._notify(observer, review)
+            return review
         except Exception:
-            return review.fail_coordinator(
+            review = review.fail_coordinator(
                 ReviewError(
                     kind=ReviewErrorKind.EXECUTION,
                     message="Coordinator execution failed",
                 )
             )
-        return review.complete_coordinator(final_review)
+            self._notify(observer, review)
+            return review
+        review = review.complete_coordinator(final_review)
+        self._notify(observer, review)
+        return review
+
+    @staticmethod
+    def _notify(observer: ReviewObserver | None, review: Review) -> None:
+        if observer is not None:
+            observer(review)

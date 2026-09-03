@@ -1316,3 +1316,189 @@ def test_coordinator_failure_does_not_contaminate_fresh_review() -> None:
     assert second_coordinator.inputs.review_input is not first_coordinator.inputs.review_input
     assert isinstance(second_coordinator.output, FinalReview)
     assert second_coordinator.error is None
+
+
+OBSERVED_STAGE_ORDER = (
+    StageIdentity.ANALYST,
+    StageIdentity.SOLUTION_ARCHITECT,
+    StageIdentity.RISK_REVIEWER,
+    StageIdentity.CRITIC,
+    StageIdentity.COORDINATOR,
+)
+
+
+def snapshot_signature(
+    review: Review,
+) -> tuple[ReviewStatus, tuple[StageStatus, ...]]:
+    return review.status, tuple(
+        review.stage(identity).status for identity in OBSERVED_STAGE_ORDER
+    )
+
+
+def responses_with_invalid_output(role: str) -> dict[str, Mapping[str, object]]:
+    responses = successful_responses()
+    invalid_by_role: dict[str, Mapping[str, object]] = {
+        "analyst": invalid_analyst_response(),
+        "solution_architect": invalid_solution_architect_response(),
+        "risk_reviewer": invalid_risk_reviewer_response(),
+        "critic": invalid_critic_response(),
+        "coordinator": {"unexpected": "invalid"},
+    }
+    responses[role] = invalid_by_role[role]
+    return responses
+
+
+def test_no_observer_and_explicit_none_preserve_existing_execution() -> None:
+    implicit_llm = RecordingLLM(successful_responses())
+    explicit_llm = RecordingLLM(successful_responses())
+
+    implicit_result = orchestrator_with(implicit_llm).execute(create_review())
+    explicit_result = orchestrator_with(explicit_llm).execute(
+        create_review(),
+        observer=None,
+    )
+
+    assert explicit_result == implicit_result
+    assert explicit_llm.calls == implicit_llm.calls
+
+
+def test_success_observer_receives_exact_validated_transition_sequence() -> None:
+    observed: list[Review] = []
+
+    result = orchestrator_with(RecordingLLM(successful_responses())).execute(
+        create_review(),
+        observer=observed.append,
+    )
+
+    expected: list[tuple[ReviewStatus, tuple[StageStatus, ...]]] = [
+        (ReviewStatus.RUNNING, (StageStatus.PENDING,) * 5)
+    ]
+    for index in range(5):
+        expected.append(
+            (
+                ReviewStatus.RUNNING,
+                (StageStatus.COMPLETED,) * index
+                + (StageStatus.RUNNING,)
+                + (StageStatus.PENDING,) * (4 - index),
+            )
+        )
+        expected.append(
+            (
+                ReviewStatus.COMPLETED if index == 4 else ReviewStatus.RUNNING,
+                (StageStatus.COMPLETED,) * (index + 1)
+                + (StageStatus.PENDING,) * (4 - index),
+            )
+        )
+
+    assert [snapshot_signature(review) for review in observed] == expected
+    assert len(observed) == 11
+    assert all(review.model_config.get("frozen") is True for review in observed)
+    assert all(Review.model_validate(review) is review for review in observed)
+    assert observed[-1] is result
+
+
+@pytest.mark.parametrize(
+    ("role", "failed_index"),
+    [
+        ("analyst", 0),
+        ("solution_architect", 1),
+        ("risk_reviewer", 2),
+        ("critic", 3),
+        ("coordinator", 4),
+    ],
+)
+def test_failure_observer_preserves_exact_reached_and_pending_stages(
+    role: str,
+    failed_index: int,
+) -> None:
+    observed: list[Review] = []
+
+    result = orchestrator_with(RecordingLLM(responses_with_invalid_output(role))).execute(
+        create_review(),
+        observer=observed.append,
+    )
+
+    assert len(observed) == 2 * (failed_index + 1) + 1
+    assert observed[-1] is result
+    assert result.status is ReviewStatus.INCOMPLETE
+    for index, identity in enumerate(OBSERVED_STAGE_ORDER):
+        stage = result.stage(identity)
+        if index < failed_index:
+            assert stage.status is StageStatus.COMPLETED
+            assert stage.output is not None
+            assert stage.error is None
+        elif index == failed_index:
+            assert stage.status is StageStatus.FAILED
+            assert stage.output is None
+            assert stage.error is not None
+            assert stage.error.kind is ReviewErrorKind.OUTPUT_VALIDATION
+        else:
+            assert stage.status is StageStatus.PENDING
+            assert stage.inputs is None
+            assert stage.output is None
+            assert stage.error is None
+
+
+class ObserverFailure(RuntimeError):
+    pass
+
+
+@pytest.mark.parametrize(
+    ("raise_at", "expected_roles"),
+    [
+        (1, []),
+        (2, []),
+        (3, ["analyst"]),
+        (4, ["analyst"]),
+        (
+            11,
+            ["analyst", "solution_architect", "risk_reviewer", "critic", "coordinator"],
+        ),
+    ],
+)
+def test_observer_exception_propagates_without_participant_failure_mapping(
+    raise_at: int,
+    expected_roles: list[str],
+) -> None:
+    llm = RecordingLLM(successful_responses())
+    observed: list[Review] = []
+
+    def failing_observer(review: Review) -> None:
+        observed.append(review)
+        if len(observed) == raise_at:
+            raise ObserverFailure("presentation observer failed")
+
+    with pytest.raises(ObserverFailure, match="presentation observer failed"):
+        orchestrator_with(llm).execute(create_review(), observer=failing_observer)
+
+    assert [role for role, _ in llm.calls] == expected_roles
+    assert all(
+        stage.error is None
+        for snapshot in observed
+        for stage in snapshot.stages
+    )
+
+
+def test_observer_exception_on_failure_notification_remains_distinct() -> None:
+    llm = RecordingLLM(responses_with_invalid_output("critic"))
+    observed: list[Review] = []
+
+    def failing_observer(review: Review) -> None:
+        observed.append(review)
+        if review.status is ReviewStatus.INCOMPLETE:
+            raise ObserverFailure("failure view failed")
+
+    with pytest.raises(ObserverFailure, match="failure view failed"):
+        orchestrator_with(llm).execute(create_review(), observer=failing_observer)
+
+    assert [role for role, _ in llm.calls] == [
+        "analyst",
+        "solution_architect",
+        "risk_reviewer",
+        "critic",
+    ]
+    failed = observed[-1].stage(StageIdentity.CRITIC)
+    assert observed[-1].status is ReviewStatus.INCOMPLETE
+    assert failed.status is StageStatus.FAILED
+    assert failed.error is not None
+    assert failed.error.kind is ReviewErrorKind.OUTPUT_VALIDATION

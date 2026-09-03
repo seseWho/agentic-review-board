@@ -3,7 +3,7 @@ from __future__ import annotations
 import gc
 import weakref
 from collections.abc import Callable, Mapping
-from typing import Any
+from typing import Any, cast
 
 import httpx
 import pytest
@@ -877,3 +877,71 @@ def test_exposes_only_safe_immutable_composition_metadata() -> None:
 
     assert runtime.lifecycle_state == "CLOSED"
     assert runtime.selected_profile_names == ("Remote", "local")
+
+
+def test_execute_forwards_exact_optional_review_observer() -> None:
+    transport = CloseRecordingTransport()
+    calls: list[tuple[Review, object]] = []
+
+    class ObserverRecordingOrchestrator:
+        def execute(
+            self,
+            review: Review,
+            *,
+            observer: Callable[[Review], None] | None = None,
+        ) -> Review:
+            calls.append((review, observer))
+            if observer is not None:
+                observer(review)
+            return review
+
+    client = httpx.Client(transport=transport)
+    runtime = ConfiguredReviewRuntime(
+        client=client,
+        orchestrator=cast(ReviewOrchestrator, ObserverRecordingOrchestrator()),
+        selected_profile_names=(),
+        participant_profile_names={},
+    )
+    review = Review.create(ReviewInput(description="Observer forwarding marker."))
+    observed: list[Review] = []
+
+    result = runtime.execute(review, observer=observed.append)
+
+    assert result is review
+    assert calls == [(review, observed.append)]
+    assert observed == [review]
+    runtime.close()
+    assert transport.close_count == 1
+
+
+def test_closed_runtime_rejects_before_observer_forwarding() -> None:
+    transport = CloseRecordingTransport()
+    forwarded: list[object] = []
+
+    class UnexpectedOrchestrator:
+        def execute(
+            self,
+            review: Review,
+            *,
+            observer: Callable[[Review], None] | None = None,
+        ) -> Review:
+            forwarded.append(observer)
+            return review
+
+    client = httpx.Client(transport=transport)
+    runtime = ConfiguredReviewRuntime(
+        client=client,
+        orchestrator=cast(ReviewOrchestrator, UnexpectedOrchestrator()),
+        selected_profile_names=(),
+        participant_profile_names={},
+    )
+    review = Review.create(ReviewInput(description="Closed observer guard marker."))
+    observed: list[Review] = []
+    runtime.close()
+
+    with pytest.raises(LLMRuntimeClosedError, match=r"^LLM runtime is closed$"):
+        runtime.execute(review, observer=observed.append)
+
+    assert forwarded == []
+    assert observed == []
+    assert transport.close_count == 1

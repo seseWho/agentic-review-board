@@ -1,0 +1,1 @@
+"""Deterministic UI test fixtures."""

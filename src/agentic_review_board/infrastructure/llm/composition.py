@@ -6,6 +6,7 @@ from typing import Self
 
 import httpx
 
+from agentic_review_board.application.observation import ReviewObserver
 from agentic_review_board.application.orchestrator import ReviewOrchestrator
 from agentic_review_board.domain.execution import Review
 from agentic_review_board.infrastructure.llm.config import (
@@ -134,10 +135,17 @@ class ConfiguredReviewRuntime:
     def lifecycle_state(self) -> str:
         return "CLOSED" if self._closed else "OPEN"
 
-    def execute(self, review: Review) -> Review:
+    def execute(
+        self,
+        review: Review,
+        *,
+        observer: ReviewObserver | None = None,
+    ) -> Review:
         if self._closed:
             raise LLMRuntimeClosedError()
-        return self._orchestrator.execute(review)
+        if observer is None:
+            return self._orchestrator.execute(review)
+        return self._orchestrator.execute(review, observer=observer)
 
     def close(self) -> None:
         if self._closed:

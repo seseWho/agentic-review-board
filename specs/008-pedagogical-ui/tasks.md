@@ -45,7 +45,7 @@ composition entry from core application code.
 
 ### Tests first
 
-- [ ] T001 [TEST] Update `tests/architecture/test_infrastructure_boundaries.py` so the exact
+- [X] T001 [TEST] Update `tests/architecture/test_infrastructure_boundaries.py` so the exact
   runtime dependency set includes constrained Streamlit, `streamlit` imports are permitted
   only under `src/agentic_review_board/ui/`, and domain, application, participants, and LLM
   infrastructure continue to reject UI/web imports; add an explicit inverse guard proving
@@ -55,9 +55,9 @@ composition entry from core application code.
 
 ### Configuration
 
-- [ ] T002 Add `streamlit>=1.63,<2` to the normal runtime dependencies in `pyproject.toml`
+- [X] T002 Add `streamlit>=1.63,<2` to the normal runtime dependencies in `pyproject.toml`
   without adding charting, component, web-server, workflow, or persistence packages.
-- [ ] T003 [TEST] Synchronize the editable development environment from `pyproject.toml` and
+- [X] T003 [TEST] Synchronize the editable development environment from `pyproject.toml` and
   run the focused dependency and architecture checks; record no lockfile because the
   repository has no approved lockfile convention.
 
@@ -76,37 +76,37 @@ inspect observer snapshots without importing Streamlit.
 
 ### Tests first
 
-- [ ] T004 [TEST] [US2] Extend `tests/unit/test_review_orchestrator.py` with a no-observer
+- [X] T004 [TEST] [US2] Extend `tests/unit/test_review_orchestrator.py` with a no-observer
   regression proving identical participant order, object propagation, terminal Review, and
   call counts to the current execution path.
-- [ ] T005 [TEST] [US2] Extend `tests/unit/test_review_orchestrator.py` with the exact
+- [X] T005 [TEST] [US2] Extend `tests/unit/test_review_orchestrator.py` with the exact
   eleven-snapshot successful sequence: Review start, each of five stage starts, and each of
   five completions; prove every value is a frozen validated `Review` and the last emitted
   object is the exact returned object.
-- [ ] T006 [TEST] [US2] [US5] Add parameterized failure-observation tests to
+- [X] T006 [TEST] [US2] [US5] Add parameterized failure-observation tests to
   `tests/unit/test_review_orchestrator.py` for Analyst through Coordinator, proving exact
   `2k + 1` snapshot counts, preserved completed upstream work, one failed reached stage,
   pending downstream stages, and identity between the final emission and returned
   incomplete Review.
-- [ ] T007 [TEST] [US2] Extend `tests/unit/test_review_orchestrator.py` with observers that
+- [X] T007 [TEST] [US2] Extend `tests/unit/test_review_orchestrator.py` with observers that
   raise at Review start, stage start, successful completion, and failure notification;
   prove propagation is immediate, no observer error becomes `ReviewError`, and no later
   participant is called.
-- [ ] T008 [TEST] [US2] Extend
+- [X] T008 [TEST] [US2] Extend
   `tests/unit/infrastructure/llm/test_composition.py` with exact observer forwarding,
   `observer=None` compatibility, closed-runtime rejection before observation, and resource
   lifecycle regressions.
 
 ### Implementation
 
-- [ ] T009 [US2] Create `src/agentic_review_board/application/observation.py` with only the
+- [X] T009 [US2] Create `src/agentic_review_board/application/observation.py` with only the
   provider-neutral `ReviewObserver` alias and export it from
   `src/agentic_review_board/application/__init__.py`.
-- [ ] T010 [US2] Extend `src/agentic_review_board/application/orchestrator.py` with the
+- [X] T010 [US2] Extend `src/agentic_review_board/application/orchestrator.py` with the
   optional keyword-only observer and synchronous notification after every validated
   transition, keeping notifications outside participant exception handlers and preserving
   the explicit five-stage orchestration.
-- [ ] T011 [US2] Extend
+- [X] T011 [US2] Extend
   `src/agentic_review_board/infrastructure/llm/composition.py` to forward the optional
   observer without exposing its orchestrator/client or changing close behavior.
 
@@ -125,31 +125,31 @@ stage presentation values without starting a Streamlit application or model runt
 
 ### Tests first
 
-- [ ] T012 [TEST] [US1] Create `tests/unit/ui/test_app_state.py` with draft normalization
+- [X] T012 [TEST] [US1] Create `tests/unit/ui/test_app_state.py` with draft normalization
   cases for required description, optional scalar empty-to-`None`, CRLF/LF repeated values,
   whitespace-only absence/rejection, exact outer-whitespace preservation for every
   non-empty value, Unicode, preserved order and duplicates, discarded blank lines, and no
   comma/JSON interpretation.
-- [ ] T013 [TEST] [US1] [US6] Extend `tests/unit/ui/test_app_state.py` with all allowed
+- [X] T013 [TEST] [US1] [US6] Extend `tests/unit/ui/test_app_state.py` with all allowed
   `ReviewUiState` phases, duplicate-start guard, observer snapshot replacement, terminal
   return, startup/application error, selected-stage, and complete reset transitions; reject
   or fail safely on inconsistent phase/Review combinations.
-- [ ] T014 [TEST] [US5] Extend `tests/unit/ui/test_app_state.py` with fixed sanitized error
+- [X] T014 [TEST] [US5] Extend `tests/unit/ui/test_app_state.py` with fixed sanitized error
   messages containing no injected exception, secret, endpoint, prompt, or raw-output marker
   and proving UI errors never construct a domain `ReviewError`.
-- [ ] T015 [TEST] [US2] [US3] Create `tests/unit/ui/test_presentation.py` with exhaustive
+- [X] T015 [TEST] [US2] [US3] Create `tests/unit/ui/test_presentation.py` with exhaustive
   `StageIdentity`, `StageStatus`, and `ReviewStatus` mapping tests for canonical order,
   readable non-color-only labels, responsibilities, input artifact labels, and output type
   labels.
-- [ ] T016 [TEST] [US3] [US5] Extend `tests/unit/ui/test_presentation.py` with
+- [X] T016 [TEST] [US3] [US5] Extend `tests/unit/ui/test_presentation.py` with
   `StagePresentation` tests proving it references the exact `StageExecution`, uses the
   descriptor selected by that execution identity, derives `blocked_by` only for downstream
   pending stages after a trusted failure, and never writes blocked state into the Review.
-- [ ] T017 [TEST] [US3] Extend `tests/unit/ui/test_presentation.py` with completed-only output
+- [X] T017 [TEST] [US3] Extend `tests/unit/ui/test_presentation.py` with completed-only output
   dispatch for all five exact output types; distinguish pending/running/failed/unavailable
   from valid empty collections and preserve material IDs, provenance, assumptions,
   uncertainties, validation status, and contradiction support status.
-- [ ] T018 [TEST] [US4] Extend `tests/unit/ui/test_presentation.py` with final-result
+- [X] T018 [TEST] [US4] Extend `tests/unit/ui/test_presentation.py` with final-result
   availability, preferred-alternative presence/absence, ranked data, principal risks,
   unresolved questions, qualitative confidence, `INSUFFICIENT_EVIDENCE`, next validation
   step, and decision-support notice; prove no numeric probability or executable action is
@@ -157,16 +157,16 @@ stage presentation values without starting a Streamlit application or model runt
 
 ### Implementation
 
-- [ ] T019 Create `src/agentic_review_board/ui/__init__.py` with a narrow public rendering
+- [X] T019 Create `src/agentic_review_board/ui/__init__.py` with a narrow public rendering
   entry and no import-time runtime construction.
-- [ ] T020 [US1] [US6] Create `src/agentic_review_board/ui/app.py` with the approved
+- [X] T020 [US1] [US6] Create `src/agentic_review_board/ui/app.py` with the approved
   `ReviewExecutor`, `ReviewInputDraft`, normalization, `UiPhase`, `UiError`, immutable
   `ReviewUiState`, guarded transitions, and reset helpers; keep concrete LLM infrastructure
   outside this module.
-- [ ] T021 [US2] [US3] Create `src/agentic_review_board/ui/presentation.py` with exhaustive
+- [X] T021 [US2] [US3] Create `src/agentic_review_board/ui/presentation.py` with exhaustive
   static descriptors, exact status labels, derived blocked-stage mapping, and trusted
   completed-output dispatch.
-- [ ] T022 [US3] [US4] Complete pure role-specific and final-result presentation helpers in
+- [X] T022 [US3] [US4] Complete pure role-specific and final-result presentation helpers in
   `src/agentic_review_board/ui/presentation.py`, preserving evidence semantics and returning
   no HTML, provider values, actions, or replacement domain artifacts.
 
@@ -185,24 +185,24 @@ artifact handoff, observer history, and terminal state.
 
 ### Test infrastructure and contracts
 
-- [ ] T023 [TEST] Create `tests/ui/fixtures/review_scenarios.py` with deterministic scripted
+- [X] T023 [TEST] Create `tests/ui/fixtures/review_scenarios.py` with deterministic scripted
   `LLMPort` substitutes and valid structured mappings for the five existing participants;
   build executors through the real `Analyst`, `SolutionArchitect`, `RiskReviewer`, `Critic`,
   `Coordinator`, and `ReviewOrchestrator`.
-- [ ] T024 [TEST] [US2] [US3] Create `tests/ui/test_review_scenarios.py` with a complete
+- [X] T024 [TEST] [US2] [US3] Create `tests/ui/test_review_scenarios.py` with a complete
   scenario proving exact five-role call order, exact current-review/upstream-artifact
   propagation, eleven observer snapshots, five trusted outputs, and terminal completion.
-- [ ] T025 [TEST] [US4] Extend `tests/ui/test_review_scenarios.py` with a trusted completed
+- [X] T025 [TEST] [US4] Extend `tests/ui/test_review_scenarios.py` with a trusted completed
   `INSUFFICIENT_EVIDENCE` scenario that produces no invented preference and retains
   unresolved information and next validation step.
-- [ ] T026 [TEST] [US5] Extend `tests/ui/test_review_scenarios.py` with Critic
+- [X] T026 [TEST] [US5] Extend `tests/ui/test_review_scenarios.py` with Critic
   output-validation failure and participant/provider execution failure scenarios, proving
   their distinct trusted categories, upstream preservation, Coordinator non-invocation,
   and absence of final output.
-- [ ] T027 [TEST] [US6] Extend `tests/ui/test_review_scenarios.py` with two sequential fresh
+- [X] T027 [TEST] [US6] Extend `tests/ui/test_review_scenarios.py` with two sequential fresh
   inputs through a reused deterministic executor, proving no Review, prompt payload,
   output, error, observer history, or participant-call data crosses executions.
-- [ ] T028 [TEST] Create
+- [X] T028 [TEST] Create
   `tests/ui/fixtures/deterministic_streamlit_app.py` as a test-only Streamlit composition
   entry using those real-participant deterministic scenarios, selected only through
   test-injected session state and never through production UI controls.
@@ -222,31 +222,31 @@ and inspect execution count, captured snapshots, ordered stages, and trusted pro
 
 ### Tests first
 
-- [ ] T029 [TEST] [US1] Create `tests/ui/test_streamlit_app.py` with `AppTest` coverage for
+- [X] T029 [TEST] [US1] Create `tests/ui/test_streamlit_app.py` with `AppTest` coverage for
   initial form labels, required/optional distinction, no execution on load or ordinary
   widget edits, field validation, line-based collections, and exact accepted
   `ReviewInput` values.
-- [ ] T030 [TEST] [US1] Extend `tests/ui/test_streamlit_app.py` with explicit Start behavior,
+- [X] T030 [TEST] [US1] Extend `tests/ui/test_streamlit_app.py` with explicit Start behavior,
   form isolation after start, an execution call counter, repeated script reruns, and
   repeated interaction proving exactly one non-overlapping Review execution.
-- [ ] T031 [TEST] [US2] Extend `tests/ui/test_streamlit_app.py` with exactly five ordered
+- [X] T031 [TEST] [US2] Extend `tests/ui/test_streamlit_app.py` with exactly five ordered
   participant cards, readable stage and overall statuses, one-running-stage invariant from
   captured observer history, and canonical dependency direction with no parallelism claim.
-- [ ] T032 [TEST] [US2] [US3] Extend `tests/ui/test_streamlit_app.py` to prove every
+- [X] T032 [TEST] [US2] [US3] Extend `tests/ui/test_streamlit_app.py` to prove every
   completion snapshot is observed before the next stage-start snapshot, completed output
   becomes inspectable, static responsibility stays distinct from generated content, and
   recorded input artifact types are visible.
 
 ### Implementation
 
-- [ ] T033 [US1] Implement initial state, labelled form controls, normalization/validation,
+- [X] T033 [US1] Implement initial state, labelled form controls, normalization/validation,
   explicit Start, and disabled/hidden active input behavior in
   `src/agentic_review_board/ui/app.py` using standard Streamlit components only.
-- [ ] T034 [US2] Implement synchronous observer-driven status containers and overall Review
+- [X] T034 [US2] Implement synchronous observer-driven status containers and overall Review
   status in `src/agentic_review_board/ui/app.py`; create all stage surfaces before invoking
   the executor and update them from exact snapshots without timers, percentages, polling,
   threads, queues, or partial model text.
-- [ ] T035 [US2] [US3] Implement the canonical process overview and stage selection/detail
+- [X] T035 [US2] [US3] Implement the canonical process overview and stage selection/detail
   surface in `src/agentic_review_board/ui/app.py`, delegating all semantic mappings to
   `presentation.py` and preserving the process view after terminal return.
 
@@ -265,33 +265,33 @@ using the complete and insufficient-evidence scenarios.
 
 ### Tests first
 
-- [ ] T036 [TEST] [US3] Extend `tests/ui/test_streamlit_app.py` with role-specific rendered
+- [X] T036 [TEST] [US3] Extend `tests/ui/test_streamlit_app.py` with role-specific rendered
   sections for Analyst, Solution Architect, Risk Reviewer, and Critic, including their IDs,
   upstream references, assumptions, missing information, trade-offs, complexity, risks,
   mitigations, contradictions, support status, and unresolved issues.
-- [ ] T037 [TEST] [US3] Extend `tests/ui/test_streamlit_app.py` with valid empty-collection
+- [X] T037 [TEST] [US3] Extend `tests/ui/test_streamlit_app.py` with valid empty-collection
   states and optional trusted JSON detail, proving empty means “No items,” JSON remains
   secondary, and only trusted `StageExecution` serialization is exposed.
-- [ ] T038 [TEST] [US4] Extend `tests/ui/test_streamlit_app.py` with a separately identified
+- [X] T038 [TEST] [US4] Extend `tests/ui/test_streamlit_app.py` with a separately identified
   final-result surface containing ordered rankings, copied validation status, conditional
   preference, principal risks, unresolved questions, criticism dispositions, qualitative
   confidence, advisory next step, and the fixed human decision-support notice.
-- [ ] T039 [TEST] [US4] Extend `tests/ui/test_streamlit_app.py` with the
+- [X] T039 [TEST] [US4] Extend `tests/ui/test_streamlit_app.py` with the
   `INSUFFICIENT_EVIDENCE` scenario, proving it remains a valid completed result, has no
   invented preferred alternative, and links back to inspectable process artifacts.
-- [ ] T040 [TEST] [US3] [US4] Add evidence-state regression assertions to
+- [X] T040 [TEST] [US3] [US4] Add evidence-state regression assertions to
   `tests/ui/test_streamlit_app.py` proving `PROPOSED` and `UNVERIFIED` remain exact and no
   UI copy promotes them to validated, confirmed, proven, or evidenced.
 
 ### Implementation
 
-- [ ] T041 [US3] Implement the five role-specific trusted-output renderers in
+- [X] T041 [US3] Implement the five role-specific trusted-output renderers in
   `src/agentic_review_board/ui/app.py`, using native text/layout components, explicit empty
   states, and no raw HTML or partial/untrusted output.
-- [ ] T042 [US3] Implement stage-input provenance and the optional secondary trusted JSON
+- [X] T042 [US3] Implement stage-input provenance and the optional secondary trusted JSON
   expander in `src/agentic_review_board/ui/app.py` without displaying prompts, raw provider
   observations, runtime configuration, or exception objects.
-- [ ] T043 [US4] Implement the distinct Coordinator final-result view and return-to-process
+- [X] T043 [US4] Implement the distinct Coordinator final-result view and return-to-process
   navigation in `src/agentic_review_board/ui/app.py`, with no accept, deploy, send, apply,
   or execute action.
 
@@ -310,35 +310,35 @@ Review in the same AppTest session.
 
 ### Tests first
 
-- [ ] T044 [TEST] [US5] Extend `tests/ui/test_streamlit_app.py` with Critic
+- [X] T044 [TEST] [US5] Extend `tests/ui/test_streamlit_app.py` with Critic
   output-validation failure: Review incomplete, first three outputs inspectable, Critic
   failed with trusted category/message, Coordinator pending and blocked by Critic, and no
   final-result surface.
-- [ ] T045 [TEST] [US5] Extend `tests/ui/test_streamlit_app.py` with participant/provider
+- [X] T045 [TEST] [US5] Extend `tests/ui/test_streamlit_app.py` with participant/provider
   execution failure, proving it is distinguishable from output validation while exposing no
   fabricated provider cause, raw body, prompt, response, endpoint query, header, or secret.
-- [ ] T046 [TEST] [US1] [US5] Extend `tests/ui/test_streamlit_app.py` with an executor that
+- [X] T046 [TEST] [US1] [US5] Extend `tests/ui/test_streamlit_app.py` with an executor that
   fails before its first observation and one that fails after a trusted snapshot; prove
   fixed sanitized startup/application errors, no fabricated failed agent, no started Review
   claim for startup failure, deterministic cleanup, and absence of injected secret markers.
-- [ ] T047 [TEST] [US6] Extend `tests/ui/test_streamlit_app.py` with New Review after both
+- [X] T047 [TEST] [US6] Extend `tests/ui/test_streamlit_app.py` with New Review after both
   complete and incomplete outcomes, proving all six widget values, Review/output/error,
   selected detail, and execution guard are cleared before a different input executes and no
   prior scenario artifact appears in the second Review.
-- [ ] T048 [TEST] [US5] Add a rendered-content denylist regression to
+- [X] T048 [TEST] [US5] Add a rendered-content denylist regression to
   `tests/ui/test_streamlit_app.py` for private reasoning/chain-of-thought labels, complete
   prompts, raw-output markers, credentials, authorization values, and autonomous-action
   controls.
 
 ### Implementation
 
-- [ ] T049 [US5] Implement incomplete Review, failed-stage, trusted error-category, and
+- [X] T049 [US5] Implement incomplete Review, failed-stage, trusted error-category, and
   derived downstream-blocking presentation in `src/agentic_review_board/ui/app.py`, keeping
   upstream completed details available and the final view absent.
-- [ ] T050 [US1] [US5] Implement outer startup/application error handling in
+- [X] T050 [US1] [US5] Implement outer startup/application error handling in
   `src/agentic_review_board/ui/app.py` using fixed public messages and no exception-string
   interpolation or domain failure fabrication.
-- [ ] T051 [US6] Implement New Review confirmation/reset in
+- [X] T051 [US6] Implement New Review confirmation/reset in
   `src/agentic_review_board/ui/app.py`, replacing the immutable UI state and deleting every
   review/form/detail widget key without retaining history.
 
@@ -358,22 +358,22 @@ load.
 
 ### Tests first
 
-- [ ] T052 [TEST] [US1] Create `tests/ui/test_streamlit_composition.py` with substituted
+- [X] T052 [TEST] [US1] Create `tests/ui/test_streamlit_composition.py` with substituted
   configuration/runtime collaborators proving the root executor copies the current
   environment, loads the existing `ARB_LLM_CONFIG_PATH`, forwards the exact created Review
   and observer once, returns the exact terminal Review, requests no raw-output observer, and
   closes runtime resources on success or exception.
-- [ ] T053 [TEST] [US1] Extend `tests/ui/test_streamlit_composition.py` with a production-root
+- [X] T053 [TEST] [US1] Extend `tests/ui/test_streamlit_composition.py` with a production-root
   import/page-load regression proving no runtime, HTTP client, participant, or model request
   is created before explicit Start.
 
 ### Implementation and documentation
 
-- [ ] T054 [US1] Create root `streamlit_app.py` with an import-safe `main()`, one concrete
+- [X] T054 [US1] Create root `streamlit_app.py` with an import-safe `main()`, one concrete
   `ReviewExecutor` using `load_llm_runtime_config(dict(os.environ))` and a context-managed
   `ConfiguredReviewRuntime`, and one call to the public UI render entry; add no raw-output
   capture, cache, global runtime, profile editor, or provider-specific behavior.
-- [ ] T055 [DOC] Update `README.md` with the approved dependency installation, local
+- [X] T055 [DOC] Update `README.md` with the approved dependency installation, local
   `ARB_LLM_CONFIG_PATH` setup, `streamlit run streamlit_app.py` command, six input-field
   conventions, process/final/failure explanation, New Review behavior, and explicit no
   persistence/resume/history guarantees.
@@ -388,21 +388,21 @@ once per Review, always closes it, and can be launched from documented local con
 **Purpose:** Prove the complete Slice 8 behavior and preserve every prior functional
 contract.
 
-- [ ] T056 [TEST] Run the full deterministic `python -m pytest` suite with no live endpoint,
+- [X] T056 [TEST] Run the full deterministic `python -m pytest` suite with no live endpoint,
   credentials, or network requirement; all prior agent/domain/adapter tests and new UI
   scenarios must pass.
-- [ ] T057 [TEST] Run `python -m ruff check .` without weakening rules or adding suppressions
+- [X] T057 [TEST] Run `python -m ruff check .` without weakening rules or adding suppressions
   solely for UI convenience.
 - [ ] T058 [TEST] Run strict `python -m mypy` over `src` and `tests`, preserving exhaustive
   role/status dispatch and avoiding untyped presentation escape hatches.
-- [ ] T059 [TEST] Run `python -m pip check` and the focused architecture suite; confirm the
+- [X] T059 [TEST] Run `python -m pip check` and the focused architecture suite; confirm the
   only new runtime dependency is the approved Streamlit range and core imports do not
   initialize it.
-- [ ] T060 [TEST] Review `src/agentic_review_board/ui/`, `streamlit_app.py`, and rendered test
+- [X] T060 [TEST] Review `src/agentic_review_board/ui/`, `streamlit_app.py`, and rendered test
   content for no LangGraph/workflow engine, API service, persistence, retry, polling,
   threads, queue, provider SDK, raw HTML, chain-of-thought, autonomous action, or secret
   surface.
-- [ ] T061 [DOC] Create `specs/008-pedagogical-ui/acceptance.md` and record one delayed
+- [X] T061 [DOC] Create `specs/008-pedagogical-ui/acceptance.md` and record one delayed
   deterministic complete walkthrough plus one Critic-failure walkthrough, answering which
   agent ran, what it received/produced, why execution continued/stopped, whether a final
   result exists, and which uncertainty/evidence states remain.
@@ -412,7 +412,7 @@ contract.
   record actual model, vLLM version, GPU, terminal Review/stage statuses, and observed UI
   result in `specs/008-pedagogical-ui/acceptance.md`, including an honest incomplete outcome
   if that is what occurs.
-- [ ] T063 [TEST] Re-run `git diff --check` and review all Slice 8 changes against the
+- [X] T063 [TEST] Re-run `git diff --check` and review all Slice 8 changes against the
   approved specification, plan, data model, ADR-0003, Constitution, canonical architecture,
   and five-agent role model.
 
