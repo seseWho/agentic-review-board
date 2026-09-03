@@ -17,9 +17,9 @@ network access
 - Architecture suite: `14 passed`.
 - Ruff: pass.
 - `pip check`: pass.
-- Slice 8 focused strict mypy: pass over 14 created or modified source/test files.
-- Repository-wide mypy retains 76 pre-existing errors, all confined to
-  `tests/unit/infrastructure/llm/test_dynamic_risk_schemas.py`; none is in Slice 8.
+- Repository-wide strict mypy: pass over all 85 analyzed source, test, and support files.
+  The pre-existing diagnostics in the dynamic risk-schema tests and audit helper were
+  eliminated through explicit type narrowing without changing production behavior.
 
 The delayed walkthrough injects a test-only five-millisecond pause after each observer
 snapshot. It exercises the same observer-driven Streamlit containers used by production.
@@ -92,5 +92,28 @@ or fabricated replacement result exists.
 
 ## Live vLLM acceptance
 
-Not executed. Task T062 remains intentionally pending until the operator explicitly
-authorizes a live model run after reviewing this deterministic acceptance baseline.
+**Operator authorization:** explicit `adelante` on 2026-09-03 after review of the
+deterministic baseline.
+
+**Runtime:** existing local container `arb-vllm-v011`, image
+`vllm/vllm-openai:v0.11.0`, vLLM 0.11.0, model `Qwen/Qwen3-4B-AWQ` served as
+`qwen3-4b-awq`, `awq_marlin`, FP16, 40,960-token context, one sequence, and configuration
+`config/llm.vllm.json`.
+
+**GPU:** NVIDIA GeForce RTX 3060, 12,288 MiB, driver 576.52, compute capability 8.6.
+
+**Input:** `examples/reviews/critical-desktop-migration.en.json`, entered through all six
+production UI controls.
+
+**Execution:** one explicit Start action through the production `streamlit_app.py` entry
+under Streamlit AppTest. No retry, fallback, mode downgrade, output repair, raw-output
+observer, or second model execution was used. Two earlier shell-runner preflight failures
+occurred before the application loaded and sent no model request.
+
+**Observed result:** PASS in 122.02 seconds. UI phase `RESULT`; Review `COMPLETED`; Analyst,
+Solution Architect, Risk Reviewer, Critic, and Coordinator all `COMPLETED`, each with a
+trusted output and no error. The separate Final result surface was visible and the UI
+reported no sanitized application error.
+
+This establishes one successful integration observation for this exact local candidate;
+it is not a reliability or semantic-quality guarantee for future model outputs.

@@ -70,10 +70,12 @@ def main() -> int:
                     continue
                 field = characteristic_fields[reference["characteristic"]]
                 current = alternative[field]
-                matches = reference["value"] in current if isinstance(current, list) else reference[
-                    "value"
-                ] == current
-                if not matches:
+                matches_value = (
+                    reference["value"] in current
+                    if isinstance(current, list)
+                    else reference["value"] == current
+                )
+                if not matches_value:
                     failures.append(
                         f"{risk_id}: unresolved {reference['alternative_id']} "
                         f"{reference['characteristic']} value={reference['value']!r}"

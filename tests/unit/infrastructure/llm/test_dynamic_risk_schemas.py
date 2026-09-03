@@ -5,11 +5,12 @@ from collections.abc import Iterator, Mapping
 from copy import deepcopy
 from dataclasses import FrozenInstanceError
 from pathlib import Path
+from typing import Protocol, TypeVar, cast
 
 import pytest
 from pydantic import TypeAdapter
 
-from agentic_review_board.domain.analysis import ProblemAnalysis
+from agentic_review_board.domain.analysis import ProblemAnalysis, ReviewInputSource
 from agentic_review_board.domain.review import ReviewInput
 from agentic_review_board.domain.risks import (
     ProblemAnalysisBasisReference,
@@ -376,26 +377,49 @@ def test_snapshot_serialization_is_independent_of_mapping_insertion_order() -> N
     assert first.solution_alternatives == second.solution_alternatives
 
 
+_ReferenceT_co = TypeVar("_ReferenceT_co", covariant=True)
+
+
+class _TypedAllowedRiskBasis(Protocol[_ReferenceT_co]):
+    @property
+    def reference(self) -> _ReferenceT_co: ...
+
+    @property
+    def target_key(self) -> tuple[str, ...]: ...
+
+    @property
+    def emitted_identity(self) -> str: ...
+
+    def as_wire_object(self) -> dict[str, object]: ...
+
+
 def review_input_bases(
     bases: tuple[AllowedRiskBasis, ...],
-) -> tuple[AllowedRiskBasis, ...]:
-    return tuple(basis for basis in bases if isinstance(basis.reference, ReviewInputBasisReference))
+) -> tuple[_TypedAllowedRiskBasis[ReviewInputBasisReference], ...]:
+    selected = tuple(
+        basis
+        for basis in bases
+        if isinstance(basis.reference, ReviewInputBasisReference)
+    )
+    return cast(tuple[_TypedAllowedRiskBasis[ReviewInputBasisReference], ...], selected)
 
 
 def problem_analysis_bases(
     bases: tuple[AllowedRiskBasis, ...],
-) -> tuple[AllowedRiskBasis, ...]:
-    return tuple(
+) -> tuple[_TypedAllowedRiskBasis[ProblemAnalysisBasisReference], ...]:
+    selected = tuple(
         basis for basis in bases if isinstance(basis.reference, ProblemAnalysisBasisReference)
     )
+    return cast(tuple[_TypedAllowedRiskBasis[ProblemAnalysisBasisReference], ...], selected)
 
 
 def solution_alternative_bases(
     bases: tuple[AllowedRiskBasis, ...],
-) -> tuple[AllowedRiskBasis, ...]:
-    return tuple(
+) -> tuple[_TypedAllowedRiskBasis[SolutionAlternativeBasisReference], ...]:
+    selected = tuple(
         basis for basis in bases if isinstance(basis.reference, SolutionAlternativeBasisReference)
     )
+    return cast(tuple[_TypedAllowedRiskBasis[SolutionAlternativeBasisReference], ...], selected)
 
 
 def test_review_input_catalog_covers_exact_fields_in_fixed_order() -> None:
@@ -861,7 +885,7 @@ def test_catalog_is_independent_of_payload_mapping_insertion_order() -> None:
 
 def test_basis_normalization_deduplicates_or_excludes_by_semantic_target() -> None:
     description_reference = ReviewInputBasisReference(
-        field="description",
+        field=ReviewInputSource.DESCRIPTION,
         value="Exact description.",
     )
     first = AllowedRiskBasis(
@@ -873,7 +897,7 @@ def test_basis_normalization_deduplicates_or_excludes_by_semantic_target() -> No
         target_key=("REVIEW_INPUT", "description"),
     )
     ambiguous_reference = ReviewInputBasisReference(
-        field="constraints",
+        field=ReviewInputSource.CONSTRAINTS,
         value="Ambiguous exact value.",
     )
     ambiguous_first = AllowedRiskBasis(
@@ -886,7 +910,7 @@ def test_basis_normalization_deduplicates_or_excludes_by_semantic_target() -> No
     )
     unrelated = AllowedRiskBasis(
         reference=ProblemAnalysisBasisReference(
-            kind="UNCERTAINTY",
+            kind=ProblemAnalysisFindingKind.UNCERTAINTY,
             text="Independent uncertainty.",
             id="UNC-001",
         ),
@@ -927,7 +951,7 @@ def test_allowed_basis_rejects_invalid_private_target_keys(
     with pytest.raises(expected_error):
         AllowedRiskBasis(
             reference=ReviewInputBasisReference(
-                field="description",
+                field=ReviewInputSource.DESCRIPTION,
                 value="Exact description.",
             ),
             target_key=target_key,  # type: ignore[arg-type]
@@ -953,9 +977,8 @@ def test_adversarial_text_is_preserved_verbatim() -> None:
     assert snapshot.review_input.description == value
     basis = next(
         item
-        for item in build_allowed_risk_bases(snapshot)
-        if isinstance(item.reference, ReviewInputBasisReference)
-        and item.reference.field.value == "description"
+        for item in review_input_bases(build_allowed_risk_bases(snapshot))
+        if item.reference.field is ReviewInputSource.DESCRIPTION
     )
     assert basis.reference.value == value
     assert json.loads(basis.emitted_identity)["value"] == value
@@ -1154,7 +1177,9 @@ def test_problem_analysis_branch_omits_absent_optional_id_entirely() -> None:
 
     branch = build_risk_basis_schema_branch(basis)
 
-    assert list(branch["properties"]) == ["source", "kind", "text"]  # type: ignore[arg-type]
+    properties = branch["properties"]
+    assert isinstance(properties, dict)
+    assert list(properties) == ["source", "kind", "text"]
     assert branch["required"] == ["source", "kind", "text"]
     assert "null" not in json.dumps(branch)
 
@@ -1200,8 +1225,8 @@ def test_risk_schema_narrowing_changes_only_basis_and_scope_routes() -> None:
 
     assert narrowed == expected
     narrowed_basis = narrowed["$defs"]["Risk"]["properties"]["basis"]  # type: ignore[index]
-    assert narrowed_basis["maxItems"] == 10  # type: ignore[index]
-    assert len(narrowed_basis["items"]["oneOf"]) == len(bases)  # type: ignore[index]
+    assert narrowed_basis["maxItems"] == 10
+    assert len(narrowed_basis["items"]["oneOf"]) == len(bases)
     assert len(narrowed["$defs"]["RiskScope"]["oneOf"]) == 5  # type: ignore[index]
 
 
@@ -1212,10 +1237,10 @@ def test_empty_basis_catalog_allows_only_zero_risk_assessments() -> None:
     narrowed = narrow_risk_schema(RiskAssessment.model_json_schema(), (), scopes)
 
     risks = narrowed["properties"]["risks"]  # type: ignore[index]
-    assert risks["maxItems"] == 0  # type: ignore[index]
+    assert risks["maxItems"] == 0
     basis_items = narrowed["$defs"]["Risk"]["properties"]["basis"]["items"]  # type: ignore[index]
     assert basis_items
-    assert basis_items.get("oneOf") != []  # type: ignore[union-attr]
+    assert basis_items.get("oneOf") != []
     assert len(narrowed["$defs"]["RiskScope"]["oneOf"]) == 1  # type: ignore[index]
 
 
@@ -1319,8 +1344,8 @@ def test_high_cardinality_schema_has_formula_counts_without_truncation() -> None
     expected_basis_count = 9 + (20 * values_per_collection)
 
     assert len(bases) == expected_basis_count
-    assert len(basis_branches) == expected_basis_count  # type: ignore[arg-type]
-    assert len(scopes) == len(scope_branches) == 16  # type: ignore[arg-type]
+    assert len(basis_branches) == expected_basis_count
+    assert len(scopes) == len(scope_branches) == 16
     assert len(request_schema.serialized.encode("utf-8")) == 154_324
 
 
@@ -1490,7 +1515,7 @@ def _instance_from_exact_branch(branch: dict[str, object]) -> dict[str, object]:
 
 def test_every_wire_projection_matches_authoritative_union_and_exact_branch() -> None:
     snapshot = build_risk_reviewer_payload_snapshot(full_risk_reviewer_payload())
-    adapter = TypeAdapter(RiskBasisReference)
+    adapter: TypeAdapter[RiskBasisReference] = TypeAdapter(RiskBasisReference)
 
     for basis in build_allowed_risk_bases(snapshot):
         wire_object = basis.as_wire_object()
@@ -1511,7 +1536,7 @@ def test_checked_in_cross_kind_reference_has_no_catalog_or_schema_match() -> Non
     observed = document.pop("observed_invalid_reference")
     snapshot = build_risk_reviewer_payload_snapshot(document)
     bases = build_allowed_risk_bases(snapshot)
-    observed_reference = TypeAdapter(RiskBasisReference).validate_python(observed)
+    observed_reference: RiskBasisReference = TypeAdapter(RiskBasisReference).validate_python(observed)
 
     assert observed_reference not in {basis.reference for basis in bases}
     assert observed not in [basis.as_wire_object() for basis in bases]

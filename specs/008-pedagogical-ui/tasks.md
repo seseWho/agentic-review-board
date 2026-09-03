@@ -393,7 +393,7 @@ contract.
   scenarios must pass.
 - [X] T057 [TEST] Run `python -m ruff check .` without weakening rules or adding suppressions
   solely for UI convenience.
-- [ ] T058 [TEST] Run strict `python -m mypy` over `src` and `tests`, preserving exhaustive
+- [X] T058 [TEST] Run strict `python -m mypy` over `src` and `tests`, preserving exhaustive
   role/status dispatch and avoiding untyped presentation escape hatches.
 - [X] T059 [TEST] Run `python -m pip check` and the focused architecture suite; confirm the
   only new runtime dependency is the approved Streamlit range and core imports do not
@@ -406,7 +406,7 @@ contract.
   deterministic complete walkthrough plus one Critic-failure walkthrough, answering which
   agent ran, what it received/produced, why execution continued/stopped, whether a final
   result exists, and which uncertainty/evidence states remain.
-- [ ] T062 [LIVE] After deterministic acceptance passes and only with explicit operator
+- [X] T062 [LIVE] After deterministic acceptance passes and only with explicit operator
   authorization, launch the documented local vLLM candidate/configuration and execute one
   UI walkthrough without automatic retry, fallback, mode downgrade, or output repair;
   record actual model, vLLM version, GPU, terminal Review/stage statuses, and observed UI
