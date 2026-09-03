@@ -2,7 +2,7 @@
 
 **Branch:** `008-pedagogical-ui`  
 **Date:** 2026-09-03  
-**Status:** Draft — pending joint review  
+**Status:** Approved — jointly reviewed on 2026-09-03
 **Depends on:** Slices 1–7.2 and the validated five-participant runtime baseline  
 **Canonical sources:** `docs/01-product-vision.md`, `docs/02-requirements.md`,
 `docs/03-architecture.md`, `docs/04-agent-model.md`, `docs/05-quality-security.md`,
