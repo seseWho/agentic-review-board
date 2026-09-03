@@ -83,6 +83,9 @@ the local UI from the repository root:
 .venv/bin/python -m streamlit run streamlit_app.py
 ```
 
+For step-by-step local validation—from the deterministic walkthrough through the full vLLM
+execution—see the [`local UI testing runbook`](docs/local-ui-test-runbook.md).
+
 Loading the page is inert: configuration, the HTTP client, and the five participants are
 created only after an explicit **Start Review**. The form uses six fields:
 

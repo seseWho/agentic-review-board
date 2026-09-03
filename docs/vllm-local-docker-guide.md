@@ -1,9 +1,10 @@
 # Probar Agentic Review Board localmente con vLLM y Docker
 
 Esta guía levanta un servidor vLLM reproducible para ejecutar las pruebas live y
-una revisión completa antes de construir la interfaz. Todo lo necesario para el
-servicio está declarado en el `compose.yaml` del repositorio. El modelo se guarda
-en un volumen Docker persistente y no depende de directorios de otro proyecto.
+una revisión completa. Todo lo necesario para el servicio está declarado en el
+`compose.yaml` del repositorio. El modelo se guarda en un volumen Docker persistente
+y no depende de directorios de otro proyecto. Para validar también la interfaz, sigue el
+[`runbook de prueba local de la UI`](local-ui-test-runbook.md).
 
 ## Configuración incluida
 
