@@ -12,6 +12,7 @@ from agentic_review_board.domain.solutions import (
     GenerationNotes,
     SolutionAlternative,
     SolutionAlternatives,
+    SolutionDesign,
 )
 
 
@@ -20,6 +21,14 @@ def valid_alternative_data(*, alternative_id: str = "ALT-001") -> dict[str, obje
         "id": alternative_id,
         "name": "Local deployment",
         "description": "Run the solution inside the current local environment.",
+        "solution_design": {
+            "summary": "Use a bounded local-first deployment architecture.",
+            "building_blocks": ["Local runtime and owned persistence."],
+            "key_interactions": ["Requests flow from the UI to local persisted state."],
+            "operational_model": ["Local teams deploy and support the runtime."],
+            "delivery_steps": ["Pilot before staged rollout."],
+            "validation_checks": ["Verify the complete workflow offline."],
+        },
         "advantages": ["Keeps operational data local."],
         "disadvantages": ["Requires local model lifecycle management."],
         "assumptions": ["Suitable local compute is available."],
@@ -81,6 +90,28 @@ def test_shared_solution_vocabularies_are_closed() -> None:
     }
 
 
+def test_solution_design_requires_actionable_content_in_every_section() -> None:
+    data = valid_alternative_data()["solution_design"]
+    assert isinstance(data, dict)
+
+    design = SolutionDesign.model_validate(data)
+
+    assert design.building_blocks == ("Local runtime and owned persistence.",)
+    assert design.validation_checks == ("Verify the complete workflow offline.",)
+
+    for field in (
+        "building_blocks",
+        "key_interactions",
+        "operational_model",
+        "delivery_steps",
+        "validation_checks",
+    ):
+        invalid = dict(data)
+        invalid[field] = []
+        with pytest.raises(ValidationError):
+            SolutionDesign.model_validate(invalid)
+
+
 def test_constraint_reference_accepts_only_supported_source_kind_combinations() -> None:
     review_input_text = ConstraintReference(
         source=ConstraintSource.REVIEW_INPUT,
@@ -124,7 +155,9 @@ def test_finding_reference_allows_optional_local_identifier() -> None:
 def test_generation_notes_are_structured_and_immutable() -> None:
     notes = GenerationNotes.model_validate(valid_generation_notes_data())
 
-    assert notes.explanation == "Alternatives remain comparable with the current evidence."
+    assert (
+        notes.explanation == "Alternatives remain comparable with the current evidence."
+    )
     assert isinstance(notes.blocking_missing_information, tuple)
     assert isinstance(notes.blocking_uncertainties, tuple)
 
@@ -132,7 +165,9 @@ def test_generation_notes_are_structured_and_immutable() -> None:
         notes.explanation = "Changed after validation"
 
 
-def test_solution_alternative_preserves_explicit_tradeoffs_and_immutable_collections() -> None:
+def test_solution_alternative_preserves_explicit_tradeoffs_and_immutable_collections() -> (
+    None
+):
     alternative = SolutionAlternative.model_validate(valid_alternative_data())
 
     assert alternative.id == "ALT-001"
@@ -180,7 +215,9 @@ def test_solution_alternatives_accepts_two_or_three_unique_alternatives() -> Non
     assert isinstance(two.alternatives, tuple)
 
 
-def test_required_generated_text_rejects_blank_values_without_rewriting_valid_text() -> None:
+def test_required_generated_text_rejects_blank_values_without_rewriting_valid_text() -> (
+    None
+):
     preserved = "  Keep intentional surrounding whitespace.  "
     alternative_data = valid_alternative_data()
     alternative_data["name"] = preserved
@@ -190,7 +227,10 @@ def test_required_generated_text_rejects_blank_values_without_rewriting_valid_te
     assert alternative.name == preserved
 
     for model, data in (
-        (ConstraintReference, {"source": "REVIEW_INPUT", "kind": "TEXT", "value": "   "}),
+        (
+            ConstraintReference,
+            {"source": "REVIEW_INPUT", "kind": "TEXT", "value": "   "},
+        ),
         (FindingReference, {"text": "   "}),
         (
             GenerationNotes,
@@ -213,7 +253,9 @@ def test_generated_solution_contracts_reject_unexpected_fields() -> None:
         SolutionAlternative.model_validate(data)
 
 
-def test_solution_alternatives_model_validation_normalizes_nested_lists_to_tuples() -> None:
+def test_solution_alternatives_model_validation_normalizes_nested_lists_to_tuples() -> (
+    None
+):
     data = valid_alternative_data()
     data["advantages"] = ["First", "Second"]
     result = SolutionAlternatives.model_validate(
@@ -239,7 +281,9 @@ def test_zero_alternatives_requires_generation_notes() -> None:
         SolutionAlternatives.model_validate({"alternatives": []})
 
 
-def test_zero_alternative_generation_notes_preserve_structured_immutable_blockers() -> None:
+def test_zero_alternative_generation_notes_preserve_structured_immutable_blockers() -> (
+    None
+):
     result = SolutionAlternatives.model_validate(
         {
             "alternatives": [],
@@ -285,13 +329,13 @@ def test_solution_contracts_reject_unexpected_top_level_and_nested_fields() -> N
         SolutionAlternatives.model_validate(top_level)
     with pytest.raises(ValidationError):
         SolutionAlternatives.model_validate(
-            {
-                "alternatives": [nested, valid_alternative_data(alternative_id="ALT-002")]
-            }
+            {"alternatives": [nested, valid_alternative_data(alternative_id="ALT-002")]}
         )
 
 
-def test_solution_alternative_rejects_unsupported_complexity_and_non_string_semantic_text() -> None:
+def test_solution_alternative_rejects_unsupported_complexity_and_non_string_semantic_text() -> (
+    None
+):
     invalid_complexity = valid_alternative_data()
     invalid_complexity["implementation_complexity"] = "VERY_HIGH"
     invalid_text = valid_alternative_data()

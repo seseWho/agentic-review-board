@@ -1,7 +1,7 @@
 from enum import StrEnum
 from typing import Self
 
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class CriticReferenceSource(StrEnum):
@@ -168,7 +168,9 @@ class CriticReference(BaseModel):
 
         if self.kind in _VALUE_ONLY_KINDS:
             if self.item_id is not None or self.value is None:
-                raise ValueError("value-only reference requires value and forbids item_id")
+                raise ValueError(
+                    "value-only reference requires value and forbids item_id"
+                )
         elif self.kind in _OPTIONAL_FINDING_ID_KINDS:
             if self.value is None:
                 raise ValueError("finding reference requires value")
@@ -283,7 +285,7 @@ class MissingAlternative(BaseModel):
     category: str
     rationale: str
     weakens_later_recommendation: bool
-    basis_references: tuple[CriticReference, ...]
+    basis_references: tuple[CriticReference, ...] = Field(min_length=1)
 
     @field_validator("id", "category", "rationale")
     @classmethod
@@ -295,7 +297,9 @@ class MissingAlternative(BaseModel):
     @model_validator(mode="after")
     def validate_basis(self) -> Self:
         if not self.basis_references:
-            raise ValueError("missing alternative requires at least one basis reference")
+            raise ValueError(
+                "missing alternative requires at least one basis reference"
+            )
 
         for index, reference in enumerate(self.basis_references):
             if reference in self.basis_references[:index]:
@@ -372,7 +376,7 @@ class UnresolvedIssue(BaseModel):
     id: str
     issue: str
     rationale: str
-    basis_references: tuple[CriticReference, ...]
+    basis_references: tuple[CriticReference, ...] = Field(min_length=1)
 
     @field_validator("id", "issue", "rationale")
     @classmethod

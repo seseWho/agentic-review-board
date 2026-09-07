@@ -1,7 +1,7 @@
 from enum import StrEnum
 from typing import Self
 
-from pydantic import BaseModel, ConfigDict, StrictStr, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator, model_validator
 
 from agentic_review_board.domain.shared import QualitativeLevel
 
@@ -45,7 +45,10 @@ class ConstraintReference(BaseModel):
 
     @model_validator(mode="after")
     def validate_source_kind_compatibility(self) -> Self:
-        if self.source is ConstraintSource.REVIEW_INPUT and self.kind is ConstraintReferenceKind.ID:
+        if (
+            self.source is ConstraintSource.REVIEW_INPUT
+            and self.kind is ConstraintReferenceKind.ID
+        ):
             raise ValueError("ReviewInput constraints do not support ID references")
         return self
 
@@ -90,18 +93,59 @@ class GenerationNotes(BaseModel):
         return value
 
 
+class SolutionDesign(BaseModel):
+    """Actionable design detail for implementing one proposed alternative."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    summary: StrictStr
+    building_blocks: tuple[StrictStr, ...] = Field(max_length=3)
+    key_interactions: tuple[StrictStr, ...] = Field(max_length=3)
+    operational_model: tuple[StrictStr, ...] = Field(max_length=3)
+    delivery_steps: tuple[StrictStr, ...] = Field(max_length=3)
+    validation_checks: tuple[StrictStr, ...] = Field(max_length=3)
+
+    @field_validator("summary")
+    @classmethod
+    def validate_summary(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("solution design summary must not be empty")
+        return value
+
+    @field_validator(
+        "building_blocks",
+        "key_interactions",
+        "operational_model",
+        "delivery_steps",
+        "validation_checks",
+    )
+    @classmethod
+    def validate_required_text_collection(
+        cls,
+        values: tuple[str, ...],
+    ) -> tuple[str, ...]:
+        if not values:
+            raise ValueError("solution design collections must not be empty")
+        if any(not value.strip() for value in values):
+            raise ValueError("solution design items must not be empty")
+        return values
+
+
 class SolutionAlternative(BaseModel):
     """One candidate approach proposed by the Solution Architect."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     id: StrictStr
-    validation_status: AlternativeValidationStatus = AlternativeValidationStatus.PROPOSED
+    validation_status: AlternativeValidationStatus = (
+        AlternativeValidationStatus.PROPOSED
+    )
     name: StrictStr
     description: StrictStr
-    advantages: tuple[StrictStr, ...]
-    disadvantages: tuple[StrictStr, ...]
-    assumptions: tuple[StrictStr, ...]
+    solution_design: SolutionDesign
+    advantages: tuple[StrictStr, ...] = Field(max_length=4)
+    disadvantages: tuple[StrictStr, ...] = Field(max_length=4)
+    assumptions: tuple[StrictStr, ...] = Field(max_length=4)
     implementation_complexity: QualitativeLevel
     relevant_constraints: tuple[ConstraintReference, ...]
 
@@ -135,10 +179,14 @@ class SolutionAlternatives(BaseModel):
             raise ValueError("alternatives must contain exactly 0, 2, or 3 items")
 
         if count == 0 and self.generation_notes is None:
-            raise ValueError("generation_notes are required when no alternatives are produced")
+            raise ValueError(
+                "generation_notes are required when no alternatives are produced"
+            )
 
         ids = [alternative.id for alternative in self.alternatives]
         if len(ids) != len(set(ids)):
-            raise ValueError("alternative ids must be unique within SolutionAlternatives")
+            raise ValueError(
+                "alternative ids must be unique within SolutionAlternatives"
+            )
 
         return self

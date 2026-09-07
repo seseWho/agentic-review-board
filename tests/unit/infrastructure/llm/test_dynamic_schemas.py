@@ -11,6 +11,7 @@ import pytest
 from agentic_review_board.domain.analysis import ProblemAnalysis
 from agentic_review_board.domain.critics import (
     CriticalReview,
+    CriticismTargetType,
     CriticReference,
     CriticReferenceKind,
     CriticReferenceSource,
@@ -34,7 +35,9 @@ from agentic_review_board.infrastructure.llm.dynamic_schemas import (
     normalize_allowed_critic_references,
 )
 from agentic_review_board.infrastructure.llm.errors import LLMRequestSchemaError
-from agentic_review_board.infrastructure.llm.openai_compatible import _strict_json_schema
+from agentic_review_board.infrastructure.llm.openai_compatible import (
+    _strict_json_schema,
+)
 from agentic_review_board.infrastructure.llm.prompts import get_role_prompt_definition
 from agentic_review_board.participants.critic import Critic, CriticOutputError
 
@@ -44,6 +47,17 @@ CRITIC_PAYLOAD_KEYS = {
     "solution_alternatives",
     "risk_assessment",
 }
+
+
+def solution_design(summary: str) -> dict[str, object]:
+    return {
+        "summary": summary,
+        "building_blocks": ["Client runtime and owned persistence."],
+        "key_interactions": ["Client requests flow to persisted state."],
+        "operational_model": ["Assign deployment and support ownership."],
+        "delivery_steps": ["Pilot before staged rollout."],
+        "validation_checks": ["Verify the end-to-end workflow."],
+    }
 
 
 def as_json_object(value: object) -> dict[str, Any]:
@@ -104,7 +118,9 @@ def minimal_critic_payload() -> dict[str, object]:
             },
         }
     )
-    risk_assessment = RiskAssessment.model_validate({"risks": [], "overall_observations": []})
+    risk_assessment = RiskAssessment.model_validate(
+        {"risks": [], "overall_observations": []}
+    )
     return {
         "review_input": review_input.model_dump(mode="json"),
         "problem_analysis": problem_analysis.model_dump(mode="json"),
@@ -134,8 +150,12 @@ def full_critic_payload() -> dict[str, object]:
             ],
             "constraints": [{"id": "CON-001", "text": "Must work offline."}],
             "assumptions": [{"id": "ASM-001", "text": "Drivers support ARM64."}],
-            "missing_information": [{"id": "MISS-001", "text": "Measured ARM64 memory usage."}],
-            "uncertainties": [{"id": "UNC-001", "text": "ARM64 performance degradation."}],
+            "missing_information": [
+                {"id": "MISS-001", "text": "Measured ARM64 memory usage."}
+            ],
+            "uncertainties": [
+                {"id": "UNC-001", "text": "ARM64 performance degradation."}
+            ],
         }
     )
     solution_alternatives = SolutionAlternatives.model_validate(
@@ -145,18 +165,28 @@ def full_critic_payload() -> dict[str, object]:
                     "id": "ALT-001",
                     "name": "Incremental migration",
                     "description": "Move WPF to .NET 8 incrementally.",
+                    "solution_design": solution_design(
+                        "Use an incremental .NET 8 target architecture."
+                    ),
                     "advantages": ["Lower delivery risk."],
                     "disadvantages": ["Retains Windows coupling."],
                     "assumptions": ["Required libraries support .NET 8."],
                     "implementation_complexity": "MEDIUM",
                     "relevant_constraints": [
-                        {"source": "REVIEW_INPUT", "kind": "TEXT", "value": "Must work offline."}
+                        {
+                            "source": "REVIEW_INPUT",
+                            "kind": "TEXT",
+                            "value": "Must work offline.",
+                        }
                     ],
                 },
                 {
                     "id": "ALT-002",
                     "name": "Cross-platform rewrite",
                     "description": "Rewrite the client with .NET MAUI.",
+                    "solution_design": solution_design(
+                        "Use a cross-platform replacement architecture."
+                    ),
                     "advantages": ["Broadens platform options."],
                     "disadvantages": ["Requires substantial rework."],
                     "assumptions": ["MAUI meets desktop requirements."],
@@ -184,7 +214,10 @@ def full_critic_payload() -> dict[str, object]:
                     "id": "RISK-001",
                     "category": "PERFORMANCE",
                     "description": "ARM64 performance may be insufficient.",
-                    "affected_scope": {"kind": "ALTERNATIVES", "alternative_ids": ["ALT-001"]},
+                    "affected_scope": {
+                        "kind": "ALTERNATIVES",
+                        "alternative_ids": ["ALT-001"],
+                    },
                     "severity": "HIGH",
                     "basis": [
                         {
@@ -227,7 +260,9 @@ class SingleReadMapping(Mapping[str, object]):
         return len(self._values)
 
 
-@pytest.mark.parametrize("payload_factory", [minimal_critic_payload, full_critic_payload])
+@pytest.mark.parametrize(
+    "payload_factory", [minimal_critic_payload, full_critic_payload]
+)
 def test_snapshot_accepts_exact_four_artifact_payload(payload_factory: object) -> None:
     assert callable(payload_factory)
     payload = payload_factory()
@@ -237,11 +272,15 @@ def test_snapshot_accepts_exact_four_artifact_payload(payload_factory: object) -
     assert set(payload) == CRITIC_PAYLOAD_KEYS
     assert json.loads(snapshot.serialized_payload) == payload
     assert snapshot.review_input == ReviewInput.model_validate(payload["review_input"])
-    assert snapshot.problem_analysis == ProblemAnalysis.model_validate(payload["problem_analysis"])
+    assert snapshot.problem_analysis == ProblemAnalysis.model_validate(
+        payload["problem_analysis"]
+    )
     assert snapshot.solution_alternatives == SolutionAlternatives.model_validate(
         payload["solution_alternatives"]
     )
-    assert snapshot.risk_assessment == RiskAssessment.model_validate(payload["risk_assessment"])
+    assert snapshot.risk_assessment == RiskAssessment.model_validate(
+        payload["risk_assessment"]
+    )
 
 
 @pytest.mark.parametrize(
@@ -250,17 +289,23 @@ def test_snapshot_accepts_exact_four_artifact_payload(payload_factory: object) -
         lambda payload: payload.pop("risk_assessment"),
         lambda payload: payload.update({"unexpected": {}}),
         lambda payload: payload.update({"review_input": []}),
-        lambda payload: payload.update({"problem_analysis": {"objective": "incomplete"}}),
+        lambda payload: payload.update(
+            {"problem_analysis": {"objective": "incomplete"}}
+        ),
         lambda payload: payload.update({"risk_assessment": {"risks": float("nan")}}),
     ],
 )
-def test_snapshot_rejects_invalid_critic_payload_with_safe_error(mutate: object) -> None:
+def test_snapshot_rejects_invalid_critic_payload_with_safe_error(
+    mutate: object,
+) -> None:
     assert callable(mutate)
     payload = minimal_critic_payload()
     mutate(payload)
     original = deepcopy(payload)
 
-    with pytest.raises(LLMRequestSchemaError, match="^LLM request schema construction failed$"):
+    with pytest.raises(
+        LLMRequestSchemaError, match="^LLM request schema construction failed$"
+    ):
         build_critic_payload_snapshot(payload)
 
     assert payload.keys() == original.keys()
@@ -271,7 +316,9 @@ def test_snapshot_rejects_invalid_critic_payload_with_safe_error(mutate: object)
 
 
 def test_snapshot_rejects_non_mapping_with_safe_error() -> None:
-    with pytest.raises(LLMRequestSchemaError, match="^LLM request schema construction failed$"):
+    with pytest.raises(
+        LLMRequestSchemaError, match="^LLM request schema construction failed$"
+    ):
         build_critic_payload_snapshot([])  # type: ignore[arg-type]
 
 
@@ -307,7 +354,9 @@ def test_failed_snapshot_does_not_mutate_nested_caller_values() -> None:
     assert payload == before
 
 
-def test_critic_snapshot_remains_byte_equivalent_after_shared_detachment_refactor() -> None:
+def test_critic_snapshot_remains_byte_equivalent_after_shared_detachment_refactor() -> (
+    None
+):
     payload = full_critic_payload()
     reverse_key_payload = dict(reversed(tuple(payload.items())))
     expected = json.dumps(
@@ -436,8 +485,12 @@ def test_solution_catalog_covers_canonical_alternatives_and_generation_notes() -
         CriticReferenceKind.BLOCKING_MISSING_INFORMATION,
         CriticReferenceKind.BLOCKING_UNCERTAINTY,
     ]
-    alternative_references = reference_by_kind(solution_references, CriticReferenceKind.ALTERNATIVE)
-    assert [(reference.item_id, reference.value) for reference in alternative_references] == [
+    alternative_references = reference_by_kind(
+        solution_references, CriticReferenceKind.ALTERNATIVE
+    )
+    assert [
+        (reference.item_id, reference.value) for reference in alternative_references
+    ] == [
         ("ALT-001", "Incremental migration"),
         ("ALT-002", "Cross-platform rewrite"),
     ]
@@ -476,7 +529,9 @@ def test_solution_catalog_handles_zero_alternatives_and_local_ambiguity() -> Non
         for reference in zero_references
         if reference.source is CriticReferenceSource.SOLUTION_ALTERNATIVES
     )
-    assert [(reference.kind, reference.value) for reference in zero_solution_references] == [
+    assert [
+        (reference.kind, reference.value) for reference in zero_solution_references
+    ] == [
         (
             CriticReferenceKind.GENERATION_EXPLANATION,
             "No viable alternative can yet be grounded.",
@@ -492,7 +547,8 @@ def test_solution_catalog_handles_zero_alternatives_and_local_ambiguity() -> Non
     advantages = reference_by_kind(references, CriticReferenceKind.ADVANTAGE)
 
     assert [
-        (reference.item_id, reference.value, reference.target_key) for reference in advantages
+        (reference.item_id, reference.value, reference.target_key)
+        for reference in advantages
     ] == [
         (
             "ALT-002",
@@ -500,7 +556,9 @@ def test_solution_catalog_handles_zero_alternatives_and_local_ambiguity() -> Non
             ("SOLUTION_ALTERNATIVES", "ADVANTAGE", "ALT-002", "0"),
         )
     ]
-    assumptions = reference_by_kind(references, CriticReferenceKind.ALTERNATIVE_ASSUMPTION)
+    assumptions = reference_by_kind(
+        references, CriticReferenceKind.ALTERNATIVE_ASSUMPTION
+    )
     assert [(reference.item_id, reference.value) for reference in assumptions] == [
         ("ALT-002", "MAUI meets desktop requirements.")
     ]
@@ -533,8 +591,12 @@ def test_risk_catalog_covers_canonical_and_optional_risk_fields() -> None:
 
     payload = full_critic_payload()
     payload["risk_assessment"]["risks"][0]["residual_uncertainty"] = None  # type: ignore[index]
-    without_optional = build_allowed_critic_references(build_critic_payload_snapshot(payload))
-    assert not reference_by_kind(without_optional, CriticReferenceKind.RESIDUAL_UNCERTAINTY)
+    without_optional = build_allowed_critic_references(
+        build_critic_payload_snapshot(payload)
+    )
+    assert not reference_by_kind(
+        without_optional, CriticReferenceKind.RESIDUAL_UNCERTAINTY
+    )
 
 
 def test_catalog_and_payload_order_are_deterministic() -> None:
@@ -598,9 +660,9 @@ def test_catalog_normalization_deduplicates_or_excludes_by_semantic_target() -> 
     )
 
     assert normalize_allowed_critic_references((first, exact_duplicate)) == (first,)
-    assert normalize_allowed_critic_references((first, safe_other, ambiguous_target)) == (
-        safe_other,
-    )
+    assert normalize_allowed_critic_references(
+        (first, safe_other, ambiguous_target)
+    ) == (safe_other,)
     with pytest.raises(LLMRequestSchemaError):
         normalize_allowed_critic_references(())
 
@@ -616,7 +678,8 @@ def test_idless_duplicate_finding_is_excluded_but_unique_id_pair_remains() -> No
     uncertainties = reference_by_kind(references, CriticReferenceKind.UNCERTAINTY)
 
     assert [
-        (reference.item_id, reference.value, reference.target_key) for reference in uncertainties
+        (reference.item_id, reference.value, reference.target_key)
+        for reference in uncertainties
     ] == [
         (
             "UNC-002",
@@ -641,7 +704,10 @@ def test_catalog_preserves_json_significant_and_prompt_like_text_exactly() -> No
     snapshot = build_critic_payload_snapshot(payload)
     references = build_allowed_critic_references(snapshot)
 
-    assert json.loads(snapshot.serialized_payload)["review_input"]["description"] == exact_value
+    assert (
+        json.loads(snapshot.serialized_payload)["review_input"]["description"]
+        == exact_value
+    )
     assert [(reference.kind, reference.value) for reference in references[:2]] == [
         (CriticReferenceKind.DESCRIPTION, exact_value),
         (CriticReferenceKind.CONTEXT, exact_value),
@@ -666,11 +732,14 @@ def test_catalog_never_contains_observed_illegal_reference_shapes() -> None:
 
     assert not any(
         reference.source is CriticReferenceSource.PROBLEM_ANALYSIS
-        and reference.kind in {CriticReferenceKind.STATED_FACT, CriticReferenceKind.CONTEXT}
+        and reference.kind
+        in {CriticReferenceKind.STATED_FACT, CriticReferenceKind.CONTEXT}
         for reference in references
     )
     assert all(
-        reference.item_id is None for reference in references if reference.kind in value_only_kinds
+        reference.item_id is None
+        for reference in references
+        if reference.kind in value_only_kinds
     )
 
 
@@ -742,8 +811,15 @@ def test_criticism_branches_exclude_each_exact_target_from_its_basis() -> None:
     criticism = as_json_object(definitions["Criticism"])
     criticism_branches = as_json_array(criticism["oneOf"])
 
-    assert len(criticism_branches) == len(references) + 1
-    for index, branch_value in enumerate(criticism_branches[:-1]):
+    assert len(criticism_branches) == len(references) + 2
+    ordinary_target_types = {
+        "enum": [
+            target_type.value
+            for target_type in CriticismTargetType
+            if target_type is not CriticismTargetType.CROSS_ARTIFACT_CONCLUSION
+        ]
+    }
+    for index, branch_value in enumerate(criticism_branches[:-2]):
         branch = as_json_object(branch_value)
         properties = as_json_object(branch["properties"])
         target = collect_exact_reference_branches(
@@ -754,18 +830,28 @@ def test_criticism_branches_exclude_each_exact_target_from_its_basis() -> None:
         basis_items = collect_exact_reference_branches(basis["items"], definitions)
 
         assert target == [expected[index]]
+        assert properties["target_type"] == ordinary_target_types
         assert basis_items == expected[:index] + expected[index + 1 :]
         assert expected[index] not in basis_items
 
-    null_branch = as_json_object(criticism_branches[-1])
-    null_properties = as_json_object(null_branch["properties"])
-    assert null_properties["target_reference"] == {"type": "null"}
-    assert null_properties["target_type"] == {
-        "enum": ["CROSS_ARTIFACT_CONCLUSION", "OMISSION"]
-    }
-    null_basis = as_json_object(null_properties["basis_references"])
-    assert null_basis["minItems"] == 1
-    assert collect_exact_reference_branches(null_basis["items"], definitions) == expected
+    for branch_value, target_type, minimum in (
+        (criticism_branches[-2], CriticismTargetType.OMISSION, 1),
+        (
+            criticism_branches[-1],
+            CriticismTargetType.CROSS_ARTIFACT_CONCLUSION,
+            2,
+        ),
+    ):
+        null_branch = as_json_object(branch_value)
+        null_properties = as_json_object(null_branch["properties"])
+        assert null_properties["target_reference"] == {"type": "null"}
+        assert null_properties["target_type"] == {"const": target_type.value}
+        null_basis = as_json_object(null_properties["basis_references"])
+        assert null_basis["minItems"] == minimum
+        assert (
+            collect_exact_reference_branches(null_basis["items"], definitions)
+            == expected
+        )
 
 
 def test_allowed_contradiction_sides_pair_each_reference_with_visible_value() -> None:
@@ -821,9 +907,10 @@ def test_dynamic_schema_preserves_strict_outer_critical_review_contract() -> Non
     definitions = as_json_object(schema["$defs"])
     strict_definitions = as_json_object(strict_base["$defs"])
     generated_definitions = set(definitions) - set(strict_definitions)
-    assert len(generated_definitions) == 2 * len(
-        build_allowed_critic_references(snapshot)
-    ) - 1
+    assert (
+        len(generated_definitions)
+        == 2 * len(build_allowed_critic_references(snapshot)) - 1
+    )
     assert all(
         name.startswith(("CriticReferenceExact", "CriticReferenceSet"))
         for name in generated_definitions
@@ -843,12 +930,14 @@ def test_dynamic_schema_preserves_strict_outer_critical_review_contract() -> Non
     assert "support_status" in contradiction["required"]
 
     criticism = as_json_object(definitions["Criticism"])
-    assert len(as_json_array(criticism["oneOf"])) == len(
-        build_allowed_critic_references(snapshot)
-    ) + 1
+    assert (
+        len(as_json_array(criticism["oneOf"]))
+        == len(build_allowed_critic_references(snapshot)) + 2
+    )
     root_properties = as_json_object(schema["properties"])
     assert all(
-        "minItems" not in as_json_object(collection) for collection in root_properties.values()
+        "minItems" not in as_json_object(collection)
+        for collection in root_properties.values()
     )
     assert (
         CriticalReview.model_validate(
@@ -999,10 +1088,12 @@ def high_cardinality_critic_payload() -> dict[str, object]:
             ]
     notes = as_json_object(solution_alternatives["generation_notes"])
     notes["blocking_missing_information"] = [
-        {"id": f"BMISS-{index:03d}", "text": f"Blocking missing {index}."} for index in range(20)
+        {"id": f"BMISS-{index:03d}", "text": f"Blocking missing {index}."}
+        for index in range(20)
     ]
     notes["blocking_uncertainties"] = [
-        {"id": f"BUNC-{index:03d}", "text": f"Blocking uncertainty {index}."} for index in range(20)
+        {"id": f"BUNC-{index:03d}", "text": f"Blocking uncertainty {index}."}
+        for index in range(20)
     ]
     risk_assessment = as_json_object(payload["risk_assessment"])
     risk_template = as_json_object(as_json_array(risk_assessment["risks"])[0])
@@ -1043,7 +1134,7 @@ def test_high_cardinality_schema_has_exact_branch_counts_without_truncation() ->
     assert len(references) == 512
     assert len(reference_branches) == 512
     assert len(side_branches) == 512
-    assert len(criticism_branches) == 513
+    assert len(criticism_branches) == 514
     assert len(request_schema.serialized.encode("utf-8")) < 4_000_000
 
 
@@ -1175,7 +1266,9 @@ def test_generated_contradiction_sides_have_exact_trusted_statement_parity() -> 
 
 def test_2026_08_29_invalid_reference_fixture_is_excluded_and_rejected() -> None:
     fixture_path = (
-        Path(__file__).parents[3] / "fixtures" / "critic_2026-08-29_invalid_references.json"
+        Path(__file__).parents[3]
+        / "fixtures"
+        / "critic_2026-08-29_invalid_references.json"
     )
     fixture = as_json_object(json.loads(fixture_path.read_text(encoding="utf-8")))
     payload = as_json_object(fixture["payload"])

@@ -17,6 +17,10 @@ from agentic_review_board.domain.execution import (
     StageStatus,
 )
 from agentic_review_board.domain.review import ReviewInput
+from agentic_review_board.domain.solutions import (
+    SolutionAlternative,
+    SolutionAlternatives,
+)
 from agentic_review_board.ui.markdown_case import (
     MarkdownCaseError,
     MarkdownReviewCase,
@@ -29,6 +33,7 @@ from agentic_review_board.ui.presentation import (
     StagePresentation,
     final_result,
     output_sections,
+    preferred_solution,
     stage_presentations,
 )
 
@@ -257,18 +262,96 @@ def _humanize_field(name: str) -> str:
     return name.replace("_", " ").capitalize()
 
 
+def _compact_cell(value: object) -> object:
+    if isinstance(value, StrEnum):
+        return value.value
+    if isinstance(value, BaseModel):
+        return " | ".join(
+            f"{_humanize_field(name)}: {_compact_cell(getattr(value, name))}"
+            for name in type(value).model_fields
+        )
+    if isinstance(value, tuple):
+        return " \u2022 ".join(str(_compact_cell(item)) for item in value) or "\u2014"
+    if value is None:
+        return "\u2014"
+    return value
+
+
+def _model_rows(values: tuple[BaseModel, ...]) -> list[dict[str, object]]:
+    return [
+        {
+            _humanize_field(field_name): _compact_cell(getattr(value, field_name))
+            for field_name in type(value).model_fields
+        }
+        for value in values
+    ]
+
+
+def _render_solution_alternatives(values: tuple[SolutionAlternative, ...]) -> None:
+    rows = [
+        {
+            "ID": item.id,
+            "Alternative": item.name,
+            "Status": item.validation_status.value,
+            "Complexity": item.implementation_complexity.value,
+            "Summary": item.description,
+        }
+        for item in values
+    ]
+    st.dataframe(rows, hide_index=True, width="stretch")
+    for item in values:
+        with st.expander(f"{item.id} \u00b7 {item.name}", expanded=False):
+            st.markdown(f"**Description:** {item.description}")
+            st.markdown("**Solution design**")
+            _render_value(item.solution_design)
+            tradeoffs, delivery = st.columns(2, gap="small")
+            with tradeoffs:
+                st.markdown("**Advantages**")
+                _render_value(item.advantages)
+                st.markdown("**Disadvantages**")
+                _render_value(item.disadvantages)
+            with delivery:
+                st.markdown("**Assumptions**")
+                _render_value(item.assumptions)
+                st.markdown(
+                    "**Implementation complexity:** "
+                    f"`{item.implementation_complexity.value}`"
+                )
+                st.markdown("**Relevant constraints**")
+                _render_value(item.relevant_constraints)
+
+
 def _render_value(value: object) -> None:
     if isinstance(value, StrEnum):
         st.code(value.value)
         return
     if isinstance(value, BaseModel):
         for field_name in type(value).model_fields:
-            st.markdown(f"**{_humanize_field(field_name)}**")
-            _render_value(getattr(value, field_name))
+            field_value = getattr(value, field_name)
+            if isinstance(field_value, (StrEnum, str, int, float)):
+                st.markdown(
+                    f"**{_humanize_field(field_name)}:** {_compact_cell(field_value)}"
+                )
+            else:
+                st.markdown(f"**{_humanize_field(field_name)}**")
+                _render_value(field_value)
         return
     if isinstance(value, tuple):
         if not value:
             st.info("No items")
+            return
+        if all(isinstance(item, SolutionAlternative) for item in value):
+            _render_solution_alternatives(value)
+            return
+        if all(isinstance(item, BaseModel) for item in value):
+            st.dataframe(
+                _model_rows(value),
+                hide_index=True,
+                width="stretch",
+            )
+            return
+        if all(not isinstance(item, (BaseModel, tuple)) for item in value):
+            st.markdown("\n".join(f"- {item}" for item in value))
             return
         for index, item in enumerate(value, start=1):
             if isinstance(item, (BaseModel, tuple)):
@@ -286,7 +369,7 @@ def _render_value(value: object) -> None:
 
 def _render_sections(sections: tuple[OutputSection, ...]) -> None:
     for section in sections:
-        st.markdown(f"#### {section.label}")
+        st.markdown(f"**{section.label}**")
         if section.empty_message is not None:
             st.info(section.empty_message)
         else:
@@ -315,6 +398,25 @@ def configure_page() -> None:
         page_icon="🧭",
         layout="wide",
         initial_sidebar_state="expanded",
+    )
+    st.markdown(
+        """
+        <style>
+        div[data-testid="stExpanderDetails"] div[data-testid="stVerticalBlock"] {
+            gap: 0.35rem;
+        }
+        div[data-testid="stExpanderDetails"] p {
+            margin-bottom: 0.15rem;
+        }
+        div[data-testid="stExpanderDetails"] [data-testid="stAlert"] {
+            padding-block: 0.45rem;
+        }
+        div[data-testid="stDataFrame"] {
+            margin-block: 0.15rem 0.35rem;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
     )
 
 
@@ -419,7 +521,9 @@ def _render_stage_card(presentation: StagePresentation) -> None:
             if stage.status in {StageStatus.COMPLETED, StageStatus.FAILED}:
                 st.json(stage.model_dump(mode="json"))
             else:
-                st.info("Technical detail becomes available after the stage is reached.")
+                st.info(
+                    "Technical detail becomes available after the stage is reached."
+                )
 
 
 def _render_agent_grid(review: Review | None) -> None:
@@ -497,11 +601,25 @@ def _render_final(review: Review) -> None:
     final = final_result(review)
     if final is None:
         return
+    selected = preferred_solution(review)
+    architect_output = review.stage(StageIdentity.SOLUTION_ARCHITECT).output
+    if not isinstance(architect_output, SolutionAlternatives):
+        raise ValueError(
+            "completed Review does not expose trusted SolutionAlternatives"
+        )
     st.header("Decision workspace")
     with st.container(border=True):
         st.markdown("### Final result")
-        overview_tab, alternatives_tab, risks_tab, evidence_tab, technical_tab = st.tabs(
-            ("Overview", "Alternatives", "Risks", "Evidence & next steps", "Technical")
+        overview_tab, alternatives_tab, risks_tab, evidence_tab, technical_tab = (
+            st.tabs(
+                (
+                    "Overview",
+                    "Alternatives",
+                    "Risks",
+                    "Evidence & next steps",
+                    "Technical",
+                )
+            )
         )
         with overview_tab:
             st.markdown(
@@ -510,7 +628,17 @@ def _render_final(review: Review) -> None:
             st.markdown("**Situation summary**")
             st.write(final.situation_summary)
             st.markdown("**Preferred alternative**")
-            _render_value(final.preferred_alternative_id)
+            if selected is None:
+                _render_value(None)
+            else:
+                st.markdown(f"### {selected.id} \u00b7 {selected.name}")
+                st.write(selected.description)
+                st.caption(
+                    f"{selected.validation_status.value} \u00b7 "
+                    f"Implementation complexity: {selected.implementation_complexity.value}"
+                )
+                st.markdown("**Proposed solution design**")
+                _render_value(selected.solution_design)
             st.markdown("**Conclusion rationale**")
             st.write(final.conclusion_rationale)
             st.markdown("**Qualitative confidence**")
@@ -518,7 +646,28 @@ def _render_final(review: Review) -> None:
             st.warning(final.decision_support_notice)
         with alternatives_tab:
             st.markdown("**Ranked alternatives**")
-            _render_value(final.ranked_alternatives)
+            alternatives_by_id = {
+                alternative.id: alternative
+                for alternative in architect_output.alternatives
+            }
+            ranking_rows = []
+            for ranked in sorted(
+                final.ranked_alternatives, key=lambda item: item.position
+            ):
+                alternative = alternatives_by_id[ranked.alternative_id]
+                ranking_rows.append(
+                    {
+                        "Rank": ranked.position,
+                        "ID": ranked.alternative_id,
+                        "Alternative": alternative.name,
+                        "Status": ranked.validation_status.value,
+                        "Complexity": alternative.implementation_complexity.value,
+                        "Rationale": ranked.justification,
+                    }
+                )
+            st.dataframe(ranking_rows, hide_index=True, width="stretch")
+            st.markdown("**Alternative details**")
+            _render_solution_alternatives(architect_output.alternatives)
         with risks_tab:
             st.markdown("**Principal risks**")
             _render_value(final.principal_risks)

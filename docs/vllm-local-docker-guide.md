@@ -1,75 +1,73 @@
-# Probar Agentic Review Board localmente con vLLM y Docker
+# Run Agentic Review Board Locally with vLLM and Docker
 
-Esta guía levanta un servidor vLLM reproducible para ejecutar las pruebas live y
-una revisión completa. Todo lo necesario para el servicio está declarado en el
-`compose.yaml` del repositorio. El modelo se guarda en un volumen Docker persistente
-y no depende de directorios de otro proyecto. Para validar también la interfaz, sigue el
-[`runbook de prueba local de la UI`](local-ui-test-runbook.md).
+This guide starts a reproducible vLLM server for live tests and a complete review. Everything
+required by the service is declared in the repository's `compose.yaml`. The model is stored in
+a persistent Docker volume and does not depend on directories from another project. To validate
+the UI as well, follow the [`local UI test runbook`](local-ui-test-runbook.md).
 
-## Configuración incluida
+## Included Configuration
 
-La configuración de referencia está ajustada para una NVIDIA RTX 3060 de 12 GiB:
+The reference configuration is tuned for an NVIDIA RTX 3060 with 12 GiB:
 
-- imagen: `vllm/vllm-openai:v0.11.0`;
-- modelo: `Qwen/Qwen3-4B-AWQ`;
-- nombre servido: `qwen3-4b-awq`;
-- contexto: 40 960 tokens;
-- cuantización: AWQ Marlin;
-- puerto local: `127.0.0.1:8000`;
-- caché: volumen Docker `agentic-review-board-huggingface-cache` por defecto, o
-  el directorio indicado mediante `HF_HOME`;
-- configuración de la aplicación: `config/llm.vllm.json`.
+- image: `vllm/vllm-openai:v0.11.0`;
+- model: `Qwen/Qwen3-4B-AWQ`;
+- served name: `qwen3-4b-awq`;
+- context: 40,960 tokens;
+- quantization: AWQ Marlin;
+- local port: `127.0.0.1:8000`;
+- cache: Docker volume `agentic-review-board-huggingface-cache` by default, or
+  the directory specified through `HF_HOME`;
+- application configuration: `config/llm.vllm.json`.
 
-El puerto se publica solo en `127.0.0.1`; el servidor no queda expuesto a la red
-local. La configuración no contiene credenciales. La primera ejecución descarga
-el modelo y la imagen, por lo que necesita conexión a Internet y suficiente
-espacio en el almacenamiento de Docker.
+The port is published only on `127.0.0.1`; the server is not exposed to the local
+network. The configuration contains no credentials. The first run downloads the
+model and image, so it requires an Internet connection and enough Docker storage.
 
-### Dónde se guarda el modelo
+### Where the Model Is Stored
 
-Sin configurar nada, Compose usa el volumen administrado por Docker
-`agentic-review-board-huggingface-cache`. Sus archivos viven dentro del disco de
-datos de Docker Desktop y no aparecen como una carpeta normal del repositorio.
-Puedes consultar su ubicación lógica con:
+Without any configuration, Compose uses the Docker-managed volume
+`agentic-review-board-huggingface-cache`. Its files live inside Docker Desktop's
+data disk and do not appear as a normal repository folder. You can inspect its
+logical location with:
 
 ```powershell
 docker volume inspect agentic-review-board-huggingface-cache
 ```
 
-Para reutilizar una caché existente del host, define `HF_HOME` antes de arrancar.
-En la máquina de referencia:
+To reuse an existing host cache, set `HF_HOME` before starting. On the reference
+machine:
 
 ```powershell
 $env:HF_HOME = "D:\_models\huggingface"
 docker compose up -d vllm
 ```
 
-Compose monta entonces `D:\_models\huggingface` en
-`/root/.cache/huggingface`. Qwen3-4B-AWQ se reutiliza si ya está presente y los
-modelos nuevos se descargan en esa misma ruta. `HF_HOME` solo afecta al comando
-actual y a los procesos lanzados desde esa sesión de PowerShell.
+Compose then mounts `D:\_models\huggingface` at `/root/.cache/huggingface`.
+Qwen3-4B-AWQ is reused if it is already present, and new models are downloaded
+to the same path. `HF_HOME` affects only the current command and processes
+launched from that PowerShell session.
 
-Para guardar el ajuste entre sesiones sin versionar una ruta específica de una
-máquina, crea un archivo `.env` en la raíz del repositorio:
+To persist the setting between sessions without versioning a machine-specific
+path, create a `.env` file in the repository root:
 
 ```dotenv
 HF_HOME=D:/_models/huggingface
 ```
 
-`.env` está ignorado por Git. En otra máquina se puede omitir para usar el
-volumen Docker o crear otro `.env` con la ruta local adecuada.
+`.env` is ignored by Git. On another machine, omit it to use the Docker volume or
+create another `.env` with the appropriate local path.
 
-## 1. Requisitos
+## 1. Requirements
 
-Se necesita:
+You need:
 
-1. Python 3.12 o posterior.
-2. Docker Desktop con backend WSL 2 en Windows, o Docker Engine en Linux.
-3. Docker Compose moderno (`docker compose`).
-4. Una GPU NVIDIA compatible y el runtime NVIDIA para contenedores.
-5. Al menos 12 GiB de VRAM para la configuración de referencia.
+1. Python 3.12 or later.
+2. Docker Desktop with the WSL 2 backend on Windows, or Docker Engine on Linux.
+3. Modern Docker Compose (`docker compose`).
+4. A compatible NVIDIA GPU and the NVIDIA container runtime.
+5. At least 12 GiB of VRAM for the reference configuration.
 
-Comprueba las versiones y el acceso a la GPU:
+Check the versions and GPU access:
 
 ```powershell
 python --version
@@ -79,14 +77,14 @@ nvidia-smi
 docker run --rm --gpus all nvidia/cuda:12.8.1-base-ubuntu22.04 nvidia-smi
 ```
 
-En Docker Desktop conviene revisar **Settings > Resources > Advanced > Disk
-image location** antes de descargar la imagen. La imagen de vLLM y el modelo
-pueden ocupar varias decenas de GB. No ejecutes `docker system prune` sin revisar
-antes qué recursos pertenecen a otros proyectos.
+In Docker Desktop, review **Settings > Resources > Advanced > Disk image location**
+before downloading the image. The vLLM image and model may occupy several dozen
+GB. Do not run `docker system prune` without first checking which resources belong
+to other projects.
 
-## 2. Preparar el proyecto Python
+## 2. Set Up the Python Project
 
-Desde la raíz del repositorio:
+From the repository root:
 
 ```powershell
 py -3.12 -m venv .venv
@@ -94,7 +92,7 @@ py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
 ```
 
-En Linux:
+On Linux:
 
 ```bash
 python3.12 -m venv .venv
@@ -102,37 +100,37 @@ python3.12 -m venv .venv
 .venv/bin/python -m pip install -e '.[dev]'
 ```
 
-Verifica primero la suite determinista, que no utiliza red ni modelos:
+First verify the deterministic suite, which does not use the network or models:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest
 ```
 
-## 3. Evitar conflictos con otros servidores
+## 3. Avoid Conflicts with Other Servers
 
-Solo un proceso puede publicar el puerto 8000. Comprueba si otro contenedor lo
-está usando:
+Only one process can publish port 8000. Check whether another container is using
+it:
 
 ```powershell
 docker ps --filter publish=8000
 ```
 
-Si aparece, detenlo desde su propio proyecto o cambia el puerto de este Compose.
-Por ejemplo, para publicar en el puerto 8001:
+If one appears, stop it from its own project or change this Compose port. For
+example, to publish on port 8001:
 
 ```powershell
 $env:VLLM_PORT = "8001"
 docker compose up -d vllm
 ```
 
-En ese caso copia `config/llm.vllm.json` a un archivo `*.local.json` ignorado por
-Git y cambia `base_url` a `http://localhost:8001/v1`.
+In that case, copy `config/llm.vllm.json` to a `*.local.json` file ignored by Git
+and change `base_url` to `http://localhost:8001/v1`.
 
-No renombres un contenedor creado por el Compose de otro repositorio: su Compose
-puede recrearlo con el nombre original. Este proyecto utiliza su propio servicio
-`arb-vllm` y su propio volumen de caché.
+Do not rename a container created by another repository's Compose: its Compose file
+may recreate it with the original name. This project uses its own `arb-vllm` service
+and its own cache volume.
 
-## 4. Descargar y arrancar vLLM
+## 4. Download and Start vLLM
 
 ```powershell
 docker compose pull vllm
@@ -141,28 +139,27 @@ docker compose ps
 docker compose logs -f vllm
 ```
 
-La primera carga puede tardar bastante porque descarga el modelo, convierte los
-kernels AWQ Marlin y reserva la caché KV. Sal del seguimiento de logs con
-`Ctrl+C`; el contenedor seguirá ejecutándose.
+The first load may take a while because it downloads the model, converts the AWQ
+Marlin kernels, and allocates the KV cache. Stop following the logs with `Ctrl+C`;
+the container will continue running.
 
-Cuando `docker compose ps` muestre el servicio como `healthy`, consulta el
-catálogo:
+When `docker compose ps` shows the service as `healthy`, query the catalog:
 
 ```powershell
 Invoke-RestMethod http://localhost:8000/v1/models |
   ConvertTo-Json -Depth 6
 ```
 
-La respuesta debe contener `qwen3-4b-awq` y `max_model_len: 40960`.
+The response must contain `qwen3-4b-awq` and `max_model_len: 40960`.
 
-También puedes inspeccionar el consumo:
+You can also inspect resource usage:
 
 ```powershell
 docker stats arb-vllm --no-stream
 nvidia-smi
 ```
 
-## 5. Probar el contrato JSON directamente
+## 5. Test the JSON Contract Directly
 
 ```powershell
 $requestBody = @{
@@ -170,7 +167,7 @@ $requestBody = @{
   messages = @(
     @{
       role = "user"
-      content = "Devuelve exclusivamente un objeto JSON con la propiedad status y el valor ok."
+      content = "Return exclusively a JSON object with the status property and the value ok."
     }
   )
   response_format = @{ type = "json_object" }
@@ -185,15 +182,15 @@ $response = Invoke-RestMethod `
 $response.choices[0].message.content
 ```
 
-El contenido esperado es un objeto equivalente a:
+The expected content is an object equivalent to:
 
 ```json
 {"status":"ok"}
 ```
 
-## 6. Ejecutar el smoke live de la aplicación
+## 6. Run the Application Live Smoke Test
 
-La prueba live exige autorización explícita mediante variable, opción y marcador:
+The live test requires explicit authorization through an environment variable, option, and marker:
 
 ```powershell
 $env:ARB_RUN_LIVE_LLM = "1"
@@ -206,22 +203,19 @@ $env:NO_PROXY = "localhost,127.0.0.1"
   -s
 ```
 
-El smoke contiene tres comprobaciones:
+The smoke test contains three checks:
 
-1. una petición sintética con el contrato estático de Analyst por cada perfil
-   seleccionado;
-2. una petición Critic mínima construida por la ruta real de Slice 7.1, con su
-   catálogo, `oneOf`, valores `const`, sección dinámica delimitada y
-   `response_format` dinámico.
-3. una petición Risk Reviewer mínima construida por la ruta real de Slice 7.2,
-   con `oneOf`, `const`, `minItems`, `maxItems` y el ámbito dinámico exacto.
+1. a synthetic request using Analyst's static contract for each selected profile;
+2. a minimal Critic request built through the real Slice 7.1 path, with its catalog,
+  `oneOf`, `const` values, delimited dynamic section, and dynamic `response_format`;
+3. a minimal Risk Reviewer request built through the real Slice 7.2 path, with
+  `oneOf`, `const`, `minItems`, `maxItems`, and the exact dynamic scope.
 
-Las dos pruebas dinámicas demuestran que el servidor acepta el subconjunto JSON
-Schema utilizado por Slice 7.1 y Slice 7.2 y devuelve objetos JSON directos. No
-demuestran calidad semántica ni sustituyen la validación de los participantes.
+The two dynamic tests demonstrate that the server accepts the JSON Schema subset
+used by Slice 7.1 and Slice 7.2 and returns direct JSON objects. They do not
+demonstrate semantic quality or replace participant validation.
 
-Resultado de compatibilidad validado con vLLM 0.11.0 en la RTX 3060 de
-referencia:
+Compatibility result validated with vLLM 0.11.0 on the reference RTX 3060:
 
 ```text
 live LLM profile: local-qwen3
@@ -230,26 +224,24 @@ live dynamic Risk Reviewer profile: local-qwen3
 1 failed, 2 passed
 ```
 
-Los dos contratos dinámicos fueron aceptados y completados. La comprobación
-estática falló por contenido del modelo que no superó la validación de la
-aplicación, no por rechazo del JSON Schema en vLLM. Por tanto, este resultado
-valida la compatibilidad del proveedor con los esquemas dinámicos, pero no la
-fiabilidad semántica de Qwen3-4B-AWQ.
+Both dynamic contracts were accepted and completed. The static check failed because
+model content did not pass application validation, not because vLLM rejected the
+JSON Schema. Therefore, this result validates provider compatibility with dynamic
+schemas, but not the semantic reliability of Qwen3-4B-AWQ.
 
-Si alguna prueba dinámica falla porque vLLM rechaza `oneOf`, `const`, `minItems`
-o `maxItems`, conserva el
-error como evidencia y detén la evaluación. No cambies a `JSON_OBJECT`, no
-debilites el esquema y no repitas hasta obtener éxito.
+If a dynamic test fails because vLLM rejects `oneOf`, `const`, `minItems`, or
+`maxItems`, preserve the error as evidence and stop the evaluation. Do not switch
+to `JSON_OBJECT`, weaken the schema, or retry until it succeeds.
 
-El smoke mínimo puede pasar aunque un escenario grande exceda el contexto. En ese
-caso los logs de vLLM muestran los tokens solicitados y el límite configurado. No
-trunques el catálogo ni retires el esquema delimitado: detén la campaña y utiliza
-posteriormente un perfil/modelo con contexto explícitamente suficiente.
+The minimal smoke test may pass even when a large scenario exceeds the context. In
+that case, the vLLM logs show the requested tokens and configured limit. Do not
+truncate the catalog or remove the delimited schema: stop the campaign and later
+use a profile/model with an explicitly sufficient context.
 
-## 7. Ejecutar una revisión completa
+## 7. Run a Complete Review
 
-Empieza con el escenario inglés, que facilita comparar resultados con las
-pruebas de referencia:
+Start with the English scenario, which makes it easier to compare results with the
+reference tests:
 
 ```powershell
 $env:NO_PROXY = "localhost,127.0.0.1"
@@ -260,7 +252,7 @@ $env:NO_PROXY = "localhost,127.0.0.1"
   --output artifacts\critical-desktop-migration.en.local.json
 ```
 
-Para conservar cada respuesta sin validar y diagnosticar un fallo contractual:
+To preserve every unvalidated response and diagnose a contract failure:
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\run_live_review.py `
@@ -270,46 +262,45 @@ Para conservar cada respuesta sin validar y diagnosticar un fallo contractual:
   --raw-output-dir artifacts\critical-desktop-migration.en.raw
 ```
 
-`artifacts/` está ignorado por Git. Las salidas crudas pueden incluir datos
-sensibles del caso revisado; úsalas solo para diagnóstico.
+`artifacts/` is ignored by Git. Raw outputs may include sensitive data from the
+reviewed case; use them only for diagnosis.
 
-El runner siempre intenta guardar el agregado de confianza. Devuelve código 0
-si la revisión queda `COMPLETED` y código 1 si queda `INCOMPLETE`. Un código 1
-puede significar que vLLM respondió correctamente pero el modelo incumplió un
-contrato semántico.
+The runner always attempts to save the confidence aggregate. It returns code 0 if
+the review is `COMPLETED` and code 1 if it is `INCOMPLETE`. Code 1 may mean that
+vLLM responded correctly but the model violated a semantic contract.
 
-## 8. Resultado de referencia y criterio previo a la interfaz
+## 8. Reference Result and Pre-UI Criteria
 
-Validación del 29 de agosto de 2026 con RTX 3060 12 GiB:
+Validation on August 29, 2026, with an RTX 3060 and 12 GiB:
 
-- suite determinista: 1 038 pruebas superadas y 1 omitida;
-- smoke vLLM: superado;
-- Analyst: completado;
-- Solution Architect: completado;
-- Risk Reviewer: completado;
-- Critic: rechazado por validación de salida;
-- Coordinator: pendiente por diseño fail-closed;
-- duración end-to-end: 212,26 segundos.
+- deterministic suite: 1,038 passed tests and 1 skipped;
+- vLLM smoke test: passed;
+- Analyst: completed;
+- Solution Architect: completed;
+- Risk Reviewer: completed;
+- Critic: rejected by output validation;
+- Coordinator: pending by fail-closed design;
+- end-to-end duration: 212.26 seconds.
 
-El Critic produjo JSON estructuralmente válido, pero mezcló referencias, por
-ejemplo `PROBLEM_ANALYSIS / ALTERNATIVE_ASSUMPTION / ALT-001`, cuando esa
-referencia pertenece a `SOLUTION_ALTERNATIVES`. Qwen3-8B-AWQ sirve para validar
-la integración y los estados de error, pero no ha demostrado fiabilidad
-semántica suficiente para completar siempre los cinco participantes.
+Critic produced structurally valid JSON but mixed references, for example
+`PROBLEM_ANALYSIS / ALTERNATIVE_ASSUMPTION / ALT-001`, where that reference belongs
+to `SOLUTION_ALTERNATIVES`. Qwen3-8B-AWQ is useful for validating integration and
+error states, but it has not demonstrated enough semantic reliability to always
+complete all five participants.
 
-Antes de construir la interfaz deberían quedar comprobados estos comportamientos:
+Before building the UI, verify these behaviors:
 
-1. El smoke live es estable.
-2. Una revisión completa o incompleta se persiste correctamente.
-3. Los estados `COMPLETED`, `FAILED` y `PENDING` se distinguen claramente.
-4. Los fallos contractuales no activan silenciosamente etapas dependientes.
-5. Se decide si el producto necesita esquemas dinámicos, reintentos acotados o
-   un modelo más capaz para los roles más exigentes.
+1. The live smoke test is stable.
+2. A complete or incomplete review is persisted correctly.
+3. The `COMPLETED`, `FAILED`, and `PENDING` states are clearly distinguished.
+4. Contract failures do not silently activate dependent stages.
+5. Decide whether the product needs dynamic schemas, bounded retries, or a more
+  capable model for the most demanding roles.
 
-### Evaluación de Slice 7.1
+### Slice 7.1 Evaluation
 
-Slice 7.1 exige exactamente cinco invocaciones independientes del mismo escenario,
-sin retry automático, sustitución ni borrado selectivo. Usa rutas diferentes:
+Slice 7.1 requires exactly five independent invocations of the same scenario,
+without automatic retry, substitution, or selective deletion. Use separate paths:
 
 ```powershell
 1..5 | ForEach-Object {
@@ -322,65 +313,64 @@ sin retry automático, sustitución ni borrado selectivo. Usa rutas diferentes:
 }
 ```
 
-PowerShell continúa el bucle aunque una ejecución devuelva código 1. No vuelvas a
-ejecutar solo los números fallidos. Registra los cinco resultados, configuración,
-imagen, GPU y tiempos en
+PowerShell continues the loop even if a run returns code 1. Do not rerun only the
+failed numbers. Record all five results, configuration, image, GPU, and timings in
 `specs/007.1-dynamic-critic-schema/live-evaluation.md`. Los archivos bajo
 `artifacts/` permanecen ignorados y pueden contener información sensible.
 
-Con el escenario de referencia actual, la petición Critic dinámica observada
-necesita 34 227 tokens (30 131 de mensajes y 4 096 de salida). Por eso el
-compose usa 40 960; el perfil histórico de 16 384 sólo servía para el smoke
-mínimo y no para esta revisión completa.
+With the current reference scenario, the observed dynamic Critic request needs
+34,227 tokens (30,131 message tokens and 4,096 output tokens). That is why Compose
+uses 40,960; the historical 16,384 profile was suitable only for the minimal smoke
+test, not this complete review.
 
-## 9. Operación diaria
+## 9. Daily Operation
 
-Arrancar y esperar a que esté listo:
+Start and wait until it is ready:
 
 ```powershell
 docker compose up -d vllm
 docker compose ps
 ```
 
-Ver logs:
+View logs:
 
 ```powershell
 docker compose logs -f vllm
 ```
 
-Parar conservando modelo e imagen:
+Stop while preserving the model and image:
 
 ```powershell
 docker compose down
 ```
 
-Actualizar solo la imagen configurada:
+Update only the configured image:
 
 ```powershell
 docker compose pull vllm
 docker compose up -d vllm
 ```
 
-## 10. Recuperar espacio
+## 10. Reclaim Storage
 
-`docker compose down` no borra el modelo. Para ver el volumen:
+`docker compose down` does not delete the model. To view the volume:
 
 ```powershell
 docker volume inspect agentic-review-board-huggingface-cache
 ```
 
-Para borrar también la caché del modelo hay que solicitarlo explícitamente:
+To also delete the model cache, request it explicitly:
 
 ```powershell
 docker compose down --volumes
 ```
 
-Ese último comando obliga a descargar de nuevo el modelo en el próximo arranque.
-No lo uses si quieres conservar la caché.
+The latter command forces the model to be downloaded again on the next startup.
+Do not use it if you want to preserve the cache.
 
-## Ajustes para otras GPU
+## Settings for Other GPUs
 
-Los valores pueden modificarse temporalmente sin editar `compose.yaml`:
+The values can be changed temporarily without editing `compose.yaml`:
 
 ```powershell
 $env:VLLM_MAX_MODEL_LEN = "8192"
@@ -389,24 +379,23 @@ $env:VLLM_KV_CACHE_DTYPE = "auto"
 docker compose up -d vllm
 ```
 
-Si la carga falla por falta de VRAM, reduce primero `VLLM_MAX_MODEL_LEN` a
-`12288` y después a `8192`. Mantén `max-num-seqs=1`, ya que el flujo actual es
-secuencial. Cambiar el repositorio o el nombre servido del modelo exige mantener
-sincronizados `VLLM_MODEL`, `VLLM_SERVED_MODEL_NAME` y el campo `model` de la
-configuración JSON de la aplicación.
+If loading fails because of insufficient VRAM, first reduce `VLLM_MAX_MODEL_LEN` to
+`12288`, and then to `8192`. Keep `max-num-seqs=1`, since the current flow is
+sequential. Changing the model repository or served name requires keeping
+`VLLM_MODEL`, `VLLM_SERVED_MODEL_NAME`, and the application's JSON `model` field
+in sync.
 
-Para ejecutar el escenario completo del Slice 7.1 hacen falta al menos 34.227
-tokens entre entrada y salida. La configuración de referencia usa
-`Qwen/Qwen3-4B-AWQ`, 40.960 tokens y caché KV `auto`; no necesita FP8,
-FlashInfer ni offload en la RTX 3060 de 12 GiB.
+Running the complete Slice 7.1 scenario requires at least 34,227 input and output
+tokens. The reference configuration uses `Qwen/Qwen3-4B-AWQ`, 40,960 tokens, and
+`auto` KV cache; it does not need FP8, FlashInfer, or offload on the 12 GiB RTX 3060.
 
-La investigación con el modelo 8B se conserva como contexto de diagnóstico:
-vLLM 0.8.5 sólo disponía de 2,96 GiB para KV frente a los 5,62 GiB necesarios;
-FP8 E5M2 forzaba el motor V0 y excedía el timeout al compilar el esquema
-dinámico; el offload V1 requería UVA, no disponible bajo WSL; y vLLM 0.11.0
-encontró incompatibilidades de kernel FP8 en Ampere. Estas combinaciones no son
-la configuración soportada del proyecto.
+The 8B model investigation is retained as diagnostic context: vLLM 0.8.5 had
+only 2.96 GiB available for KV versus the 5.62 GiB required; FP8 E5M2 forced the
+V0 engine and exceeded the timeout while compiling the dynamic schema; V1 offload
+required UVA, which is unavailable under WSL; and vLLM 0.11.0 encountered FP8
+kernel incompatibilities on Ampere. These combinations are not the project's
+supported configuration.
 
-Si se cambia de modelo o GPU, conserva siempre suficiente contexto para la suma
-de prompt y salida. No reduzcas el esquema, trunques el catálogo ni sustituyas
-ejecuciones fallidas para hacer pasar la evaluación.
+If you change the model or GPU, always preserve enough context for the combined
+prompt and output. Do not reduce the schema, truncate the catalog, or substitute
+failed runs to make the evaluation pass.

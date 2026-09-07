@@ -74,9 +74,7 @@ def _analyst_response(payload: Mapping[str, object]) -> dict[str, object]:
             {"id": f"CON-{index:03d}", "text": text}
             for index, text in enumerate(constraints, start=1)
         ],
-        "assumptions": [
-            {"id": "ASM-001", "text": "The PoC remains single-session."}
-        ],
+        "assumptions": [{"id": "ASM-001", "text": "The PoC remains single-session."}],
         "missing_information": [],
         "uncertainties": [
             {"id": "UNC-001", "text": "Operational effort is not measured."}
@@ -121,6 +119,24 @@ def _alternatives_response(
                 "validation_status": "PROPOSED",
                 "name": "Local deployment",
                 "description": "Run the capability in the local environment.",
+                "solution_design": {
+                    "summary": "Use a local-first runtime with explicitly owned state.",
+                    "building_blocks": [
+                        "Local client runtime and local persistence boundary."
+                    ],
+                    "key_interactions": [
+                        "User operations flow from the client to local persisted state."
+                    ],
+                    "operational_model": [
+                        "Package, deploy, monitor, and support the runtime locally."
+                    ],
+                    "delivery_steps": [
+                        "Build a pilot and roll out after operational acceptance."
+                    ],
+                    "validation_checks": [
+                        "Exercise the complete workflow without network connectivity."
+                    ],
+                },
                 "advantages": ["Keeps operation local."],
                 "disadvantages": ["Requires local lifecycle management."],
                 "assumptions": ["Suitable local capacity is available."],
@@ -132,6 +148,24 @@ def _alternatives_response(
                 "validation_status": "PROPOSED",
                 "name": "Managed deployment",
                 "description": "Run the capability in a managed environment.",
+                "solution_design": {
+                    "summary": "Use a managed runtime behind a controlled integration boundary.",
+                    "building_blocks": [
+                        "Managed service and local integration adapter."
+                    ],
+                    "key_interactions": [
+                        "Local requests cross the integration boundary to managed state."
+                    ],
+                    "operational_model": [
+                        "Split deployment and support ownership with the provider."
+                    ],
+                    "delivery_steps": [
+                        "Integrate, pilot, and approve the managed dependency."
+                    ],
+                    "validation_checks": [
+                        "Verify availability and behavior during network loss."
+                    ],
+                },
                 "advantages": ["Reduces local operational work."],
                 "disadvantages": ["Adds an external dependency."],
                 "assumptions": ["A managed environment is available."],
@@ -294,12 +328,16 @@ def _coordinator_response(payload: Mapping[str, object]) -> dict[str, object]:
     raw_risks = risk_document["risks"]
     if not isinstance(raw_risks, list):
         raise AssertionError("scenario expected serialized risks")
-    principal_risks = [
-        {
-            "risk_id": _required_string(_mapping(raw_risks[0]), "id"),
-            "rationale": "This risk affects the current leading option.",
-        }
-    ] if raw_risks else []
+    principal_risks = (
+        [
+            {
+                "risk_id": _required_string(_mapping(raw_risks[0]), "id"),
+                "rationale": "This risk affects the current leading option.",
+            }
+        ]
+        if raw_risks
+        else []
+    )
     problem_analysis = _mapping(payload["problem_analysis"])
     raw_uncertainties = problem_analysis["uncertainties"]
     if not isinstance(raw_uncertainties, list) or not raw_uncertainties:

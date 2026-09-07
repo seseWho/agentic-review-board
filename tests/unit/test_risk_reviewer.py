@@ -22,6 +22,7 @@ from agentic_review_board.domain.solutions import (
     GenerationNotes,
     SolutionAlternative,
     SolutionAlternatives,
+    SolutionDesign,
 )
 from agentic_review_board.participants.risk_reviewer import (
     RiskReviewer,
@@ -69,11 +70,15 @@ def problem_analysis(
     duplicate_constraint_text: bool = False,
 ) -> ProblemAnalysis:
     constraints = (
-        AnalysisFinding(id="CON-001", text="Must run offline"),
-        AnalysisFinding(id="CON-002", text="Must run offline"),
-    ) if duplicate_constraint_text else (
-        AnalysisFinding(id="CON-001", text="Must run offline"),
-        AnalysisFinding(id="CON-002", text="Keep deployment simple"),
+        (
+            AnalysisFinding(id="CON-001", text="Must run offline"),
+            AnalysisFinding(id="CON-002", text="Must run offline"),
+        )
+        if duplicate_constraint_text
+        else (
+            AnalysisFinding(id="CON-001", text="Must run offline"),
+            AnalysisFinding(id="CON-002", text="Keep deployment simple"),
+        )
     )
 
     return ProblemAnalysis(
@@ -112,14 +117,28 @@ def solution_alternatives(
     duplicate_constraint_reference: bool = False,
 ) -> SolutionAlternatives:
     advantages = (
-        "Keeps operation local.",
-        "Keeps operation local.",
-    ) if duplicate_advantage_text else (
-        "Keeps operation local.",
-        "Avoids a network dependency.",
+        (
+            "Keeps operation local.",
+            "Keeps operation local.",
+        )
+        if duplicate_advantage_text
+        else (
+            "Keeps operation local.",
+            "Avoids a network dependency.",
+        )
     )
     reference = constraint_reference()
-    relevant_constraints = (reference, reference) if duplicate_constraint_reference else (reference,)
+    relevant_constraints = (
+        (reference, reference) if duplicate_constraint_reference else (reference,)
+    )
+    design = SolutionDesign(
+        summary="Implement a bounded deployment architecture.",
+        building_blocks=("Runtime and owned state.",),
+        key_interactions=("Requests flow through the runtime to owned state.",),
+        operational_model=("Assign deployment and support ownership.",),
+        delivery_steps=("Pilot before staged rollout.",),
+        validation_checks=("Verify the end-to-end workflow.",),
+    )
 
     return SolutionAlternatives(
         alternatives=(
@@ -127,6 +146,7 @@ def solution_alternatives(
                 id="ALT-001",
                 name="Local deployment",
                 description="Run the capability in the existing local environment.",
+                solution_design=design,
                 advantages=advantages,
                 disadvantages=("Requires local lifecycle management.",),
                 assumptions=("Local compute is available.",),
@@ -137,6 +157,7 @@ def solution_alternatives(
                 id="ALT-002",
                 name="Managed edge deployment",
                 description="Run the capability in a managed edge environment.",
+                solution_design=design,
                 advantages=("Reduces local lifecycle work.",),
                 disadvantages=("Introduces an external operational dependency.",),
                 assumptions=("A suitable managed environment is available.",),
@@ -209,7 +230,8 @@ def risk_response(
                 "description": "Lifecycle ownership may create operational burden.",
                 "affected_scope": scope or {"kind": "OVERALL", "alternative_ids": []},
                 "severity": "MEDIUM",
-                "basis": basis or [
+                "basis": basis
+                or [
                     review_input_basis(
                         "description",
                         "Review a proposed technical deployment change.",
@@ -237,7 +259,9 @@ def assess(
     )
 
 
-def test_risk_reviewer_returns_trusted_assessment_and_uses_exact_provider_payload() -> None:
+def test_risk_reviewer_returns_trusted_assessment_and_uses_exact_provider_payload() -> (
+    None
+):
     current_input = review_input()
     analysis = problem_analysis()
     alternatives = solution_alternatives()
@@ -264,10 +288,15 @@ def test_risk_reviewer_returns_trusted_assessment_and_uses_exact_provider_payloa
         ("objective", "Assess material deployment risk."),
         ("constraints", "Must run offline"),
         ("context", "The current environment is locally managed."),
-        ("stated_facts", "The capability must remain available without internet access."),
+        (
+            "stated_facts",
+            "The capability must remain available without internet access.",
+        ),
     ],
 )
-def test_review_input_basis_resolves_every_supported_source(field: str, value: str) -> None:
+def test_review_input_basis_resolves_every_supported_source(
+    field: str, value: str
+) -> None:
     result = assess(risk_response(basis=[review_input_basis(field, value)]))
 
     assert result.risks[0].basis
@@ -276,7 +305,11 @@ def test_review_input_basis_resolves_every_supported_source(field: str, value: s
 @pytest.mark.parametrize(
     ("field", "actual", "generated"),
     [
-        ("description", "Review a proposed technical deployment change.", "Different description"),
+        (
+            "description",
+            "Review a proposed technical deployment change.",
+            "Different description",
+        ),
         ("title", "Deployment review", "Different title"),
         ("objective", "Assess material deployment risk.", "Different objective"),
     ],
@@ -293,12 +326,18 @@ def test_review_input_scalar_basis_requires_exact_value(
 
 
 @pytest.mark.parametrize("field", ["title", "objective"])
-def test_review_input_optional_scalar_basis_fails_when_source_is_absent(field: str) -> None:
-    current_input = review_input(title=None) if field == "title" else review_input(objective=None)
+def test_review_input_optional_scalar_basis_fails_when_source_is_absent(
+    field: str,
+) -> None:
+    current_input = (
+        review_input(title=None) if field == "title" else review_input(objective=None)
+    )
 
     with pytest.raises(RiskReviewerOutputError):
         assess(
-            risk_response(basis=[review_input_basis(field, "Generated unsupported value")]),
+            risk_response(
+                basis=[review_input_basis(field, "Generated unsupported value")]
+            ),
             current_input=current_input,
         )
 
@@ -363,9 +402,7 @@ def test_problem_analysis_basis_resolves_all_finding_kinds_by_id_and_text(
     text: str,
 ) -> None:
     result = assess(
-        risk_response(
-            basis=[problem_analysis_basis(kind, text, finding_id=finding_id)]
-        )
+        risk_response(basis=[problem_analysis_basis(kind, text, finding_id=finding_id)])
     )
 
     assert result.risks[0].basis
@@ -452,9 +489,7 @@ def test_solution_alternative_basis_resolves_every_supported_characteristic(
     value: object,
 ) -> None:
     result = assess(
-        risk_response(
-            basis=[solution_basis("ALT-001", characteristic, value)]
-        )
+        risk_response(basis=[solution_basis("ALT-001", characteristic, value)])
     )
 
     assert result.risks[0].basis
@@ -490,14 +525,12 @@ def test_solution_alternative_basis_rejects_characteristic_value_mismatch(
     value: str,
 ) -> None:
     with pytest.raises(RiskReviewerOutputError):
-        assess(
-            risk_response(
-                basis=[solution_basis("ALT-001", characteristic, value)]
-            )
-        )
+        assess(risk_response(basis=[solution_basis("ALT-001", characteristic, value)]))
 
 
-def test_solution_alternative_text_basis_fails_when_characteristic_text_is_ambiguous() -> None:
+def test_solution_alternative_text_basis_fails_when_characteristic_text_is_ambiguous() -> (
+    None
+):
     with pytest.raises(RiskReviewerOutputError):
         assess(
             risk_response(
@@ -547,9 +580,7 @@ def test_duplicate_identical_relevant_constraints_make_basis_ambiguous() -> None
 
 
 def test_overall_scope_is_valid_without_alternative_lookup() -> None:
-    result = assess(
-        risk_response(scope={"kind": "OVERALL", "alternative_ids": []})
-    )
+    result = assess(risk_response(scope={"kind": "OVERALL", "alternative_ids": []}))
 
     assert result.risks[0].affected_scope.alternative_ids == ()
 
@@ -582,7 +613,9 @@ def test_alternative_scope_rejects_unknown_current_alternative_id() -> None:
         )
 
 
-def test_alternative_scope_is_invalid_when_solution_architect_produced_zero_alternatives() -> None:
+def test_alternative_scope_is_invalid_when_solution_architect_produced_zero_alternatives() -> (
+    None
+):
     with pytest.raises(RiskReviewerOutputError):
         assess(
             risk_response(
@@ -629,9 +662,7 @@ def test_zero_alternative_input_still_allows_grounded_overall_risk() -> None:
 @pytest.mark.parametrize(
     "response",
     [
-        risk_response(
-            scope={"kind": "ALTERNATIVES", "alternative_ids": ["ALT-001"]}
-        ),
+        risk_response(scope={"kind": "ALTERNATIVES", "alternative_ids": ["ALT-001"]}),
         risk_response(
             basis=[
                 solution_basis(
@@ -659,9 +690,7 @@ def test_zero_alternative_input_rejects_fabricated_alternative_specific_risk(
             "overall_observations": [],
             "ranking": ["ALT-001", "ALT-002"],
         },
-        risk_response(
-            basis=[review_input_basis("constraints", "Unknown constraint")]
-        ),
+        risk_response(basis=[review_input_basis("constraints", "Unknown constraint")]),
     ],
 )
 def test_structural_or_contextual_generated_output_failure_is_dedicated_and_fail_closed(
@@ -691,13 +720,13 @@ def test_contextual_resolution_does_not_silently_trim_or_case_repair_generated_t
 ) -> None:
     with pytest.raises(RiskReviewerOutputError):
         assess(
-            risk_response(
-                basis=[review_input_basis("description", generated_value)]
-            )
+            risk_response(basis=[review_input_basis("description", generated_value)])
         )
 
 
-def test_one_invalid_risk_prevents_partial_trust_of_an_otherwise_valid_assessment() -> None:
+def test_one_invalid_risk_prevents_partial_trust_of_an_otherwise_valid_assessment() -> (
+    None
+):
     valid_risk = risk_response()["risks"]
     assert isinstance(valid_risk, list)
     response: dict[str, object] = {

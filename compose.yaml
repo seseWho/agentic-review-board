@@ -44,7 +44,10 @@ services:
       timeout: 10s
       retries: 5
       start_period: 30m
+    environment:
+        HF_HUB_OFFLINE: "1"
 
 volumes:
   huggingface-cache:
     name: agentic-review-board-huggingface-cache
+

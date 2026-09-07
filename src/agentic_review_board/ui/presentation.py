@@ -17,7 +17,10 @@ from agentic_review_board.domain.execution import (
 )
 from agentic_review_board.domain.final_reviews import FinalReview
 from agentic_review_board.domain.risks import RiskAssessment
-from agentic_review_board.domain.solutions import SolutionAlternatives
+from agentic_review_board.domain.solutions import (
+    SolutionAlternative,
+    SolutionAlternatives,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -231,3 +234,24 @@ def final_result(review: Review) -> FinalReview | None:
     if not isinstance(output, FinalReview):
         raise ValueError("completed Review does not expose trusted FinalReview")
     return output
+
+
+def preferred_solution(review: Review) -> SolutionAlternative | None:
+    """Resolve the Coordinator's preferred ID to the exact Architect alternative."""
+
+    final = final_result(review)
+    if final is None or final.preferred_alternative_id is None:
+        return None
+    architect_output = trusted_output(review.stage(StageIdentity.SOLUTION_ARCHITECT))
+    if not isinstance(architect_output, SolutionAlternatives):
+        raise ValueError(
+            "completed Review does not expose trusted SolutionAlternatives"
+        )
+    matches = tuple(
+        alternative
+        for alternative in architect_output.alternatives
+        if alternative.id == final.preferred_alternative_id
+    )
+    if len(matches) != 1:
+        raise ValueError("preferred alternative does not resolve exactly once")
+    return matches[0]

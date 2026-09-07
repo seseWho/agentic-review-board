@@ -1,38 +1,37 @@
-# Runbook de prueba local de la UI
+# Local UI Test Runbook
 
-Este runbook permite validar la interfaz pedagógica de Agentic Review Board en Windows con
-PowerShell. Incluye una ejecución determinista sin modelo y una ejecución integral con la
-configuración de referencia para vLLM y una NVIDIA RTX 3060 de 12 GiB.
+This runbook validates the Agentic Review Board educational UI on Windows with PowerShell. It
+includes a deterministic model-free run and a full run with the reference configuration for
+vLLM and an NVIDIA RTX 3060 with 12 GiB.
 
-Ejecuta todos los comandos desde la raíz del repositorio. La ruta esperada en la máquina de
-referencia es:
+Run all commands from the repository root. The expected path on the reference machine is:
 
 ```powershell
 Set-Location "D:\DEVELOP\GitHub\SeseWho\agentic-review-board"
 ```
 
-## Qué valida cada recorrido
+## What Each Run Validates
 
-| Recorrido | Modelo real | GPU | Propósito |
+| Run | Real model | GPU | Purpose |
 |---|---:|---:|---|
-| Suite automatizada | No | No | Regresión del dominio, agentes, orquestación y UI |
-| UI determinista | No | No | Formulario, estados, detalle de agentes y resultado final |
-| UI de producción | Sí | Sí | Integración completa del navegador con los cinco agentes y vLLM |
+| Automated suite | No | No | Regression coverage for the domain, agents, orchestration, and UI |
+| Deterministic UI | No | No | Form, states, agent details, and final result |
+| Production UI | Yes | Yes | Full browser integration with the five agents and vLLM |
 
-La UI determinista no sustituye la prueba de producción. La prueba de producción tampoco
-demuestra por sí sola que el modelo vaya a cumplir siempre los contratos semánticos.
+The deterministic UI does not replace the production test. The production test alone also does
+not prove that the model will always satisfy the semantic contracts.
 
-## 1. Requisitos previos
+## 1. Prerequisites
 
 - Python 3.12 o posterior.
-- Dependencias del proyecto instaladas en `.venv`.
-- Docker Desktop con WSL 2 para la prueba real.
-- Driver NVIDIA y acceso de Docker a la GPU.
-- Puerto 8501 libre para Streamlit.
-- Puerto 8000 libre para vLLM.
-- Espacio suficiente en Docker para la imagen y el modelo.
+- Project dependencies installed in `.venv`.
+- Docker Desktop with WSL 2 for the live test.
+- NVIDIA driver and Docker access to the GPU.
+- Port 8501 available for Streamlit.
+- Port 8000 available for vLLM.
+- Enough Docker storage for the image and model.
 
-Comprueba el entorno:
+Check the environment:
 
 ```powershell
 py -3.12 --version
@@ -42,7 +41,7 @@ nvidia-smi
 Test-Path .\.venv\Scripts\python.exe
 ```
 
-Si todavía no existe el entorno Python:
+If the Python environment does not exist yet:
 
 ```powershell
 py -3.12 -m venv .venv
@@ -50,13 +49,13 @@ py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
 ```
 
-Si `.venv` existe pero su intérprete ya no arranca después de actualizar Python, conserva el
-directorio para diagnóstico, crea un entorno nuevo y vuelve a instalar el proyecto. No borres
-el entorno anterior hasta comprobar el reemplazo.
+If `.venv` exists but its interpreter no longer starts after upgrading Python, keep the
+directory for diagnosis, create a new environment, and reinstall the project. Do not delete
+the old environment until the replacement has been verified.
 
-## 2. Verificación automatizada previa
+## 2. Preflight Automated Verification
 
-Ejecuta primero las pruebas que no utilizan red, Docker ni modelos:
+Run the tests that do not use the network, Docker, or models first:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q
@@ -65,19 +64,19 @@ Ejecuta primero las pruebas que no utilizan red, Docker ni modelos:
 .\.venv\Scripts\python.exe -m pip check
 ```
 
-Criterio de paso:
+Pass criteria:
 
-- no hay pruebas fallidas ni errores;
-- las pruebas live se omiten mientras no se autoricen explícitamente;
-- mypy y Ruff terminan con código 0;
-- `pip check` no encuentra dependencias incompatibles.
+- no failed tests or errors;
+- live tests are skipped unless explicitly authorized;
+- mypy and Ruff exit with code 0;
+- `pip check` finds no incompatible dependencies.
 
-La línea base aceptada más reciente está registrada en
+The latest accepted baseline is recorded in
 [`../specs/008-pedagogical-ui/acceptance.md`](../specs/008-pedagogical-ui/acceptance.md).
 
-## 3. Recorrido rápido de la UI sin modelo
+## 3. Quick Model-Free UI Run
 
-Arranca la composición determinista usada por las pruebas funcionales:
+Start the deterministic composition used by the functional tests:
 
 ```powershell
 .\.venv\Scripts\python.exe -m streamlit run `
@@ -86,41 +85,41 @@ Arranca la composición determinista usada por las pruebas funcionales:
   --server.port 8501
 ```
 
-Abre <http://localhost:8501>. Si Streamlit no abre el navegador automáticamente, copia esa
-dirección manualmente.
+Open <http://localhost:8501>. If Streamlit does not open the browser automatically, copy the
+address manually.
 
-Realiza el recorrido:
+Perform the following run:
 
-1. Comprueba que el editor del caso aparece en la barra lateral.
-2. Importa `examples\reviews\critical-desktop-migration.en.md` o escribe una descripción.
-3. Revisa los seis campos; importar el archivo no debe iniciar ningún agente.
-4. Comprueba que Coordinator aparece arriba y los especialistas en una cuadrícula 2x2.
-5. Pulsa una sola vez **Start Review** y verifica que el editor deja paso al resumen colapsado.
-6. Espera al estado global **Completed** y abre las tarjetas de los participantes.
-7. Comprueba que aparece el **Decision workspace** independiente con sus pestañas.
-8. Pulsa **New Review** y verifica que se limpian formulario, importación, estados y resultado.
+1. Confirm that the case editor appears in the sidebar.
+2. Import `examples\reviews\critical-desktop-migration.en.md` or enter a description.
+3. Review the six fields; importing the file must not start any agent.
+4. Confirm that Coordinator appears at the top and the specialists appear in a 2x2 grid.
+5. Press **Start Review** once and verify that the editor is replaced by the collapsed summary.
+6. Wait for the global **Completed** state and open the participant cards.
+7. Confirm that the independent **Decision workspace** with its tabs appears.
+8. Press **New Review** and verify that the form, import, states, and result are cleared.
 
-El orden visible debe ser Analyst, Solution Architect, Risk Reviewer, Critic y Coordinator.
-Cada participante completado debe tener un artefacto confiable. Detén Streamlit con `Ctrl+C`.
+The visible order must be Analyst, Solution Architect, Risk Reviewer, Critic, and Coordinator.
+Each completed participant must have a trustworthy artifact. Stop Streamlit with `Ctrl+C`.
 
-## 4. Arrancar vLLM para la prueba real
+## 4. Start vLLM for the Live Test
 
-La configuración versionada utiliza:
+The versioned configuration uses:
 
 - `vllm/vllm-openai:v0.11.0`;
 - `Qwen/Qwen3-4B-AWQ` servido como `qwen3-4b-awq`;
-- cuantización AWQ Marlin y FP16;
-- contexto de 40 960 tokens;
-- una sola secuencia concurrente;
-- puerto local `127.0.0.1:8000`.
+- AWQ Marlin and FP16 quantization;
+- a 40,960-token context;
+- a single concurrent sequence;
+- local port `127.0.0.1:8000`.
 
-Comprueba primero que ningún otro servicio utiliza el puerto:
+First check that no other service is using the port:
 
 ```powershell
 docker ps --filter publish=8000
 ```
 
-Arranca el servicio declarado por el repositorio:
+Start the service declared by the repository:
 
 ```powershell
 docker compose config
@@ -129,11 +128,10 @@ docker compose ps
 docker compose logs -f vllm
 ```
 
-La primera ejecución puede descargar varios gigabytes y tardar bastante. Cuando los logs
-indiquen que la aplicación está preparada, sal del seguimiento con `Ctrl+C`; esto no detiene
-el contenedor.
+The first run may download several gigabytes and take a while. When the logs indicate that the
+application is ready, stop following the logs with `Ctrl+C`; this does not stop the container.
 
-Comprueba su estado y catálogo:
+Check its status and catalog:
 
 ```powershell
 docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' arb-vllm
@@ -142,12 +140,12 @@ Invoke-RestMethod http://localhost:8000/v1/models |
   ConvertTo-Json -Depth 6
 ```
 
-El contenedor debe estar `healthy` y el catálogo debe contener `qwen3-4b-awq`. Si existe un
-proxy de sistema, `localhost` y `127.0.0.1` deben quedar excluidos.
+The container must be `healthy` and the catalog must contain `qwen3-4b-awq`. If a system proxy
+exists, `localhost` and `127.0.0.1` must be excluded.
 
-## 5. Ejecutar la UI de producción
+## 5. Run the Production UI
 
-En una terminal distinta a la de Docker:
+In a terminal separate from the Docker terminal:
 
 ```powershell
 $env:ARB_LLM_CONFIG_PATH = (Resolve-Path ".\config\llm.vllm.json").Path
@@ -158,14 +156,14 @@ $env:NO_PROXY = "localhost,127.0.0.1"
   --server.port 8501
 ```
 
-Abre <http://localhost:8501>. Cargar la página no llama al modelo; la ejecución comienza
-únicamente al pulsar **Start Review**.
+Open <http://localhost:8501>. Loading the page does not call the model; execution starts only
+when **Start Review** is pressed.
 
-Importa directamente esta entrada de referencia desde la barra lateral:
+Import this reference input directly from the sidebar:
 
 [`../examples/reviews/critical-desktop-migration.en.md`](../examples/reviews/critical-desktop-migration.en.md)
 
-El formato aceptado es:
+The accepted format is:
 
 ```markdown
 # Optional title
@@ -191,12 +189,12 @@ Optional objective.
 - One flat item per line
 ```
 
-También se aceptan los encabezados españoles `Descripción`, `Objetivo`, `Restricciones`,
-`Contexto` y `Hechos declarados`. El archivo debe utilizar UTF-8 y no puede superar 1 MiB.
-Los encabezados desconocidos o duplicados y las listas mal formadas se rechazan sin alterar
-el borrador actual.
+The Spanish headings `Descripción`, `Objetivo`, `Restricciones`, `Contexto`, and
+`Hechos declarados` are also accepted. The file must use UTF-8 and must not exceed 1 MiB.
+Unknown or duplicate headings and malformed lists are rejected without changing the current
+draft.
 
-Como alternativa, consulta los valores JSON y rellena el editor manualmente:
+Alternatively, inspect the JSON values and fill in the editor manually:
 
 ```powershell
 $scenario = Get-Content `
@@ -209,44 +207,43 @@ $scenario.context
 $scenario.stated_facts
 ```
 
-Copia `title`, `description` y `objective` en sus campos. Copia cada elemento de
-`constraints`, `context` y `stated_facts` en una línea distinta de su área correspondiente.
+Copy `title`, `description`, and `objective` into their fields. Copy each item from
+`constraints`, `context`, and `stated_facts` onto a separate line in its corresponding area.
 
-Antes de empezar:
+Before starting:
 
-- confirma que los cinco agentes están en estado **Pending**;
-- confirma que importar o editar no ha ejecutado el modelo;
-- anota la hora de inicio;
-- pulsa **Start Review** una sola vez;
-- no recargues ni cierres la pestaña mientras se ejecuta.
+- confirm that all five agents are in the **Pending** state;
+- confirm that importing or editing has not run the model;
+- record the start time;
+- press **Start Review** once;
+- do not reload or close the tab while it is running.
 
-La ejecución de referencia tarda aproximadamente dos minutos, aunque una carga fría puede
-tardar más. El flujo es secuencial y no realiza retry, fallback, reparación de salida ni
-cambio automático de modelo.
+The reference run takes approximately two minutes, although a cold load may take longer. The
+flow is sequential and does not retry, fall back, repair output, or automatically change the
+model.
 
-## 6. Criterios de aceptación manual
+## 6. Manual Acceptance Criteria
 
-Una ejecución completa pasa cuando:
+A complete run passes when:
 
-- el estado global termina en **Completed**;
-- los cinco agentes terminan en **Completed** y en el orden canónico;
-- cada etapa completada muestra su artefacto confiable;
-- Coordinator produce el **Decision workspace** con la sección **Final result**;
-- el resultado conserva riesgos, incertidumbres y estado de la evidencia;
-- la UI no muestra prompts, respuestas crudas, credenciales ni detalles internos de errores.
+- the global state ends in **Completed**;
+- all five agents end in **Completed** and in canonical order;
+- each completed stage shows its trustworthy artifact;
+- Coordinator produces the **Decision workspace** with the **Final result** section;
+- the result preserves risks, uncertainties, and evidence status;
+- the UI does not show prompts, raw responses, credentials, or internal error details.
 
-Una ejecución **Incomplete** también puede ser una observación válida del modelo. En ese
-caso comprueba que:
+An **Incomplete** run can also be a valid model observation. In that case, verify that:
 
-- la etapa que incumple el contrato termina en **Failed** y no presenta salida confiable;
-- las etapas anteriores siguen siendo inspeccionables;
-- las etapas posteriores obligatorias figuran como no ejecutadas;
-- no aparece un resultado final inventado;
-- se conserva la ejecución fallida sin repetir únicamente la etapa problemática.
+- the stage that violates the contract ends in **Failed** and does not present trustworthy output;
+- earlier stages remain inspectable;
+- required later stages are shown as not executed;
+- no fabricated final result appears;
+- the failed run is retained without retrying only the problematic stage.
 
-## 7. Evidencia mínima que debe registrarse
+## 7. Minimum Evidence to Record
 
-Para que una ejecución sea reproducible, anota:
+To make a run reproducible, record:
 
 ```powershell
 git rev-parse HEAD
@@ -255,26 +252,25 @@ docker compose ps
 nvidia-smi
 ```
 
-Registra además:
+Also record:
 
-- fecha y hora;
-- escenario utilizado;
-- versión de vLLM, imagen, modelo y configuración;
-- GPU, VRAM y versión del driver;
-- duración aproximada;
-- estado final de Review y de cada agente;
-- presencia o ausencia de **Final result**;
-- mensaje público mostrado por la UI si existe un fallo.
+- date and time;
+- scenario used;
+- vLLM version, image, model, and configuration;
+- GPU, VRAM, and driver version;
+- approximate duration;
+- final Review and per-agent states;
+- presence or absence of **Final result**;
+- public message shown by the UI if a failure occurs.
 
-No registres claves, prompts internos ni respuestas crudas salvo que exista una necesidad de
-diagnóstico explícita. Los archivos de `artifacts/` están ignorados por Git, pero pueden
-contener información sensible.
+Do not record keys, internal prompts, or raw responses unless there is an explicit diagnostic
+need. Files in `artifacts/` are ignored by Git but may contain sensitive information.
 
-## 8. Diagnóstico rápido
+## 8. Quick Troubleshooting
 
-### Streamlit no arranca
+### Streamlit does not start
 
-Comprueba el intérprete y la instalación:
+Check the interpreter and installation:
 
 ```powershell
 .\.venv\Scripts\python.exe --version
@@ -282,16 +278,16 @@ Comprueba el intérprete y la instalación:
 .\.venv\Scripts\python.exe -m pip check
 ```
 
-### El puerto 8501 está ocupado
+### Port 8501 is occupied
 
 ```powershell
 Get-NetTCPConnection -LocalPort 8501 -State Listen
 ```
 
-Detén la instancia anterior o arranca Streamlit con otro puerto, por ejemplo 8502, y abre la
-URL correspondiente.
+Stop the previous instance or start Streamlit on another port, such as 8502, and open the
+corresponding URL.
 
-### vLLM no llega a `healthy`
+### vLLM does not become `healthy`
 
 ```powershell
 docker compose ps
@@ -300,11 +296,11 @@ docker stats arb-vllm --no-stream
 nvidia-smi
 ```
 
-Busca falta de VRAM, descarga incompleta, error del runtime NVIDIA o conflicto de puerto. La
-revisión de referencia necesita el contexto configurado de 40 960 tokens; reducirlo puede
-permitir un smoke pequeño, pero deja de validar el escenario completo.
+Look for insufficient VRAM, an incomplete download, an NVIDIA runtime error, or a port
+conflict. The reference review requires the configured 40,960-token context; reducing it may
+allow a small smoke test, but it no longer validates the complete scenario.
 
-### La UI no conecta con vLLM
+### The UI does not connect to vLLM
 
 ```powershell
 $env:ARB_LLM_CONFIG_PATH
@@ -312,37 +308,37 @@ $env:NO_PROXY
 Invoke-RestMethod http://localhost:8000/v1/models
 ```
 
-Confirma que `ARB_LLM_CONFIG_PATH` apunta a un archivo existente y que el nombre servido por
-vLLM coincide con `qwen3-4b-awq` en `config/llm.vllm.json`.
+Confirm that `ARB_LLM_CONFIG_PATH` points to an existing file and that the name served by vLLM
+matches `qwen3-4b-awq` in `config/llm.vllm.json`.
 
-### Un agente falla aunque vLLM responda
+### An agent fails even though vLLM responds
 
-Esto normalmente indica que la salida del modelo incumplió un contrato estructural o
-semántico. Conserva el estado **Incomplete**, los estados de cada etapa y los logs. No cambies
-silenciosamente a `JSON_OBJECT`, no debilites el esquema y no repitas hasta obtener un éxito.
+This usually indicates that the model output violated a structural or semantic contract.
+Preserve the **Incomplete** state, each stage's state, and the logs. Do not silently switch to
+`JSON_OBJECT`, weaken the schema, or retry until you get a success.
 
-## 9. Apagado seguro
+## 9. Safe Shutdown
 
-Detén Streamlit con `Ctrl+C` en su terminal. Después detén el servicio conservando la imagen
-y la caché del modelo:
+Stop Streamlit with `Ctrl+C` in its terminal. Then stop the service while preserving the image
+and model cache:
 
 ```powershell
 docker compose down
 ```
 
-Comprueba que no quedan procesos del runbook:
+Confirm that no runbook processes remain:
 
 ```powershell
 docker compose ps
 Get-NetTCPConnection -LocalPort 8501,8000 -State Listen -ErrorAction SilentlyContinue
 ```
 
-No uses `docker compose down --volumes` ni `docker system prune`: ambos pueden eliminar datos
-que resulta costoso volver a descargar.
+Do not use `docker compose down --volumes` or `docker system prune`: both can remove data that
+is expensive to download again.
 
-## Referencias
+## References
 
-- [Guía de vLLM y Docker](vllm-local-docker-guide.md)
-- [Aceptación determinista y live del Slice 8](../specs/008-pedagogical-ui/acceptance.md)
-- [Escenarios de referencia](../examples/reviews/README.md)
-- [Configuración local de vLLM](../config/llm.vllm.json)
+- [vLLM and Docker Guide](vllm-local-docker-guide.md)
+- [Slice 8 deterministic and live acceptance](../specs/008-pedagogical-ui/acceptance.md)
+- [Reference scenarios](../examples/reviews/README.md)
+- [Local vLLM configuration](../config/llm.vllm.json)

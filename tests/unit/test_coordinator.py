@@ -25,8 +25,12 @@ from agentic_review_board.domain.solutions import (
     GenerationNotes,
     SolutionAlternative,
     SolutionAlternatives,
+    SolutionDesign,
 )
-from agentic_review_board.participants.coordinator import Coordinator, CoordinatorOutputError
+from agentic_review_board.participants.coordinator import (
+    Coordinator,
+    CoordinatorOutputError,
+)
 
 
 class RecordingLLM:
@@ -75,6 +79,14 @@ def solution_alternative(
         id=alternative_id,
         name=name,
         description=description,
+        solution_design=SolutionDesign(
+            summary=f"Implement {name} as a bounded capability.",
+            building_blocks=("Runtime and owned state.",),
+            key_interactions=("Requests flow through the runtime to owned state.",),
+            operational_model=("Assign deployment and support ownership.",),
+            delivery_steps=("Pilot before staged rollout.",),
+            validation_checks=("Verify the end-to-end workflow in a pilot.",),
+        ),
         advantages=("Works offline.",),
         disadvantages=("Requires local maintenance.",),
         assumptions=("Local compute remains available.",),
@@ -189,7 +201,6 @@ def test_coordinator_cannot_promote_upstream_alternative_validation_status() -> 
         run_coordinator(response)
 
 
-
 def three_solution_alternatives() -> SolutionAlternatives:
     current = solution_alternatives()
     return SolutionAlternatives(
@@ -256,7 +267,9 @@ def run_coordinator(
     )
 
 
-def test_context_accepts_complete_three_alternative_ranking_in_any_tuple_order() -> None:
+def test_context_accepts_complete_three_alternative_ranking_in_any_tuple_order() -> (
+    None
+):
     response = recommended_response()
     ranking = response["ranked_alternatives"]
     assert isinstance(ranking, list)
@@ -457,7 +470,10 @@ def test_principal_risks_resolve_exact_current_ids_and_allow_empty_selection() -
     assert result.principal_risks[0].risk_id == "RISK-001"
 
     response["principal_risks"] = []
-    assert run_coordinator(response, risks=populated_risk_assessment()).principal_risks == ()
+    assert (
+        run_coordinator(response, risks=populated_risk_assessment()).principal_risks
+        == ()
+    )
 
 
 def test_context_rejects_duplicate_principal_risk_selection() -> None:
@@ -482,7 +498,6 @@ def test_context_rejects_unknown_principal_risk_id(risk_id: str) -> None:
         run_coordinator(response, risks=populated_risk_assessment())
 
 
-
 def unresolved_response(*references: Mapping[str, object]) -> dict[str, object]:
     response = recommended_response()
     response["unresolved_questions"] = [
@@ -502,7 +517,9 @@ def populated_problem_analysis() -> ProblemAnalysis:
         objective="Choose a suitable deployment approach.",
         facts=(),
         constraints=(),
-        assumptions=(AnalysisFinding(id="ASM-001", text="Local capacity is sufficient."),),
+        assumptions=(
+            AnalysisFinding(id="ASM-001", text="Local capacity is sufficient."),
+        ),
         missing_information=(
             AnalysisFinding(id="MISS-001", text="Peak load is unknown."),
         ),
@@ -800,7 +817,6 @@ def test_context_rejects_distinct_references_to_same_resolved_target() -> None:
         )
 
 
-
 def test_problem_reference_without_id_rejects_ambiguous_exact_text() -> None:
     analysis = populated_problem_analysis().model_copy(
         update={
@@ -904,7 +920,6 @@ def test_one_invalid_nested_reference_rejects_complete_coordinator_output() -> N
             analysis=populated_problem_analysis(),
             risks=populated_risk_assessment(),
         )
-
 
 
 def critical_review_with_criticisms() -> CriticalReview:

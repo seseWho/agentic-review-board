@@ -33,9 +33,7 @@ def visible_text(at: AppTest) -> str:
         at.success,
     )
     values = [
-        str(element.value)
-        for collection in collections
-        for element in collection
+        str(element.value) for collection in collections for element in collection
     ]
     values.extend(f"{element.label}: {element.value}" for element in at.metric)
     values.extend(str(element.label) for element in at.expander)
@@ -46,6 +44,9 @@ def all_rendered_text(at: AppTest) -> str:
     values = [visible_text(at)]
     values.extend(str(element.value) for element in at.code)
     values.extend(str(element.value) for element in at.json)
+    for element in at.dataframe:
+        values.extend(str(column) for column in element.value.columns)
+        values.append(element.value.to_csv(index=False))
     values.extend(str(element.label) for element in at.tabs)
     return "\n".join(values)
 
@@ -64,9 +65,7 @@ def submit_complete_form(at: AppTest) -> AppTest:
         "Use current local capacity.\n  second constraint  "
     )
     at.text_area(key="arb_context").set_value("First context\nSecond context")
-    at.text_area(key="arb_stated_facts").set_value(
-        "The workflow contains five agents."
-    )
+    at.text_area(key="arb_stated_facts").set_value("The workflow contains five agents.")
     return at.button(key="arb_start").click().run()
 
 
@@ -78,20 +77,32 @@ def test_initial_form_is_explicit_complete_and_inert() -> None:
     assert at.text_input(key="arb_title").label == "Title (optional)"
     assert at.text_area(key="arb_description").label == "Description (required)"
     assert at.text_area(key="arb_objective").label == "Objective (optional)"
-    assert at.text_area(key="arb_constraints").label == "Constraints (optional, one per line)"
+    assert (
+        at.text_area(key="arb_constraints").label
+        == "Constraints (optional, one per line)"
+    )
     assert at.text_area(key="arb_context").label == "Context (optional, one per line)"
-    assert at.text_area(key="arb_stated_facts").label == "Stated facts (optional, one per line)"
+    assert (
+        at.text_area(key="arb_stated_facts").label
+        == "Stated facts (optional, one per line)"
+    )
     assert at.button(key="arb_start").label == "Start Review"
-    assert at.file_uploader(key="arb_markdown_upload").allowed_type == [".md", ".markdown"]
+    assert at.file_uploader(key="arb_markdown_upload").allowed_type == [
+        ".md",
+        ".markdown",
+    ]
     assert len(at.sidebar.text_area) == 5
     assert executor(at).calls == ()
-    assert all(name in text for name in (
-        "Analyst",
-        "Solution Architect",
-        "Risk Reviewer",
-        "Critic",
-        "Coordinator",
-    ))
+    assert all(
+        name in text
+        for name in (
+            "Analyst",
+            "Solution Architect",
+            "Risk Reviewer",
+            "Critic",
+            "Coordinator",
+        )
+    )
     assert "Not started" in text
     assert len(at.columns) == 7
 
@@ -256,14 +267,15 @@ def test_process_is_driven_by_the_exact_sequential_observer_history() -> None:
         started = observed[1 + (index * 2)]
         finished = observed[2 + (index * 2)]
         assert started.stage(identity).status is StageStatus.RUNNING
-        assert sum(
-            stage.status is StageStatus.RUNNING for stage in started.stages
-        ) == 1
+        assert sum(stage.status is StageStatus.RUNNING for stage in started.stages) == 1
         assert finished.stage(identity).status is StageStatus.COMPLETED
         if index < len(CANONICAL_STAGE_ORDER) - 1:
             next_started = observed[3 + (index * 2)]
             assert next_started.stage(identity).status is StageStatus.COMPLETED
-            assert next_started.stage(CANONICAL_STAGE_ORDER[index + 1]).status is StageStatus.RUNNING
+            assert (
+                next_started.stage(CANONICAL_STAGE_ORDER[index + 1]).status
+                is StageStatus.RUNNING
+            )
 
     text = visible_text(at)
     assert "Canonical execution:" in text
@@ -354,8 +366,7 @@ def test_each_collapsible_agent_card_shows_declared_and_actual_trusted_inputs() 
     for identity, (name, artifact_labels) in expectations.items():
         step = CANONICAL_STAGE_ORDER.index(identity) + 1
         assert any(
-            f"Step {step} · {name}" in str(expander.label)
-            for expander in at.expander
+            f"Step {step} · {name}" in str(expander.label) for expander in at.expander
         )
         assert all(label in text for label in artifact_labels)
     assert "Inputs" in {str(tab.label) for tab in at.tabs}
@@ -378,6 +389,9 @@ def test_final_result_is_distinct_advisory_and_complete() -> None:
     assert "RECOMMENDED" in text
     assert text.index("ALT-001") < text.index("ALT-002")
     assert "Preferred alternative" in text
+    assert "ALT-001 \u00b7 Local deployment" in text
+    assert "Proposed solution design" in text
+    assert "Use a local-first runtime with explicitly owned state." in text
     assert "Principal risks" in text
     assert "Unresolved questions" in text
     assert "Criticism dispositions" in text
@@ -434,7 +448,7 @@ def test_output_validation_failure_preserves_upstream_and_blocks_coordinator() -
     assert state.review.stage(StageIdentity.CRITIC).status is StageStatus.FAILED
     assert state.review.stage(StageIdentity.COORDINATOR).status is StageStatus.PENDING
     assert "OUTPUT_VALIDATION" in text
-    assert "Critic output validation failed" in text
+    assert "Critic output validation failed (CONTEXT)" in text
     assert "Not executed because the mandatory upstream Critic stage failed." in text
     assert "ProblemAnalysis" in text
     assert "RiskAssessment" in text
@@ -453,7 +467,9 @@ def test_execution_failure_is_safe_and_distinct() -> None:
     assert "Final result" not in text
 
 
-def test_startup_and_application_faults_are_sanitized_without_fabricated_stage_failure() -> None:
+def test_startup_and_application_faults_are_sanitized_without_fabricated_stage_failure() -> (
+    None
+):
     startup = _submit_scenario(ScenarioKind.STARTUP_FAILURE)
     startup_text = all_rendered_text(startup)
     startup_state = startup.session_state["arb_review_ui_state"]
@@ -468,7 +484,9 @@ def test_startup_and_application_faults_are_sanitized_without_fabricated_stage_f
     application_state = application.session_state["arb_review_ui_state"]
     assert application_state.review is not None
     assert application_state.review.status is ReviewStatus.RUNNING
-    assert all(stage.status is StageStatus.PENDING for stage in application_state.review.stages)
+    assert all(
+        stage.status is StageStatus.PENDING for stage in application_state.review.stages
+    )
     assert "could not complete this run safely" in application_text
     assert "application-secret-marker" not in application_text
     assert "Failed â€” no trusted output" not in application_text

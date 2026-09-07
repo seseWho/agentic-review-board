@@ -72,7 +72,9 @@ _ANALYST_PAYLOAD_KEYS = frozenset(
 
 _SOLUTION_ARCHITECT_PAYLOAD_KEYS = frozenset({"review_input", "problem_analysis"})
 
-_RISK_PAYLOAD_KEYS = frozenset({"review_input", "problem_analysis", "solution_alternatives"})
+_RISK_PAYLOAD_KEYS = frozenset(
+    {"review_input", "problem_analysis", "solution_alternatives"}
+)
 
 _RISK_BASIS_TYPES = (
     ReviewInputBasisReference,
@@ -81,7 +83,9 @@ _RISK_BASIS_TYPES = (
 )
 
 RiskBasisModel = (
-    ReviewInputBasisReference | ProblemAnalysisBasisReference | SolutionAlternativeBasisReference
+    ReviewInputBasisReference
+    | ProblemAnalysisBasisReference
+    | SolutionAlternativeBasisReference
 )
 
 
@@ -93,7 +97,10 @@ def _detach_exact_payload(
     if not isinstance(payload, Mapping):
         raise TypeError("dynamic payload must be a mapping")
     owned_top_level = dict(payload)
-    if len(owned_top_level) != len(expected_keys) or frozenset(owned_top_level) != expected_keys:
+    if (
+        len(owned_top_level) != len(expected_keys)
+        or frozenset(owned_top_level) != expected_keys
+    ):
         raise ValueError("dynamic payload keys are invalid")
     serialized_payload = json.dumps(
         owned_top_level,
@@ -153,7 +160,9 @@ def build_solution_architect_payload_snapshot(
         return SolutionArchitectPayloadSnapshot(
             serialized_payload=serialized_payload,
             review_input=ReviewInput.model_validate(detached["review_input"]),
-            problem_analysis=ProblemAnalysis.model_validate(detached["problem_analysis"]),
+            problem_analysis=ProblemAnalysis.model_validate(
+                detached["problem_analysis"]
+            ),
         )
     except LLMRequestSchemaError:
         raise
@@ -178,7 +187,8 @@ class AllowedRiskBasis:
         if type(self.reference) not in _RISK_BASIS_TYPES:
             raise TypeError("reference must be an approved risk basis model")
         if not self.target_key or any(
-            not isinstance(component, str) or not component for component in self.target_key
+            not isinstance(component, str) or not component
+            for component in self.target_key
         ):
             raise ValueError("target_key must contain non-empty strings")
 
@@ -207,7 +217,9 @@ def build_risk_reviewer_payload_snapshot(
         return RiskReviewerPayloadSnapshot(
             serialized_payload=serialized_payload,
             review_input=ReviewInput.model_validate(detached["review_input"]),
-            problem_analysis=ProblemAnalysis.model_validate(detached["problem_analysis"]),
+            problem_analysis=ProblemAnalysis.model_validate(
+                detached["problem_analysis"]
+            ),
             solution_alternatives=SolutionAlternatives.model_validate(
                 detached["solution_alternatives"]
             ),
@@ -258,9 +270,11 @@ def _append_problem_findings(
 ) -> None:
     for index, finding in enumerate(findings):
         matches = sum(
-            (candidate.id == finding.id and candidate.text == finding.text)
-            if finding.id
-            else candidate.text == finding.text
+            (
+                (candidate.id == finding.id and candidate.text == finding.text)
+                if finding.id
+                else candidate.text == finding.text
+            )
             for candidate in findings
         )
         if matches != 1:
@@ -405,7 +419,8 @@ def build_allowed_risk_bases(
 
         for alternative in alternatives:
             constraint_keys = tuple(
-                constraint.model_dump_json() for constraint in alternative.relevant_constraints
+                constraint.model_dump_json()
+                for constraint in alternative.relevant_constraints
             )
             for index, constraint in enumerate(alternative.relevant_constraints):
                 if constraint_keys.count(constraint_keys[index]) != 1:
@@ -452,7 +467,8 @@ def build_allowed_risk_scopes(
 ) -> tuple[RiskScope, ...]:
     try:
         alternative_ids = tuple(
-            alternative.id for alternative in snapshot.solution_alternatives.alternatives
+            alternative.id
+            for alternative in snapshot.solution_alternatives.alternatives
         )
         scopes = [RiskScope(kind=RiskScopeKind.OVERALL)]
         for length in range(1, len(alternative_ids) + 1):
@@ -616,7 +632,9 @@ def build_coordinator_payload_snapshot(
         return CoordinatorPayloadSnapshot(
             serialized_payload=serialized_payload,
             review_input=ReviewInput.model_validate(detached["review_input"]),
-            problem_analysis=ProblemAnalysis.model_validate(detached["problem_analysis"]),
+            problem_analysis=ProblemAnalysis.model_validate(
+                detached["problem_analysis"]
+            ),
             solution_alternatives=SolutionAlternatives.model_validate(
                 detached["solution_alternatives"]
             ),
@@ -640,8 +658,14 @@ def _problem_unresolved_references(
     snapshot: CoordinatorPayloadSnapshot,
 ) -> Iterable[AllowedCoordinatorReference]:
     for kind, findings in (
-        (ProblemUnresolvedKind.PROBLEM_ASSUMPTION, snapshot.problem_analysis.assumptions),
-        (ProblemUnresolvedKind.MISSING_INFORMATION, snapshot.problem_analysis.missing_information),
+        (
+            ProblemUnresolvedKind.PROBLEM_ASSUMPTION,
+            snapshot.problem_analysis.assumptions,
+        ),
+        (
+            ProblemUnresolvedKind.MISSING_INFORMATION,
+            snapshot.problem_analysis.missing_information,
+        ),
         (ProblemUnresolvedKind.UNCERTAINTY, snapshot.problem_analysis.uncertainties),
     ):
         for index, finding in enumerate(findings):
@@ -788,7 +812,9 @@ def build_critic_payload_snapshot(
         return CriticPayloadSnapshot(
             serialized_payload=serialized_payload,
             review_input=ReviewInput.model_validate(detached["review_input"]),
-            problem_analysis=ProblemAnalysis.model_validate(detached["problem_analysis"]),
+            problem_analysis=ProblemAnalysis.model_validate(
+                detached["problem_analysis"]
+            ),
             solution_alternatives=SolutionAlternatives.model_validate(
                 detached["solution_alternatives"]
             ),
@@ -884,7 +910,9 @@ def _finding_references(
             )
 
 
-def _review_input_references(snapshot: CriticPayloadSnapshot) -> Iterable[AllowedCriticReference]:
+def _review_input_references(
+    snapshot: CriticPayloadSnapshot,
+) -> Iterable[AllowedCriticReference]:
     source = CriticReferenceSource.REVIEW_INPUT
     review_input = snapshot.review_input
     for kind, value in (
@@ -936,7 +964,11 @@ def _solution_alternative_references(
             CriticReferenceKind.ALTERNATIVE,
             value=alternative.name,
             item_id=alternative.id,
-            target_key=(source.value, CriticReferenceKind.ALTERNATIVE.value, alternative.id),
+            target_key=(
+                source.value,
+                CriticReferenceKind.ALTERNATIVE.value,
+                alternative.id,
+            ),
         )
     for kind, attribute in (
         (CriticReferenceKind.ALTERNATIVE_NAME, "name"),
@@ -1203,13 +1235,17 @@ def _criticism_schema_branch(
     target_reference: Mapping[str, object],
     basis_item: Mapping[str, object] | None,
     target_may_be_null: bool,
+    null_target_type: CriticismTargetType | None = None,
 ) -> dict[str, object]:
     branch = deepcopy(dict(base_criticism))
     properties = branch.get("properties")
     if not isinstance(properties, dict):
         raise TypeError("Criticism properties are absent")
     basis_references = properties.get("basis_references")
-    if not isinstance(basis_references, dict) or basis_references.get("type") != "array":
+    if (
+        not isinstance(basis_references, dict)
+        or basis_references.get("type") != "array"
+    ):
         raise TypeError("Criticism basis references schema is invalid")
 
     properties["target_reference"] = deepcopy(dict(target_reference))
@@ -1218,12 +1254,22 @@ def _criticism_schema_branch(
     else:
         basis_references["items"] = deepcopy(dict(basis_item))
         if target_may_be_null:
-            basis_references["minItems"] = 1
+            if null_target_type is None:
+                raise TypeError("null-target criticism type is absent")
+            basis_references["minItems"] = (
+                2
+                if null_target_type is CriticismTargetType.CROSS_ARTIFACT_CONCLUSION
+                else 1
+            )
     if target_may_be_null:
+        assert null_target_type is not None
+        properties["target_type"] = {"const": null_target_type.value}
+    else:
         properties["target_type"] = {
             "enum": [
-                CriticismTargetType.CROSS_ARTIFACT_CONCLUSION.value,
-                CriticismTargetType.OMISSION.value,
+                target_type.value
+                for target_type in CriticismTargetType
+                if target_type is not CriticismTargetType.CROSS_ARTIFACT_CONCLUSION
             ]
         }
     return branch
@@ -1238,7 +1284,7 @@ def strict_json_schema_document(schema: Mapping[str, object]) -> dict[str, objec
             if isinstance(properties, dict):
                 node["required"] = list(properties)
             if node.get("type") == "array":
-                node["maxItems"] = 10
+                node.setdefault("maxItems", 10)
             for value in node.values():
                 require_properties(value)
         elif isinstance(node, list):
@@ -1266,7 +1312,8 @@ def _closed_exact_object_branch(
         ):
             raise ValueError("structured constraint wire value is invalid")
         nested_properties = {
-            nested_key: {"const": nested_value} for nested_key, nested_value in value.items()
+            nested_key: {"const": nested_value}
+            for nested_key, nested_value in value.items()
         }
         properties[key] = {
             "type": "object",
@@ -1506,7 +1553,10 @@ def build_coordinator_reference_schema_branch(
     reference: AllowedCoordinatorReference,
 ) -> dict[str, object]:
     try:
-        if not isinstance(reference, AllowedCoordinatorReference) or not reference.target_key:
+        if (
+            not isinstance(reference, AllowedCoordinatorReference)
+            or not reference.target_key
+        ):
             raise TypeError("allowed Coordinator reference is invalid")
         return _closed_exact_object_branch(reference.as_wire_object())
     except LLMRequestSchemaError:
@@ -1572,7 +1622,9 @@ def build_risk_scope_schema_branch(scope: RiskScope) -> dict[str, object]:
         alternative_ids = wire_object["alternative_ids"]
         if not isinstance(kind, str) or not isinstance(alternative_ids, list):
             raise TypeError("risk scope wire values are invalid")
-        if any(not isinstance(alternative_id, str) for alternative_id in alternative_ids):
+        if any(
+            not isinstance(alternative_id, str) for alternative_id in alternative_ids
+        ):
             raise TypeError("risk scope alternative id is invalid")
         return {
             "type": "object",
@@ -1605,7 +1657,8 @@ def narrow_risk_schema(
         singleton_ids = tuple(
             scope.alternative_ids[0]
             for scope in owned_scopes
-            if scope.kind is RiskScopeKind.ALTERNATIVES and len(scope.alternative_ids) == 1
+            if scope.kind is RiskScopeKind.ALTERNATIVES
+            and len(scope.alternative_ids) == 1
         )
         expected_scopes = [overall_scope]
         for length in range(1, len(singleton_ids) + 1):
@@ -1651,7 +1704,9 @@ def narrow_risk_schema(
 
         if owned_bases:
             basis_schema["items"] = {
-                "oneOf": [build_risk_basis_schema_branch(basis) for basis in owned_bases]
+                "oneOf": [
+                    build_risk_basis_schema_branch(basis) for basis in owned_bases
+                ]
             }
             basis_schema["minItems"] = 1
         else:
@@ -1834,7 +1889,6 @@ def narrow_critic_schema(
         criticism_definition = definitions.get("Criticism")
         if not isinstance(criticism_definition, dict):
             raise TypeError("Criticism definition is invalid")
-
         reference_tree = _build_critic_reference_schema_tree(
             definitions,
             owned_references,
@@ -1861,14 +1915,19 @@ def narrow_critic_schema(
                     target_may_be_null=False,
                 )
             )
-        criticism_branches.append(
-            _criticism_schema_branch(
-                criticism_definition,
-                target_reference={"type": "null"},
-                basis_item=_definition_reference("CriticReference"),
-                target_may_be_null=True,
+        for target_type in (
+            CriticismTargetType.OMISSION,
+            CriticismTargetType.CROSS_ARTIFACT_CONCLUSION,
+        ):
+            criticism_branches.append(
+                _criticism_schema_branch(
+                    criticism_definition,
+                    target_reference={"type": "null"},
+                    basis_item=_definition_reference("CriticReference"),
+                    target_may_be_null=True,
+                    null_target_type=target_type,
+                )
             )
-        )
         definitions["Criticism"] = {"oneOf": criticism_branches}
         return strict_json_schema_document(result)
     except LLMRequestSchemaError:
@@ -2024,7 +2083,9 @@ def build_request_output_schema(
         )
         if context is not None:
             return context.output_schema
-        document = strict_json_schema_document(definition.output_model.model_json_schema())
+        document = strict_json_schema_document(
+            definition.output_model.model_json_schema()
+        )
         return _serialize_request_schema(document)
     except LLMRequestSchemaError:
         raise

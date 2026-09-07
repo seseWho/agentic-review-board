@@ -1,3 +1,4 @@
+import re
 from collections.abc import Mapping
 
 from pydantic import ValidationError
@@ -39,6 +40,7 @@ class SolutionArchitect:
         )
 
         alternatives = self._validate_structure(raw)
+        self._validate_distinct_proposals(alternatives)
         self._validate_proposal_status(alternatives)
         self._validate_constraint_references(alternatives, review_input, problem_analysis)
         self._validate_generation_notes(alternatives, problem_analysis)
@@ -60,6 +62,24 @@ class SolutionArchitect:
             return SolutionAlternatives.model_validate(raw)
         except ValidationError as exc:
             raise SolutionArchitectOutputError("invalid Solution Architect output") from exc
+
+    @staticmethod
+    def _validate_distinct_proposals(alternatives: SolutionAlternatives) -> None:
+        """Reject a common small-model failure: repeating one proposal three times."""
+        if len(alternatives.alternatives) < 2:
+            return
+
+        def normalized(value: str) -> str:
+            return re.sub(r"\s+", " ", value).strip().casefold()
+
+        names = [normalized(item.name) for item in alternatives.alternatives]
+        summaries = [
+            normalized(item.solution_design.summary) for item in alternatives.alternatives
+        ]
+        if len(set(names)) != len(names) or len(set(summaries)) != len(summaries):
+            raise SolutionArchitectOutputError(
+                "Solution Architect alternatives must be materially distinct"
+            )
 
     @staticmethod
     def _validate_constraint_references(

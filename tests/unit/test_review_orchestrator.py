@@ -84,6 +84,14 @@ def two_alternative_response() -> dict[str, object]:
                 "id": "ALT-001",
                 "name": "Local deployment",
                 "description": "Run the capability in the existing local environment.",
+                "solution_design": {
+                    "summary": "Deploy a bounded local runtime.",
+                    "building_blocks": ["Local runtime and owned state."],
+                    "key_interactions": ["Requests remain within the local boundary."],
+                    "operational_model": ["Local teams deploy and support the runtime."],
+                    "delivery_steps": ["Pilot before a staged local rollout."],
+                    "validation_checks": ["Verify offline operation in the pilot."],
+                },
                 "advantages": ["Keeps operation local."],
                 "disadvantages": ["Requires local lifecycle management."],
                 "assumptions": ["Suitable local compute is available."],
@@ -94,6 +102,14 @@ def two_alternative_response() -> dict[str, object]:
                 "id": "ALT-002",
                 "name": "Managed deployment",
                 "description": "Run the capability in a managed environment.",
+                "solution_design": {
+                    "summary": "Consume a managed runtime through a controlled boundary.",
+                    "building_blocks": ["Managed runtime and local integration adapter."],
+                    "key_interactions": ["Local requests cross the managed boundary."],
+                    "operational_model": ["Provider and local teams share support ownership."],
+                    "delivery_steps": ["Integrate and pilot the managed runtime."],
+                    "validation_checks": ["Verify availability and boundary controls."],
+                },
                 "advantages": ["Reduces local operational work."],
                 "disadvantages": ["Introduces an external operational dependency."],
                 "assumptions": ["A managed environment is available."],
@@ -1022,7 +1038,7 @@ def test_critic_output_validation_failure_is_mapped_fail_closed() -> None:
     assert critic.output is None
     assert critic.error is not None
     assert critic.error.kind is ReviewErrorKind.OUTPUT_VALIDATION
-    assert critic.error.message == "Critic output validation failed"
+    assert critic.error.message == "Critic output validation failed (CONTEXT)"
     assert [role for role, _ in llm.calls] == [
         "analyst",
         "solution_architect",

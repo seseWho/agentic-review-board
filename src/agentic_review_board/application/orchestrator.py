@@ -166,11 +166,11 @@ class ReviewOrchestrator:
                 architect_stage.output,
                 reviewer_stage.output,
             )
-        except CriticOutputError:
+        except CriticOutputError as error:
             review = review.fail_critic(
                 ReviewError(
                     kind=ReviewErrorKind.OUTPUT_VALIDATION,
-                    message="Critic output validation failed",
+                    message=f"Critic output validation failed ({error.phase})",
                 )
             )
             self._notify(observer, review)

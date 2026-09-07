@@ -28,6 +28,17 @@ def as_array(value: object) -> list[Any]:
     return value
 
 
+def solution_design(summary: str) -> dict[str, object]:
+    return {
+        "summary": summary,
+        "building_blocks": ["Client runtime and owned state."],
+        "key_interactions": ["Requests flow through the runtime to owned state."],
+        "operational_model": ["Assign deployment and support ownership."],
+        "delivery_steps": ["Pilot before staged rollout."],
+        "validation_checks": ["Verify the end-to-end workflow."],
+    }
+
+
 def coordinator_payload() -> dict[str, object]:
     review_input = ReviewInput(description="Review a local migration.")
     problem_analysis = ProblemAnalysis.model_validate(
@@ -49,6 +60,9 @@ def coordinator_payload() -> dict[str, object]:
                     "id": "ALT-001",
                     "name": "Incremental",
                     "description": "Migrate incrementally.",
+                    "solution_design": solution_design(
+                        "Use an incremental target design."
+                    ),
                     "advantages": ["Lower delivery risk."],
                     "disadvantages": ["Retains coupling."],
                     "assumptions": ["Required libraries remain supported."],
@@ -59,6 +73,9 @@ def coordinator_payload() -> dict[str, object]:
                     "id": "ALT-002",
                     "name": "Rewrite",
                     "description": "Rewrite the client.",
+                    "solution_design": solution_design(
+                        "Use a replacement target design."
+                    ),
                     "advantages": ["Modern architecture."],
                     "disadvantages": ["Higher delivery risk."],
                     "assumptions": ["The team can absorb the rewrite."],
@@ -148,7 +165,9 @@ def test_coordinator_reference_catalog_contains_only_exact_resolvable_values() -
         "item_id": "ISSUE-001",
         "value": "Offline integrity remains unverified.",
     } in wire_values
-    assert all("Offline integrity is uncertain." not in value.values() for value in wire_values)
+    assert all(
+        "Offline integrity is uncertain." not in value.values() for value in wire_values
+    )
 
 
 def test_dynamic_coordinator_schema_excludes_non_criticism_dispositions() -> None:
@@ -169,7 +188,9 @@ def test_dynamic_coordinator_schema_excludes_non_criticism_dispositions() -> Non
     assert "uniqueItems" not in str(schema)
 
 
-def test_dynamic_coordinator_schema_correlates_alternative_and_validation_status() -> None:
+def test_dynamic_coordinator_schema_correlates_alternative_and_validation_status() -> (
+    None
+):
     schema = build_dynamic_coordinator_schema(
         build_coordinator_payload_snapshot(coordinator_payload())
     )
@@ -185,7 +206,9 @@ def test_dynamic_coordinator_schema_correlates_alternative_and_validation_status
     }
 
     assert pairs == {("ALT-001", "PROPOSED"), ("ALT-002", "PROPOSED")}
-    assert all("validation_status" in as_object(branch)["required"] for branch in branches)
+    assert all(
+        "validation_status" in as_object(branch)["required"] for branch in branches
+    )
 
 
 def test_coordinator_request_context_uses_dynamic_schema_and_detached_payload() -> None:
@@ -198,6 +221,7 @@ def test_coordinator_request_context_uses_dynamic_schema_and_detached_payload() 
     assert context.output_schema.new_document() == build_dynamic_coordinator_schema(
         build_coordinator_payload_snapshot(payload)
     )
-    assert context.serialized_payload == build_coordinator_payload_snapshot(
-        payload
-    ).serialized_payload
+    assert (
+        context.serialized_payload
+        == build_coordinator_payload_snapshot(payload).serialized_payload
+    )

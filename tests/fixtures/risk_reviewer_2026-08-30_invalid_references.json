@@ -8,11 +8,27 @@
   "solution_alternatives": {
     "alternatives": [{
       "id": "ALT-001", "name": "Incremental", "description": "Migrate incrementally.",
+      "solution_design": {
+        "summary": "Use an incremental target architecture.",
+        "building_blocks": ["Client runtime and owned persistence."],
+        "key_interactions": ["Client requests flow to persisted state."],
+        "operational_model": ["Assign deployment and support ownership."],
+        "delivery_steps": ["Pilot before staged rollout."],
+        "validation_checks": ["Verify the end-to-end workflow."]
+      },
       "advantages": ["Lower risk."], "disadvantages": [], "assumptions": [],
       "implementation_complexity": "LOW",
       "relevant_constraints": [{"source": "PROBLEM_ANALYSIS", "kind": "ID", "value": "CON-001"}]
     }, {
       "id": "ALT-002", "name": "Rewrite", "description": "Rewrite the client.",
+      "solution_design": {
+        "summary": "Use a replacement target architecture.",
+        "building_blocks": ["Client runtime and owned persistence."],
+        "key_interactions": ["Client requests flow to persisted state."],
+        "operational_model": ["Assign deployment and support ownership."],
+        "delivery_steps": ["Pilot before staged rollout."],
+        "validation_checks": ["Verify the end-to-end workflow."]
+      },
       "advantages": ["Modern stack."], "disadvantages": [], "assumptions": [],
       "implementation_complexity": "HIGH", "relevant_constraints": []
     }],

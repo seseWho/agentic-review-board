@@ -29,6 +29,7 @@ from agentic_review_board.domain.solutions import (
     AlternativeValidationStatus,
     SolutionAlternative,
     SolutionAlternatives,
+    SolutionDesign,
 )
 from agentic_review_board.ui.presentation import (
     REVIEW_STATUS_LABELS,
@@ -36,6 +37,7 @@ from agentic_review_board.ui.presentation import (
     STAGE_STATUS_LABELS,
     final_result,
     output_sections,
+    preferred_solution,
     stage_presentations,
     trusted_output,
 )
@@ -53,6 +55,14 @@ def problem_analysis() -> ProblemAnalysis:
 
 
 def solution_alternatives() -> SolutionAlternatives:
+    design = SolutionDesign(
+        summary="Implement a bounded deployment architecture.",
+        building_blocks=("Runtime and owned state.",),
+        key_interactions=("Requests flow through the runtime to owned state.",),
+        operational_model=("Assign deployment and support ownership.",),
+        delivery_steps=("Pilot before staged rollout.",),
+        validation_checks=("Verify the end-to-end workflow.",),
+    )
     return SolutionAlternatives(
         alternatives=(
             SolutionAlternative(
@@ -60,6 +70,7 @@ def solution_alternatives() -> SolutionAlternatives:
                 validation_status=AlternativeValidationStatus.PROPOSED,
                 name="Local",
                 description="Run locally.",
+                solution_design=design,
                 advantages=("Local control.",),
                 disadvantages=("Local operations.",),
                 assumptions=("Capacity exists.",),
@@ -71,6 +82,7 @@ def solution_alternatives() -> SolutionAlternatives:
                 validation_status=AlternativeValidationStatus.EVIDENCED,
                 name="Managed",
                 description="Run in a managed service.",
+                solution_design=design,
                 advantages=("Managed operations.",),
                 disadvantages=("External dependency.",),
                 assumptions=("Service is available.",),
@@ -155,11 +167,22 @@ def test_descriptors_and_status_labels_are_exhaustive_and_readable() -> None:
     assert tuple(STAGE_DESCRIPTORS) == CANONICAL_STAGE_ORDER
     assert set(STAGE_STATUS_LABELS) == set(StageStatus)
     assert set(REVIEW_STATUS_LABELS) == set(ReviewStatus)
-    assert len({descriptor.display_name for descriptor in STAGE_DESCRIPTORS.values()}) == 5
-    assert all(descriptor.responsibility.strip() for descriptor in STAGE_DESCRIPTORS.values())
-    assert all(descriptor.input_artifact_labels for descriptor in STAGE_DESCRIPTORS.values())
-    assert all(descriptor.output_artifact_label for descriptor in STAGE_DESCRIPTORS.values())
-    assert all(status.value.lower() in label.lower() for status, label in STAGE_STATUS_LABELS.items())
+    assert (
+        len({descriptor.display_name for descriptor in STAGE_DESCRIPTORS.values()}) == 5
+    )
+    assert all(
+        descriptor.responsibility.strip() for descriptor in STAGE_DESCRIPTORS.values()
+    )
+    assert all(
+        descriptor.input_artifact_labels for descriptor in STAGE_DESCRIPTORS.values()
+    )
+    assert all(
+        descriptor.output_artifact_label for descriptor in STAGE_DESCRIPTORS.values()
+    )
+    assert all(
+        status.value.lower() in label.lower()
+        for status, label in STAGE_STATUS_LABELS.items()
+    )
 
 
 def test_stage_presentations_reference_exact_executions_and_descriptors() -> None:
@@ -167,7 +190,10 @@ def test_stage_presentations_reference_exact_executions_and_descriptors() -> Non
 
     presentations = stage_presentations(review)
 
-    assert tuple(item.execution.identity for item in presentations) == CANONICAL_STAGE_ORDER
+    assert (
+        tuple(item.execution.identity for item in presentations)
+        == CANONICAL_STAGE_ORDER
+    )
     for item in presentations:
         assert item.execution is review.stage(item.execution.identity)
         assert item.descriptor is STAGE_DESCRIPTORS[item.execution.identity]
@@ -192,7 +218,9 @@ def test_blocked_stage_is_derived_only_downstream_of_trusted_failure() -> None:
         and item.blocked_by is StageIdentity.ANALYST
         for item in presentations[1:]
     )
-    assert all(stage.status is not StageStatus.FAILED for stage in incomplete.stages[1:])
+    assert all(
+        stage.status is not StageStatus.FAILED for stage in incomplete.stages[1:]
+    )
 
 
 def test_trusted_output_is_available_only_for_completed_stage() -> None:
@@ -249,7 +277,9 @@ def test_role_sections_preserve_empty_values_and_evidence_states() -> None:
     for identity, labels in expected_labels.items():
         sections = output_sections(review.stage(identity))
         assert tuple(section.label for section in sections) == labels
-        assert all(section.value is not None or section.empty_message for section in sections)
+        assert all(
+            section.value is not None or section.empty_message for section in sections
+        )
 
     architect_sections = output_sections(review.stage(StageIdentity.SOLUTION_ARCHITECT))
     alternatives = architect_sections[0].value
@@ -262,15 +292,22 @@ def test_role_sections_preserve_empty_values_and_evidence_states() -> None:
     contradictions = critic_sections[3].value
     assert isinstance(contradictions, tuple)
     assert contradictions[0].support_status is ContradictionSupportStatus.UNVERIFIED
-    assert output_sections(
-        Review.create(ReviewInput(description="Pending.")).stage(StageIdentity.ANALYST)
-    ) == ()
+    assert (
+        output_sections(
+            Review.create(ReviewInput(description="Pending.")).stage(
+                StageIdentity.ANALYST
+            )
+        )
+        == ()
+    )
 
 
 def test_final_result_is_exact_and_only_available_after_completion() -> None:
     completed = completed_review()
     final = completed.stage(StageIdentity.COORDINATOR).output
-    incomplete = Review.create(ReviewInput(description="Incomplete.")).start().start_analyst()
+    incomplete = (
+        Review.create(ReviewInput(description="Incomplete.")).start().start_analyst()
+    )
     incomplete = incomplete.fail_analyst(
         ReviewError(kind=ReviewErrorKind.EXECUTION, message="Analyst execution failed")
     )
@@ -284,3 +321,15 @@ def test_final_result_is_exact_and_only_available_after_completion() -> None:
     assert isinstance(final.confidence, QualitativeLevel)
     assert not isinstance(final.confidence.value, (int, float))
     assert "human decision-making" in final.decision_support_notice
+
+
+def test_preferred_solution_resolves_coordinator_id_to_exact_architect_output() -> None:
+    review = completed_review()
+    architect_output = review.stage(StageIdentity.SOLUTION_ARCHITECT).output
+    assert isinstance(architect_output, SolutionAlternatives)
+
+    selected = preferred_solution(review)
+
+    assert selected is architect_output.alternatives[1]
+    assert selected.id == "ALT-002"
+    assert selected.name == "Managed"

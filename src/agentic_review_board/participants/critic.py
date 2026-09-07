@@ -1,4 +1,5 @@
 from collections.abc import Callable, Mapping
+from copy import deepcopy
 from dataclasses import dataclass
 
 from pydantic import ValidationError
@@ -29,6 +30,10 @@ from agentic_review_board.domain.solutions import (
 
 class CriticOutputError(ValueError):
     """Raised when generated Critic output violates its trusted contract."""
+
+    def __init__(self, message: str, *, phase: str = "CONTEXT") -> None:
+        super().__init__(message)
+        self.phase = phase
 
 
 @dataclass(frozen=True)
@@ -73,9 +78,82 @@ class Critic:
     @staticmethod
     def _validate_structure(raw: Mapping[str, object]) -> CriticalReview:
         try:
-            return CriticalReview.model_validate(raw)
+            return CriticalReview.model_validate(Critic._normalize_redundancies(raw))
         except ValidationError as exc:
-            raise CriticOutputError("invalid Critic output") from exc
+            raise CriticOutputError(
+                "invalid Critic output",
+                phase="STRUCTURE",
+            ) from exc
+
+    @staticmethod
+    def _normalize_redundancies(raw: Mapping[str, object]) -> dict[str, object]:
+        """Remove exact, non-informative repetitions from optional findings.
+
+        Small local models occasionally repeat an evidence reference or emit a
+        tautological contradiction. This keeps the evidence unchanged while
+        preventing a harmless duplicate from invalidating the whole review.
+        Unknown or malformed references are deliberately left untouched so the
+        contextual trust checks remain fail-closed.
+        """
+        result = deepcopy(dict(raw))
+
+        def collection(name: str) -> list[object] | None:
+            value = result.get(name)
+            return value if isinstance(value, list) else None
+
+        def dedupe_by(name: str, key_fn: Callable[[dict[str, object]], object]) -> None:
+            values = collection(name)
+            if values is None:
+                return
+            seen: set[object] = set()
+            kept: list[object] = []
+            for value in values:
+                if not isinstance(value, dict):
+                    kept.append(value)
+                    continue
+                key = key_fn(value)
+                if key in seen:
+                    continue
+                seen.add(key)
+                kept.append(value)
+            result[name] = kept
+
+        for name in (
+            "criticisms",
+            "validated_points",
+            "missing_alternatives",
+            "contradictions",
+            "unresolved_issues",
+        ):
+            dedupe_by(name, lambda item: item.get("id"))
+        dedupe_by("validated_points", lambda item: str(item.get("target_reference")))
+        dedupe_by("missing_alternatives", lambda item: item.get("category"))
+
+        contradictions = collection("contradictions")
+        if contradictions is not None:
+            result["contradictions"] = [
+                item
+                for item in contradictions
+                if not isinstance(item, dict)
+                or item.get("side_a") != item.get("side_b")
+            ]
+
+        for name in ("criticisms", "missing_alternatives", "unresolved_issues"):
+            values = collection(name)
+            if values is None:
+                continue
+            for value in values:
+                if not isinstance(value, dict):
+                    continue
+                basis = value.get("basis_references")
+                if isinstance(basis, list):
+                    unique: list[object] = []
+                    for reference in basis:
+                        if reference not in unique:
+                            unique.append(reference)
+                    value["basis_references"] = unique
+
+        return result
 
     @classmethod
     def _validate_context(

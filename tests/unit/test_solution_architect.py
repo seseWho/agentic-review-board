@@ -45,9 +45,13 @@ class FailingLLM:
 
 
 def review_input(*, duplicate_constraint: bool = False) -> ReviewInput:
-    constraints = ("Must run offline", "Must run offline") if duplicate_constraint else (
-        "Must run offline",
-        "Keep deployment simple",
+    constraints = (
+        ("Must run offline", "Must run offline")
+        if duplicate_constraint
+        else (
+            "Must run offline",
+            "Keep deployment simple",
+        )
     )
     return ReviewInput(
         title="Deployment review",
@@ -81,11 +85,15 @@ def problem_analysis(
         constraints = (AnalysisFinding(id="CON-002", text="Keep deployment simple"),)
 
     missing_information = (
-        AnalysisFinding(
-            id="MISS-001",
-            text="Available deployment infrastructure is unknown.",
-        ),
-    ) if include_blockers else ()
+        (
+            AnalysisFinding(
+                id="MISS-001",
+                text="Available deployment infrastructure is unknown.",
+            ),
+        )
+        if include_blockers
+        else ()
+    )
 
     uncertainties: tuple[AnalysisFinding, ...]
     if duplicate_uncertainty_text:
@@ -102,7 +110,9 @@ def problem_analysis(
         objective="Identify viable deployment approaches.",
         facts=(),
         constraints=constraints,
-        assumptions=(AnalysisFinding(id="ASM-001", text="Local compute can host the workload."),),
+        assumptions=(
+            AnalysisFinding(id="ASM-001", text="Local compute can host the workload."),
+        ),
         missing_information=missing_information,
         uncertainties=uncertainties,
     )
@@ -118,6 +128,16 @@ def alternative(
         "id": alternative_id,
         "name": name,
         "description": f"Use the {name.lower()} approach.",
+        "solution_design": {
+            "summary": f"Implement {name.lower()} as a bounded operational capability.",
+            "building_blocks": ["Runtime and its owned configuration."],
+            "key_interactions": [
+                "User request flows through the runtime to local state."
+            ],
+            "operational_model": ["Assign explicit deployment and support ownership."],
+            "delivery_steps": ["Build and pilot the bounded capability."],
+            "validation_checks": ["Run an end-to-end operational pilot."],
+        },
         "advantages": [f"{name} has a clear operational benefit."],
         "disadvantages": [f"{name} introduces a distinct operational trade-off."],
         "assumptions": ["Required implementation capability is available."],
@@ -220,7 +240,9 @@ def test_solution_architect_accepts_valid_three_alternative_result() -> None:
     assert len(result.alternatives) == 3
 
 
-def test_solution_architect_invokes_provider_neutral_boundary_once_with_only_upstream_artifacts() -> None:
+def test_solution_architect_invokes_provider_neutral_boundary_once_with_only_upstream_artifacts() -> (
+    None
+):
     llm = FakeLLM(two_alternative_response())
     current_input = review_input()
     analysis = problem_analysis()
@@ -241,7 +263,9 @@ def test_solution_architect_does_not_mutate_trusted_upstream_artifacts() -> None
     input_before = current_input.model_dump(mode="json")
     analysis_before = analysis.model_dump(mode="json")
 
-    SolutionArchitect(FakeLLM(two_alternative_response())).propose(current_input, analysis)
+    SolutionArchitect(FakeLLM(two_alternative_response())).propose(
+        current_input, analysis
+    )
 
     assert current_input.model_dump(mode="json") == input_before
     assert analysis.model_dump(mode="json") == analysis_before
@@ -277,7 +301,9 @@ def test_review_input_constraint_resolves_even_when_analyst_omitted_it() -> None
     assert result.alternatives[0].relevant_constraints[0].value == "Must run offline"
 
 
-def test_identical_duplicate_review_input_constraint_text_resolves_as_one_textual_target() -> None:
+def test_identical_duplicate_review_input_constraint_text_resolves_as_one_textual_target() -> (
+    None
+):
     alternatives = base_alternatives()
     alternatives[1]["relevant_constraints"] = []
 
@@ -325,7 +351,9 @@ def test_problem_analysis_constraint_resolves_by_exact_text_when_unambiguous() -
     assert result.alternatives[0].relevant_constraints[0].value == "Must run offline"
 
 
-def test_solution_architect_returns_structured_no_alternative_result_with_valid_blockers() -> None:
+def test_solution_architect_returns_structured_no_alternative_result_with_valid_blockers() -> (
+    None
+):
     result = SolutionArchitect(FakeLLM(no_alternative_response())).propose(
         review_input(),
         problem_analysis(include_blockers=True),
@@ -337,7 +365,9 @@ def test_solution_architect_returns_structured_no_alternative_result_with_valid_
     assert result.generation_notes.blocking_uncertainties[0].id is None
 
 
-def test_generation_notes_id_and_text_must_resolve_to_same_missing_information_finding() -> None:
+def test_generation_notes_id_and_text_must_resolve_to_same_missing_information_finding() -> (
+    None
+):
     result = SolutionArchitect(FakeLLM(no_alternative_response())).propose(
         review_input(),
         problem_analysis(include_blockers=True),
@@ -361,7 +391,9 @@ def test_generation_notes_text_only_reference_resolves_when_unique() -> None:
     assert blocker.text == "Operational ownership is unclear."
 
 
-def test_generation_notes_blockers_are_validated_even_when_alternatives_are_present() -> None:
+def test_generation_notes_blockers_are_validated_even_when_alternatives_are_present() -> (
+    None
+):
     response = two_alternative_response()
     response["generation_notes"] = {
         "explanation": "One uncertainty still affects implementation planning.",
@@ -376,7 +408,10 @@ def test_generation_notes_blockers_are_validated_even_when_alternatives_are_pres
 
     assert len(result.alternatives) == 2
     assert result.generation_notes is not None
-    assert result.generation_notes.blocking_uncertainties[0].text == "Operational ownership is unclear."
+    assert (
+        result.generation_notes.blocking_uncertainties[0].text
+        == "Operational ownership is unclear."
+    )
 
 
 def test_unresolved_review_input_constraint_fails_closed() -> None:
@@ -400,14 +435,18 @@ def test_unresolved_problem_analysis_constraint_by_id_or_text_fails_closed() -> 
         alternatives = base_alternatives()
         alternatives[0]["relevant_constraints"] = [reference]
 
-        with pytest.raises(SolutionArchitectOutputError, match="unresolved ProblemAnalysis"):
+        with pytest.raises(
+            SolutionArchitectOutputError, match="unresolved ProblemAnalysis"
+        ):
             SolutionArchitect(FakeLLM(response_from(alternatives))).propose(
                 review_input(),
                 problem_analysis(),
             )
 
 
-def test_repeated_problem_analysis_constraint_text_is_ambiguous_for_text_reference() -> None:
+def test_repeated_problem_analysis_constraint_text_is_ambiguous_for_text_reference() -> (
+    None
+):
     alternatives = base_alternatives()
     alternatives[0]["relevant_constraints"] = [
         {"source": "PROBLEM_ANALYSIS", "kind": "TEXT", "value": "Must run offline"}
@@ -428,7 +467,9 @@ def test_constraint_reference_matching_is_exact_without_trim_or_case_repair() ->
             {"source": "REVIEW_INPUT", "kind": "TEXT", "value": value}
         ]
 
-        with pytest.raises(SolutionArchitectOutputError, match="unresolved ReviewInput"):
+        with pytest.raises(
+            SolutionArchitectOutputError, match="unresolved ReviewInput"
+        ):
             SolutionArchitect(FakeLLM(response_from(alternatives))).propose(
                 review_input(),
                 problem_analysis(),
@@ -482,7 +523,9 @@ def test_blocker_id_and_text_mismatch_fails_closed() -> None:
         "blocking_uncertainties": [],
     }
 
-    with pytest.raises(SolutionArchitectOutputError, match="unresolved missing information"):
+    with pytest.raises(
+        SolutionArchitectOutputError, match="unresolved missing information"
+    ):
         SolutionArchitect(FakeLLM(response)).propose(
             review_input(),
             problem_analysis(include_blockers=True),
@@ -490,7 +533,10 @@ def test_blocker_id_and_text_mismatch_fails_closed() -> None:
 
 
 def test_blocker_reference_matching_is_exact_without_trim_or_case_repair() -> None:
-    for text in ("Operational ownership is unclear. ", "operational ownership is unclear."):
+    for text in (
+        "Operational ownership is unclear. ",
+        "operational ownership is unclear.",
+    ):
         response = no_alternative_response()
         response["generation_notes"] = {
             "explanation": "An uncertainty blocks comparison.",
@@ -498,18 +544,24 @@ def test_blocker_reference_matching_is_exact_without_trim_or_case_repair() -> No
             "blocking_uncertainties": [{"text": text}],
         }
 
-        with pytest.raises(SolutionArchitectOutputError, match="unresolved uncertainty"):
+        with pytest.raises(
+            SolutionArchitectOutputError, match="unresolved uncertainty"
+        ):
             SolutionArchitect(FakeLLM(response)).propose(
                 review_input(),
                 problem_analysis(include_blockers=True),
             )
 
 
-def test_pydantic_contract_failure_is_normalized_to_solution_architect_output_error() -> None:
+def test_pydantic_contract_failure_is_normalized_to_solution_architect_output_error() -> (
+    None
+):
     response = two_alternative_response()
     response["ranking"] = ["ALT-001", "ALT-002"]
 
-    with pytest.raises(SolutionArchitectOutputError, match="invalid Solution Architect output") as captured:
+    with pytest.raises(
+        SolutionArchitectOutputError, match="invalid Solution Architect output"
+    ) as captured:
         SolutionArchitect(FakeLLM(response)).propose(review_input(), problem_analysis())
 
     assert captured.value.__cause__ is not None
@@ -521,12 +573,16 @@ def test_invalid_generated_data_is_not_repaired_before_failure() -> None:
     alternatives[0]["implementation_complexity"] = "VERY_HIGH"
     response["alternatives"] = alternatives
 
-    with pytest.raises(SolutionArchitectOutputError, match="invalid Solution Architect output"):
+    with pytest.raises(
+        SolutionArchitectOutputError, match="invalid Solution Architect output"
+    ):
         SolutionArchitect(FakeLLM(response)).propose(review_input(), problem_analysis())
 
     assert alternatives[0]["implementation_complexity"] == "VERY_HIGH"
 
 
-def test_provider_failure_is_not_misreported_as_solution_output_validation_error() -> None:
+def test_provider_failure_is_not_misreported_as_solution_output_validation_error() -> (
+    None
+):
     with pytest.raises(ProviderFailure, match="provider unavailable"):
         SolutionArchitect(FailingLLM()).propose(review_input(), problem_analysis())

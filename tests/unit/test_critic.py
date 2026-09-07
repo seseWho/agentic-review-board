@@ -27,6 +27,7 @@ from agentic_review_board.domain.solutions import (
     GenerationNotes,
     SolutionAlternative,
     SolutionAlternatives,
+    SolutionDesign,
 )
 from agentic_review_board.participants.critic import Critic, CriticOutputError
 
@@ -195,7 +196,10 @@ def test_critic_returns_trusted_empty_review_and_uses_exact_provider_payload() -
         ("REVIEW_OBJECTIVE", "Assess a proposed deployment."),
         ("REVIEW_CONSTRAINT", "Must run offline"),
         ("CONTEXT", "The current environment is locally managed."),
-        ("STATED_FACT", "The capability must remain available without internet access."),
+        (
+            "STATED_FACT",
+            "The capability must remain available without internet access.",
+        ),
     ],
 )
 def test_review_input_reference_resolves_every_supported_kind(
@@ -203,9 +207,7 @@ def test_review_input_reference_resolves_every_supported_kind(
     value: str,
 ) -> None:
     result = run_critic(
-        validated_point_response(
-            critic_reference("REVIEW_INPUT", kind, value=value)
-        )
+        validated_point_response(critic_reference("REVIEW_INPUT", kind, value=value))
     )
 
     assert result.validated_points[0].target_reference.kind.value == kind
@@ -239,9 +241,7 @@ def test_review_input_optional_scalar_reference_fails_when_source_is_absent(
     kind: str,
 ) -> None:
     current_input = (
-        review_input(title=None)
-        if kind == "TITLE"
-        else review_input(objective=None)
+        review_input(title=None) if kind == "TITLE" else review_input(objective=None)
     )
 
     with pytest.raises(CriticOutputError):
@@ -348,9 +348,7 @@ def test_problem_analysis_reference_resolves_all_findings_by_unique_text(
     text: str,
 ) -> None:
     result = run_critic(
-        validated_point_response(
-            critic_reference("PROBLEM_ANALYSIS", kind, value=text)
-        )
+        validated_point_response(critic_reference("PROBLEM_ANALYSIS", kind, value=text))
     )
 
     assert result.validated_points[0].target_reference.value == text
@@ -428,12 +426,21 @@ def populated_solution_alternatives(
         if duplicate_advantage
         else ("Keeps operation local.", "Avoids a network dependency.")
     )
+    design = SolutionDesign(
+        summary="Implement a bounded deployment architecture.",
+        building_blocks=("Runtime and owned state.",),
+        key_interactions=("Requests flow through the runtime to owned state.",),
+        operational_model=("Assign deployment and support ownership.",),
+        delivery_steps=("Pilot before staged rollout.",),
+        validation_checks=("Verify the end-to-end workflow.",),
+    )
     return SolutionAlternatives(
         alternatives=(
             SolutionAlternative(
                 id="ALT-001",
                 name="Local deployment",
                 description="Run the capability in the existing local environment.",
+                solution_design=design,
                 advantages=advantages,
                 disadvantages=("Requires local lifecycle management.",),
                 assumptions=("Local compute is available.",),
@@ -444,6 +451,7 @@ def populated_solution_alternatives(
                 id="ALT-002",
                 name="Managed edge deployment",
                 description="Run the capability in a managed edge environment.",
+                solution_design=design,
                 advantages=("Reduces local lifecycle work.",),
                 disadvantages=("Introduces an external operational dependency.",),
                 assumptions=("A suitable managed environment is available.",),
@@ -502,9 +510,7 @@ def populated_risk_assessment(
             ),
         ),
         mitigation=(
-            "Assign an explicit operational owner."
-            if include_optional_fields
-            else None
+            "Assign an explicit operational owner." if include_optional_fields else None
         ),
         residual_uncertainty=(
             "The required support effort remains unknown."
@@ -849,7 +855,9 @@ def test_risk_reference_rejects_unknown_or_mismatched_target(
         )
 
 
-@pytest.mark.parametrize("kind", ["RISK_CATEGORY", "MITIGATION", "RESIDUAL_UNCERTAINTY"])
+@pytest.mark.parametrize(
+    "kind", ["RISK_CATEGORY", "MITIGATION", "RESIDUAL_UNCERTAINTY"]
+)
 def test_optional_risk_field_reference_fails_when_field_is_absent(kind: str) -> None:
     values = {
         "RISK_CATEGORY": "operational",
@@ -869,6 +877,7 @@ def test_optional_risk_field_reference_fails_when_field_is_absent(kind: str) -> 
             ),
             risks=populated_risk_assessment(include_optional_fields=False),
         )
+
 
 def criticism_response(
     *,
@@ -1131,7 +1140,9 @@ def test_cross_artifact_conclusion_requires_two_distinct_resolved_targets() -> N
     assert len(result.criticisms[0].basis_references) == 1
 
 
-def test_structurally_different_references_to_same_target_are_not_distinct_basis() -> None:
+def test_structurally_different_references_to_same_target_are_not_distinct_basis() -> (
+    None
+):
     with pytest.raises(CriticOutputError):
         run_critic(
             criticism_response(
@@ -1229,7 +1240,9 @@ def test_review_containing_only_traceable_validated_points_is_trusted() -> None:
     )
 
 
-def test_missing_alternative_and_unresolved_issue_are_grounded_without_replacement() -> None:
+def test_missing_alternative_and_unresolved_issue_are_grounded_without_replacement() -> (
+    None
+):
     response = missing_alternative_response()
     response.update(
         unresolved_issue_response(
@@ -1323,7 +1336,9 @@ def test_critic_supports_traceable_material_criticism_examples(
     assert result.criticisms[0].id == criticism_id
 
 
-def test_zero_alternative_and_zero_risk_inputs_do_not_force_artificial_findings() -> None:
+def test_zero_alternative_and_zero_risk_inputs_do_not_force_artificial_findings() -> (
+    None
+):
     result = run_critic(
         {},
         alternatives=solution_alternatives(),
@@ -1487,7 +1502,6 @@ def test_contextual_resolution_allows_only_approved_whitespace_stripping() -> No
                 )
             )
         )
-
 
 
 def test_critic_review_does_not_mutate_any_upstream_artifact() -> None:
