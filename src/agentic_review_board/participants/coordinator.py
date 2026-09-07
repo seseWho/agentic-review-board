@@ -1,4 +1,6 @@
+import json
 from collections.abc import Mapping
+from copy import deepcopy
 
 from pydantic import ValidationError
 
@@ -73,8 +75,42 @@ class Coordinator:
 
     @staticmethod
     def _validate_structure(raw: Mapping[str, object]) -> FinalReview:
-        candidate = dict(raw)
+        candidate = deepcopy(dict(raw))
         candidate.setdefault("decision_support_notice", DECISION_SUPPORT_NOTICE)
+        # Keep the boundary tolerant of providers that omit optional-looking
+        # collections despite the schema. These defaults do not add evidence.
+        for field in (
+            "ranked_alternatives",
+            "principal_risks",
+            "unresolved_questions",
+            "criticism_dispositions",
+        ):
+            candidate.setdefault(field, [])
+        if (
+            candidate.get("preferred_alternative_id") is None
+            and candidate.get("recommendation_outcome") == RecommendationOutcome.RECOMMENDED.value
+            and isinstance(candidate.get("ranked_alternatives"), list)
+            and candidate["ranked_alternatives"]
+            and isinstance(candidate["ranked_alternatives"][0], dict)
+        ):
+            first = candidate["ranked_alternatives"][0]
+            candidate["preferred_alternative_id"] = first.get("alternative_id")
+        questions = candidate.get("unresolved_questions")
+        if isinstance(questions, list):
+            seen_references: set[str] = set()
+            unique_questions: list[object] = []
+            for question in questions:
+                if not isinstance(question, dict):
+                    unique_questions.append(question)
+                    continue
+                reference_key = json.dumps(
+                    question.get("reference"), sort_keys=True, ensure_ascii=False
+                )
+                if reference_key in seen_references:
+                    continue
+                seen_references.add(reference_key)
+                unique_questions.append(question)
+            candidate["unresolved_questions"] = unique_questions
         try:
             return FinalReview.model_validate(candidate)
         except ValidationError as exc:

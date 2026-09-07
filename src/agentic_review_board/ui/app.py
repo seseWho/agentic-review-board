@@ -36,6 +36,7 @@ from agentic_review_board.ui.presentation import (
     preferred_solution,
     stage_presentations,
 )
+from agentic_review_board.ui.report import review_json, review_markdown
 
 STATE_KEY = "arb_review_ui_state"
 TITLE_KEY = "arb_title"
@@ -713,6 +714,24 @@ def _render_active_state(state: ReviewUiState) -> None:
     _render_process(review)
     if state.phase is UiPhase.RESULT:
         _render_final(review)
+        st.markdown("### Export review")
+        report_col, json_col = st.columns(2, gap="medium")
+        with report_col:
+            st.download_button(
+                "Download Markdown report",
+                data=review_markdown(review),
+                file_name="agentic-review-report.md",
+                mime="text/markdown",
+                use_container_width=True,
+            )
+        with json_col:
+            st.download_button(
+                "Download trusted JSON",
+                data=review_json(review),
+                file_name="agentic-review-report.json",
+                mime="application/json",
+                use_container_width=True,
+            )
 
 
 def _draft_from_widgets() -> ReviewInputDraft:
